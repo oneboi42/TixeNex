@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HelpDeskHero.Api/HelpDeskHero.Api.csproj" />
+    <Project Path="src/HelpDeskHero.Shared/HelpDeskHero.Shared.csproj" />
+    <Project Path="src/HelpDeskHero.UI/HelpDeskHero.UI.csproj" />
+  </Folder>
+</Solution>
