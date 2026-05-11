@@ -1,0 +1,52 @@
+@page "/tickets"
+@using HelpDeskHero.Shared.Contracts.Tickets
+@using HelpDeskHero.UI.Services.Api
+@inject TicketApiClient TicketApi
+
+<PageTitle>Tickets</PageTitle>
+
+<h3>Tickets</h3>
+
+@if (_isLoading)
+{
+    <p>Ładowanie...</p>
+}
+else if (_tickets.Count == 0)
+{
+    <p>Brak zgłoszeń.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Number</th>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Priority</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var ticket in _tickets)
+            {
+                <tr>
+                    <td>@ticket.Number</td>
+                    <td>@ticket.Title</td>
+                    <td>@ticket.Status</td>
+                    <td>@ticket.Priority</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private bool _isLoading = true;
+    private List<TicketDto> _tickets = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _tickets = (await TicketApi.GetAllAsync()).ToList();
+        _isLoading = false;
+    }
+}
