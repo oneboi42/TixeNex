@@ -1,0 +1,18 @@
+namespace HelpDeskHero.Shared.Contracts.Tickets;
+
+public sealed class CreateTicketDto
+{
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Priority { get; set; } = "Medium";
+}
+public sealed class TicketDto
+{
+    public int Id { get; set; }
+    public string Number { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Status { get; set; } = "New";
+    public string Priority { get; set; } = "Medium";
+    public DateTime CreatedAtUtc { get; set; }
+}
