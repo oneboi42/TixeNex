@@ -1,3 +1,6 @@
+using HelpDeskHero.Api.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+
 var builder = WebApplication.CreateBuilder(args);
 
 const string CorsPolicyName = "BlazorUi";
@@ -18,6 +21,8 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 // JWT dodamy później
 // builder.Services.AddAuthentication();
 // builder.Services.AddAuthorization();

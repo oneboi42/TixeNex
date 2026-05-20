@@ -541,6 +541,16 @@
           "build/Microsoft.NET.Sdk.WebAssembly.Pack.props": {},
           "build/Microsoft.NET.Sdk.WebAssembly.Pack.targets": {}
         }
+      },
+      "HelpDeskHero.Shared/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v10.0",
+        "compile": {
+          "bin/placeholder/HelpDeskHero.Shared.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/HelpDeskHero.Shared.dll": {}
+        }
       }
     },
     "net10.0/browser-wasm": {
@@ -1082,6 +1092,16 @@
         "build": {
           "build/Microsoft.NET.Sdk.WebAssembly.Pack.props": {},
           "build/Microsoft.NET.Sdk.WebAssembly.Pack.targets": {}
+        }
+      },
+      "HelpDeskHero.Shared/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v10.0",
+        "compile": {
+          "bin/placeholder/HelpDeskHero.Shared.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/HelpDeskHero.Shared.dll": {}
         }
       }
     }
@@ -2123,10 +2143,16 @@
         "tools/net472/Microsoft.NET.Sdk.WebAssembly.Pack.Tasks.dll",
         "tools/net472/Microsoft.NET.WebAssembly.Webcil.dll"
       ]
+    },
+    "HelpDeskHero.Shared/1.0.0": {
+      "type": "project",
+      "path": "../HelpDeskHero.Shared/HelpDeskHero.Shared.csproj",
+      "msbuildProject": "../HelpDeskHero.Shared/HelpDeskHero.Shared.csproj"
     }
   },
   "projectFileDependencyGroups": {
     "net10.0": [
+      "HelpDeskHero.Shared >= 1.0.0",
       "Microsoft.AspNetCore.App.Internal.Assets >= 10.0.7",
       "Microsoft.AspNetCore.Components.WebAssembly >= 10.0.7",
       "Microsoft.AspNetCore.Components.WebAssembly.DevServer >= 10.0.7",
@@ -2159,7 +2185,11 @@
       "frameworks": {
         "net10.0": {
           "targetAlias": "net10.0",
-          "projectReferences": {}
+          "projectReferences": {
+            "C:\\blad\\Documents\\GitHub\\HelpDeskHero\\src\\HelpDeskHero.Shared\\HelpDeskHero.Shared.csproj": {
+              "projectPath": "C:\\blad\\Documents\\GitHub\\HelpDeskHero\\src\\HelpDeskHero.Shared\\HelpDeskHero.Shared.csproj"
+            }
+          }
         }
       },
       "warningProperties": {
