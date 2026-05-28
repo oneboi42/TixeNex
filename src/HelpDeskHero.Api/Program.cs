@@ -1,6 +1,10 @@
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+
 var builder = WebApplication.CreateBuilder(args);
 
 const string CorsPolicyName = "BlazorUi";
@@ -23,9 +27,33 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
-// JWT dodamy później
+
+// JWT
 // builder.Services.AddAuthentication();
-// builder.Services.AddAuthorization();
+var jwtSection = builder.Configuration.GetSection("Jwt");
+var jwtKey = jwtSection["Key"]
+    ?? throw new InvalidOperationException("Missing Jwt:Key");
+var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateIssuerSigningKey = true,
+            ValidateLifetime = true,
+            ValidIssuer = jwtSection["Issuer"],
+            ValidAudience = jwtSection["Audience"],
+            IssuerSigningKey = signingKey,
+            ClockSkew = TimeSpan.FromMinutes(1)
+        };
+    });
+
+builder.Services.AddAuthorization();
+// end JWT
 
 var app = builder.Build();
 
@@ -38,8 +66,8 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseCors(CorsPolicyName);
 
-// app.UseAuthentication();
-// app.UseAuthorization();
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 
