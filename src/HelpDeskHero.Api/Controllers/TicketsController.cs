@@ -1,57 +1,73 @@
+using HelpDeskHero.Api.Domain;
+using HelpDeskHero.Api.Infrastructure.Persistence;
 using HelpDeskHero.Shared.Contracts.Tickets;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace HelpDeskHero.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public sealed class TicketsController : ControllerBase
 {
-    private static readonly List<TicketDto> Tickets =
-    [
-        new TicketDto
-        {
-            Id = 1,
-            Number = "HDH-0001",
-            Title = "Printer not working",
-            Description = "Office printer shows paper jam.",
-            Status = "New",
-            Priority = "High",
-            CreatedAtUtc = DateTime.UtcNow
-        },
-        new TicketDto
-        {
-            Id = 2,
-            Number = "HDH-0002",
-            Title = "VPN access issue",
-            Description = "User cannot connect to VPN.",
-            Status = "InProgress",
-            Priority = "Medium",
-            CreatedAtUtc = DateTime.UtcNow
-        }
-    ];
+    private readonly AppDbContext _db;
+
+    public TicketsController(AppDbContext db)
+    {
+        _db = db;
+    }
 
     [HttpGet]
-    public ActionResult<IReadOnlyList<TicketDto>> GetAll()
+    public async Task<ActionResult<IReadOnlyList<TicketDto>>> GetAll(CancellationToken ct)
     {
-        return Ok(Tickets.OrderByDescending(x => x.Id).ToList());
+        var tickets = await _db.Tickets
+            .AsNoTracking()
+            .OrderByDescending(x => x.Id)
+            .Select(x => new TicketDto
+            {
+                Id = x.Id,
+                Number = x.Number,
+                Title = x.Title,
+                Description = x.Description,
+                Status = x.Status,
+                Priority = x.Priority,
+                CreatedAtUtc = x.CreatedAtUtc
+            })
+            .ToListAsync(ct);
+
+        return Ok(tickets);
     }
 
     [HttpGet("{id:int}")]
-    public ActionResult<TicketDto> GetById(int id)
+    public async Task<ActionResult<TicketDetailsDto>> GetById(int id, CancellationToken ct)
     {
-        var ticket = Tickets.FirstOrDefault(x => x.Id == id);
+        var ticket = await _db.Tickets
+            .AsNoTracking()
+            .Where(x => x.Id == id)
+            .Select(x => new TicketDetailsDto
+            {
+                Id = x.Id,
+                Number = x.Number,
+                Title = x.Title,
+                Description = x.Description,
+                Status = x.Status,
+                Priority = x.Priority,
+                CreatedAtUtc = x.CreatedAtUtc
+            })
+            .FirstOrDefaultAsync(ct);
+
         return ticket is null ? NotFound() : Ok(ticket);
     }
 
     [HttpPost]
-    public ActionResult<TicketDto> Create(CreateTicketDto dto)
+    public async Task<ActionResult<TicketDetailsDto>> Create(CreateTicketDto dto, CancellationToken ct)
     {
-        var nextId = Tickets.Count == 0 ? 1 : Tickets.Max(x => x.Id) + 1;
+        var nextId = await _db.Tickets.CountAsync(ct) + 1; // Simple way to generate a ticket number, in real app consider using a more robust approach
 
-        var ticket = new TicketDto
+        var entity = new Ticket
         {
-            Id = nextId,
             Number = $"HDH-{nextId:0000}",
             Title = dto.Title,
             Description = dto.Description,
@@ -60,23 +76,50 @@ public sealed class TicketsController : ControllerBase
             CreatedAtUtc = DateTime.UtcNow
         };
 
-        Tickets.Add(ticket);
+        _db.Tickets.Add(entity);
+        await _db.SaveChangesAsync(ct);
 
-        return CreatedAtAction(nameof(GetById), new { id = ticket.Id }, ticket);
+        var result = new TicketDetailsDto
+        {
+            Id = entity.Id,
+            Number = entity.Number,
+            Title = entity.Title,
+            Description = entity.Description,
+            Status = entity.Status,
+            Priority = entity.Priority,
+            CreatedAtUtc = entity.CreatedAtUtc
+        };
+
+        return CreatedAtAction(nameof(GetById), new { id = entity.Id }, result);
     }
 
     [HttpPut("{id:int}")]
-    public IActionResult Update(int id, UpdateTicketDto dto)
+    public async Task<IActionResult> Update(int id, UpdateTicketDto dto, CancellationToken ct)
     {
-        var ticket = Tickets.FirstOrDefault(x => x.Id == id);
-        if (ticket is null)
+        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null)
             return NotFound();
 
-        ticket.Title = dto.Title;
-        ticket.Description = dto.Description;
-        ticket.Status = dto.Status;
-        ticket.Priority = dto.Priority;
+        entity.Title = dto.Title;
+        entity.Description = dto.Description;
+        entity.Status = dto.Status;
+        entity.Priority = dto.Priority;
+        entity.UpdatedAtUtc = DateTime.UtcNow;
 
+        await _db.SaveChangesAsync(ct);
+        return NoContent();
+    }
+
+    [HttpDelete("{id:int}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Delete(int id, CancellationToken ct)
+    {
+        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (entity is null)
+            return NotFound();
+
+        _db.Tickets.Remove(entity);
+        await _db.SaveChangesAsync(ct);
         return NoContent();
     }
 }
