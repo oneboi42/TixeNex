@@ -19,6 +19,9 @@ public sealed class AppDbContext : DbContext
             b.HasKey(x => x.Id);
 
             b.Property(x => x.Number).HasMaxLength(30).IsRequired();
+            b.HasIndex(x => x.Number).IsUnique();
+
+            b.Property(x => x.Number).HasMaxLength(30).IsRequired();
             b.Property(x => x.Title).HasMaxLength(200).IsRequired();
             b.Property(x => x.Description).HasMaxLength(4000).IsRequired();
             b.Property(x => x.Status).HasMaxLength(30).IsRequired();

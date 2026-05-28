@@ -9,4 +9,7 @@ public sealed class Ticket
     public string Status { get; set; } = "New";
     public string Priority { get; set; } = "Medium";
     public DateTime CreatedAtUtc { get; set; }
+
+    // 4.1 update
+    public DateTime? UpdatedAtUtc { get; set; }
 }
