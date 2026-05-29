@@ -1,19 +1,24 @@
 @page "/tickets"
+@attribute [Authorize]
 @using HelpDeskHero.Shared.Contracts.Tickets
-@using HelpDeskHero.UI.Services.Api
-@inject TicketApiClient TicketApi
+@inject HelpDeskHero.UI.Services.Api.TicketApiClient TicketApi
+@inject NavigationManager Nav
 
 <PageTitle>Tickets</PageTitle>
 
 <h3>Tickets</h3>
 
+<p>
+    <button @onclick='() => Nav.NavigateTo("/tickets/create")'>Nowe zgloszenie</button>
+</p>
+
 @if (_isLoading)
 {
-    <p>Ładowanie...</p>
+    <p>Ladowanie...</p>
 }
 else if (_tickets.Count == 0)
 {
-    <p>Brak zgłoszeń.</p>
+    <p>Brak zgloszen.</p>
 }
 else
 {
@@ -24,6 +29,7 @@ else
                 <th>Title</th>
                 <th>Status</th>
                 <th>Priority</th>
+                <th>Akcje</th>
             </tr>
         </thead>
         <tbody>
@@ -34,6 +40,10 @@ else
                     <td>@ticket.Title</td>
                     <td>@ticket.Status</td>
                     <td>@ticket.Priority</td>
+                    <td>
+                        <button @onclick='() => Nav.NavigateTo($"/tickets/{ticket.Id}")'>Szczegoly</button>
+                        <button @onclick='() => Nav.NavigateTo($"/tickets/edit/{ticket.Id}")'>Edytuj</button>
+                    </td>
                 </tr>
             }
         </tbody>

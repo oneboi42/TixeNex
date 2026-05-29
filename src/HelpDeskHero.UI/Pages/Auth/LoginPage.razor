@@ -1,0 +1,52 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@inject NavigationManager Nav
+@inject HelpDeskHero.UI.Services.Auth.AuthService AuthService
+
+<PageTitle>Login</PageTitle>
+
+<h3>Login</h3>
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <p>@_error</p>
+}
+
+<EditForm Model="_model" OnValidSubmit="HandleLoginAsync">
+    <DataAnnotationsValidator />
+
+    <div>
+        <label>Login</label>
+        <InputText @bind-Value="_model.UserName" />
+    </div>
+
+    <div>
+        <label>Password</label>
+        <InputText @bind-Value="_model.Password" type="password" />
+    </div>
+
+    <button type="submit">Zaloguj</button>
+</EditForm>
+
+@code {
+    private LoginVm _model = new();
+    private string? _error;
+
+    private async Task HandleLoginAsync()
+    {
+        var ok = await AuthService.LoginAsync(_model.UserName, _model.Password);
+        if (!ok)
+        {
+            _error = "Niepoprawny login lub haslo.";
+            return;
+        }
+
+        Nav.NavigateTo("/tickets");
+    }
+
+    private sealed class LoginVm
+    {
+        public string UserName { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+    }
+}

@@ -1,0 +1,33 @@
+@page "/tickets/{Id:int}"
+@attribute [Authorize]
+@using HelpDeskHero.Shared.Contracts.Tickets
+@inject HelpDeskHero.UI.Services.Api.TicketApiClient TicketApi
+@inject NavigationManager Nav
+
+<h3>Szczegoly zgloszenia</h3>
+
+@if (_ticket is null)
+{
+    <p>Ladowanie...</p>
+}
+else
+{
+    <p><strong>Numer:</strong> @_ticket.Number</p>
+    <p><strong>Tytul:</strong> @_ticket.Title</p>
+    <p><strong>Status:</strong> @_ticket.Status</p>
+    <p><strong>Priorytet:</strong> @_ticket.Priority</p>
+    <p><strong>Opis:</strong> @_ticket.Description</p>
+
+    <button @onclick='() => Nav.NavigateTo($"/tickets/edit/{Id}")'>Edytuj</button>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private TicketDetailsDto? _ticket;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _ticket = await TicketApi.GetByIdAsync(Id);
+    }
+}

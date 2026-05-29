@@ -1,0 +1,85 @@
+@page "/tickets/edit/{Id:int}"
+@attribute [Authorize]
+@inject HelpDeskHero.UI.Services.Api.TicketApiClient TicketApi
+@inject NavigationManager Nav
+
+<h3>Edycja zgloszenia</h3>
+
+@if (_isLoading)
+{
+    <p>Ladowanie...</p>
+}
+else
+{
+    <EditForm Model="_model" OnValidSubmit="HandleSaveAsync">
+        <DataAnnotationsValidator />
+
+        <div>
+            <label>Tytul</label>
+            <InputText @bind-Value="_model.Title" />
+        </div>
+
+        <div>
+            <label>Opis</label>
+            <InputTextArea @bind-Value="_model.Description" />
+        </div>
+
+        <div>
+            <label>Status</label>
+            <InputSelect @bind-Value="_model.Status">
+                <option>New</option>
+                <option>InProgress</option>
+                <option>Resolved</option>
+                <option>Closed</option>
+            </InputSelect>
+        </div>
+
+        <div>
+            <label>Priorytet</label>
+            <InputSelect @bind-Value="_model.Priority">
+                <option>Low</option>
+                <option>Medium</option>
+                <option>High</option>
+            </InputSelect>
+        </div>
+
+        <button type="submit">Zapisz zmiany</button>
+        <button type="button" @onclick="HandleDeleteAsync">Usun</button>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private bool _isLoading = true;
+    private HelpDeskHero.Shared.Contracts.Tickets.UpdateTicketDto _model = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var ticket = await TicketApi.GetByIdAsync(Id);
+        if (ticket is not null)
+        {
+            _model = new HelpDeskHero.Shared.Contracts.Tickets.UpdateTicketDto
+            {
+                Title = ticket.Title,
+                Description = ticket.Description,
+                Status = ticket.Status,
+                Priority = ticket.Priority
+            };
+        }
+
+        _isLoading = false;
+    }
+
+    private async Task HandleSaveAsync()
+    {
+        await TicketApi.UpdateAsync(Id, _model);
+        Nav.NavigateTo($"/tickets/{Id}");
+    }
+
+    private async Task HandleDeleteAsync()
+    {
+        await TicketApi.DeleteAsync(Id);
+        Nav.NavigateTo("/tickets");
+    }
+}

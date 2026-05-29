@@ -32,6 +32,10 @@ build_property.EnableCodeStyleSeverity =
 build_metadata.AdditionalFiles.TargetPath = QXBwLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Pages/Auth/LoginPage.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQXV0aFxMb2dpblBhZ2UucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Pages/Counter.razor]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQ291bnRlci5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
@@ -42,6 +46,18 @@ build_metadata.AdditionalFiles.CssScope =
 
 [C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Pages/NotFound.razor]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcTm90Rm91bmQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Pages/Tickets/TicketCreatePage.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcVGlja2V0c1xUaWNrZXRDcmVhdGVQYWdlLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Pages/Tickets/TicketDetailsPage.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcVGlja2V0c1xUaWNrZXREZXRhaWxzUGFnZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Pages/Tickets/TicketEditPage.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcVGlja2V0c1xUaWNrZXRFZGl0UGFnZS5yYXpvcg==
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Pages/Tickets/TicketListPage.razor]

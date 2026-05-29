@@ -1,0 +1,48 @@
+@page "/tickets/create"
+@attribute [Authorize]
+@using HelpDeskHero.Shared.Contracts.Tickets
+@inject HelpDeskHero.UI.Services.Api.TicketApiClient TicketApi
+@inject NavigationManager Nav
+
+<h3>Nowe zgloszenie</h3>
+
+<EditForm Model="_model" OnValidSubmit="HandleSaveAsync">
+    <DataAnnotationsValidator />
+
+    <div>
+        <label>Tytul</label>
+        <InputText @bind-Value="_model.Title" />
+    </div>
+
+    <div>
+        <label>Opis</label>
+        <InputTextArea @bind-Value="_model.Description" />
+    </div>
+
+    <div>
+        <label>Priorytet</label>
+        <InputSelect @bind-Value="_model.Priority">
+            <option>Low</option>
+            <option>Medium</option>
+            <option>High</option>
+        </InputSelect>
+    </div>
+
+    <button type="submit">Zapisz</button>
+</EditForm>
+
+@code {
+    private CreateTicketDto _model = new()
+    {
+        Priority = "Medium"
+    };
+
+    private async Task HandleSaveAsync()
+    {
+        var created = await TicketApi.CreateAsync(_model);
+        if (created is null)
+            return;
+
+        Nav.NavigateTo($"/tickets/{created.Id}");
+    }
+}
