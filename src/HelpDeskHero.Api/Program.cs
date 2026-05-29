@@ -71,4 +71,35 @@ app.UseAuthorization();
 
 app.MapControllers();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+
+    if (!db.Tickets.Any())
+    {
+        db.Tickets.AddRange(
+            new HelpDeskHero.Api.Domain.Ticket
+            {
+                Number = "HDH-0001",
+                Title = "Printer not working",
+                Description = "Office printer shows paper jam.",
+                Status = "New",
+                Priority = "High",
+                CreatedAtUtc = DateTime.UtcNow
+            },
+            new HelpDeskHero.Api.Domain.Ticket
+            {
+                Number = "HDH-0002",
+                Title = "VPN access issue",
+                Description = "User cannot connect to VPN.",
+                Status = "InProgress",
+                Priority = "Medium",
+                CreatedAtUtc = DateTime.UtcNow
+            });
+
+        db.SaveChanges();
+    }
+}
+
 app.Run();
