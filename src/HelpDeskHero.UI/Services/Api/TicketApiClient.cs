@@ -18,15 +18,25 @@ public sealed class TicketApiClient
         return result ?? [];
     }
 
-    public async Task<TicketDto?> GetByIdAsync(int id, CancellationToken ct = default)
-    {
-        return await _httpClient.GetFromJsonAsync<TicketDto>($"api/tickets/{id}", ct);
-    }
+    public Task<TicketDetailsDto?> GetByIdAsync(int id, CancellationToken ct = default)
+        => _httpClient.GetFromJsonAsync<TicketDetailsDto>($"api/tickets/{id}", ct);
 
-    public async Task<TicketDto?> CreateAsync(CreateTicketDto dto, CancellationToken ct = default)
+    public async Task<TicketDetailsDto?> CreateAsync(CreateTicketDto dto, CancellationToken ct = default)
     {
         var response = await _httpClient.PostAsJsonAsync("api/tickets", dto, ct);
         response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<TicketDto>(cancellationToken: ct);
+        return await response.Content.ReadFromJsonAsync<TicketDetailsDto>(cancellationToken: ct);
+    }
+
+    public async Task UpdateAsync(int id, UpdateTicketDto dto, CancellationToken ct = default)
+    {
+        var response = await _httpClient.PutAsJsonAsync($"api/tickets/{id}", dto, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task DeleteAsync(int id, CancellationToken ct = default)
+    {
+        var response = await _httpClient.DeleteAsync($"api/tickets/{id}", ct);
+        response.EnsureSuccessStatusCode();
     }
 }
