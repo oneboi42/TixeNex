@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using HelpDeskHero.Shared.Contracts.Auth;
+using Microsoft.AspNetCore.Components.Authorization;
 
 namespace HelpDeskHero.UI.Services.Auth;
 
