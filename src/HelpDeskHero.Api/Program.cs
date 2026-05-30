@@ -102,6 +102,11 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-
+// Redirect root to Swagger UI
+app.MapGet("/", async context =>
+{
+    context.Response.Redirect("/swagger/index.html", permanent: false);
+    await Task.CompletedTask;
+});
 
 app.Run();
