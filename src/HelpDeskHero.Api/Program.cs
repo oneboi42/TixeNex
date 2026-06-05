@@ -158,4 +158,12 @@ app.UseAuthorization();
 
 app.MapControllers();
 // end middleware
+
+// Seed database with initial data
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await DbSeeder.SeedAsync(db);
+}
+
 app.Run();
