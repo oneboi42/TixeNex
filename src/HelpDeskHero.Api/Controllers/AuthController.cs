@@ -1,11 +1,10 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
+using HelpDeskHero.Api.Infrastructure.Persistence;
+using HelpDeskHero.Api.Infrastructure.Security;
 using HelpDeskHero.Shared.Contracts.Auth;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
-
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace HelpDeskHero.Api.Controllers;
 
@@ -13,67 +12,123 @@ namespace HelpDeskHero.Api.Controllers;
 [Route("api/[controller]")]
 public sealed class AuthController : ControllerBase
 {
-    private readonly IConfiguration _configuration;
+    private readonly AppDbContext _db;
+    private readonly ITokenService _tokenService;
+    private readonly JwtOptions _jwt;
 
-    public AuthController(IConfiguration configuration)
+    public AuthController(
+        AppDbContext db,
+        ITokenService tokenService,
+        IOptions<JwtOptions> jwtOptions)
     {
-        _configuration = configuration;
+        _db = db;
+        _tokenService = tokenService;
+        _jwt = jwtOptions.Value;
     }
 
     [HttpPost("login")]
     [AllowAnonymous]
-    public ActionResult<LoginResponseDto> Login(LoginRequestDto dto)
+    public async Task<ActionResult<AuthResponseDto>> Login(LoginRequestDto dto, CancellationToken ct)
     {
-        if (!IsValidUser(dto))
-            return Unauthorized();
+        var user = await _db.Users
+            .Include(x => x.RefreshTokens)
+            .SingleOrDefaultAsync(x => x.UserName == dto.UserName, ct);
 
-        var role = dto.UserName.Equals("admin", StringComparison.OrdinalIgnoreCase)
-            ? "Admin"
-            : "User";
+        if (user is null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+            return Unauthorized("Invalid username or password.");
 
-        var token = CreateToken(dto.UserName, role);
+        var accessExpires = DateTime.UtcNow.AddMinutes(_jwt.AccessTokenMinutes);
+        var refreshExpires = DateTime.UtcNow.AddDays(_jwt.RefreshTokenDays);
 
-        return Ok(new LoginResponseDto
+        var accessToken = _tokenService.CreateAccessToken(user, accessExpires);
+        var refreshToken = _tokenService.CreateRefreshToken(refreshExpires);
+
+        user.RefreshTokens.Add(refreshToken);
+        await _db.SaveChangesAsync(ct);
+
+        return Ok(new AuthResponseDto
         {
-            Token = token.Token,
-            ExpiresAtUtc = token.ExpiresAtUtc,
-            UserName = dto.UserName,
-            Role = role
+            AccessToken = accessToken,
+            AccessTokenExpiresAtUtc = accessExpires,
+            RefreshToken = refreshToken.Token,
+            RefreshTokenExpiresAtUtc = refreshExpires,
+            UserName = user.UserName,
+            Role = user.Role
         });
     }
 
-    private static bool IsValidUser(LoginRequestDto dto)
+    [HttpPost("refresh")]
+    [AllowAnonymous]
+    public async Task<ActionResult<AuthResponseDto>> Refresh(RefreshTokenRequestDto dto, CancellationToken ct)
     {
-        return (dto.UserName == "admin" && dto.Password == "Admin123!")
-            || (dto.UserName == "user" && dto.Password == "User123!");
+        var principal = _tokenService.GetPrincipalFromExpiredToken(dto.AccessToken);
+        if (principal is null)
+            return Unauthorized("Invalid access token.");
+
+        var userName = principal.Identity?.Name;
+        if (string.IsNullOrWhiteSpace(userName))
+            return Unauthorized("Invalid identity.");
+
+        var user = await _db.Users
+            .Include(x => x.RefreshTokens)
+            .SingleOrDefaultAsync(x => x.UserName == userName, ct);
+
+        if (user is null)
+            return Unauthorized("User not found.");
+
+        var existingRefresh = user.RefreshTokens
+            .OrderByDescending(x => x.Id)
+            .FirstOrDefault(x => x.Token == dto.RefreshToken);
+
+        if (existingRefresh is null || !existingRefresh.IsActive)
+            return Unauthorized("Invalid refresh token.");
+
+        existingRefresh.RevokedAtUtc = DateTime.UtcNow;
+
+        var accessExpires = DateTime.UtcNow.AddMinutes(_jwt.AccessTokenMinutes);
+        var refreshExpires = DateTime.UtcNow.AddDays(_jwt.RefreshTokenDays);
+
+        var newAccessToken = _tokenService.CreateAccessToken(user, accessExpires);
+        var newRefreshToken = _tokenService.CreateRefreshToken(refreshExpires);
+
+        existingRefresh.ReplacedByToken = newRefreshToken.Token;
+        user.RefreshTokens.Add(newRefreshToken);
+
+        await _db.SaveChangesAsync(ct);
+
+        return Ok(new AuthResponseDto
+        {
+            AccessToken = newAccessToken,
+            AccessTokenExpiresAtUtc = accessExpires,
+            RefreshToken = newRefreshToken.Token,
+            RefreshTokenExpiresAtUtc = refreshExpires,
+            UserName = user.UserName,
+            Role = user.Role
+        });
     }
 
-    private (string Token, DateTime ExpiresAtUtc) CreateToken(string userName, string role)
+    [HttpPost("revoke")]
+    [Authorize]
+    public async Task<IActionResult> Revoke([FromBody] string refreshToken, CancellationToken ct)
     {
-        var jwtSection = _configuration.GetSection("Jwt");
-        var key = jwtSection["Key"]
-            ?? throw new InvalidOperationException("Missing Jwt:Key");
+        var userName = User.Identity?.Name;
+        if (string.IsNullOrWhiteSpace(userName))
+            return Unauthorized();
 
-        var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
-        var credentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256);
+        var user = await _db.Users
+            .Include(x => x.RefreshTokens)
+            .SingleOrDefaultAsync(x => x.UserName == userName, ct);
 
-        var expires = DateTime.UtcNow.AddHours(8);
+        if (user is null)
+            return Unauthorized();
 
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.Name, userName),
-            new(ClaimTypes.Role, role)
-        };
+        var token = user.RefreshTokens.FirstOrDefault(x => x.Token == refreshToken);
+        if (token is null)
+            return NotFound();
 
-        var jwt = new JwtSecurityToken(
-            issuer: jwtSection["Issuer"],
-            audience: jwtSection["Audience"],
-            claims: claims,
-            notBefore: DateTime.UtcNow,
-            expires: expires,
-            signingCredentials: credentials);
+        token.RevokedAtUtc = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
 
-        var token = new JwtSecurityTokenHandler().WriteToken(jwt);
-        return (token, expires);
+        return NoContent();
     }
 }
