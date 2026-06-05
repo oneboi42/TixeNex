@@ -1,9 +1,11 @@
-using HelpDeskHero.Api.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
-
 using System.Text;
+using HelpDeskHero.Api.Infrastructure.Persistence;
+using HelpDeskHero.Api.Infrastructure.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -24,6 +26,44 @@ builder.Services.AddCors(options =>
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// JWT configuration
+
+builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<ITokenService, TokenService>();
+
+var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
+          ?? throw new InvalidOperationException("Missing Jwt settings.");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateIssuerSigningKey = true,
+            ValidateLifetime = true,
+            ValidIssuer = jwt.Issuer,
+            ValidAudience = jwt.Audience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Key)),
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+    });
+
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("AgentOrAdmin", policy => policy.RequireRole("Agent", "Admin"));
+    options.AddPolicy("CanManageTickets", policy => policy.RequireRole("User", "Agent", "Admin"));
+});
+
+// End JWT configuration
+
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -109,4 +149,13 @@ app.MapGet("/", async context =>
     await Task.CompletedTask;
 });
 
+// authorization and other middleware
+app.UseHttpsRedirection();
+app.UseCors("BlazorUi");
+
+app.UseAuthentication();
+app.UseAuthorization();
+
+app.MapControllers();
+// end middleware
 app.Run();
