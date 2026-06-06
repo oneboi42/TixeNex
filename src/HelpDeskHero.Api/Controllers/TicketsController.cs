@@ -22,8 +22,7 @@ public sealed class TicketsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<TicketDto>>> GetAll(CancellationToken ct)
     {
-        var tickets = await _db.Tickets
-            .AsNoTracking()
+        var result = await _db.Tickets
             .OrderByDescending(x => x.Id)
             .Select(x => new TicketDto
             {
@@ -37,16 +36,15 @@ public sealed class TicketsController : ControllerBase
             })
             .ToListAsync(ct);
 
-        return Ok(tickets);
+        return Ok(result);
     }
 
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<TicketDetailsDto>> GetById(int id, CancellationToken ct)
+    public async Task<ActionResult<TicketDto>> GetById(int id, CancellationToken ct)
     {
         var ticket = await _db.Tickets
-            .AsNoTracking()
             .Where(x => x.Id == id)
-            .Select(x => new TicketDetailsDto
+            .Select(x => new TicketDto
             {
                 Id = x.Id,
                 Number = x.Number,
@@ -56,19 +54,20 @@ public sealed class TicketsController : ControllerBase
                 Priority = x.Priority,
                 CreatedAtUtc = x.CreatedAtUtc
             })
-            .FirstOrDefaultAsync(ct);
+            .SingleOrDefaultAsync(ct);
 
         return ticket is null ? NotFound() : Ok(ticket);
     }
 
     [HttpPost]
-    public async Task<ActionResult<TicketDetailsDto>> Create(CreateTicketDto dto, CancellationToken ct)
+    [Authorize(Policy = "CanManageTickets")]
+    public async Task<ActionResult<TicketDto>> Create(CreateTicketDto dto, CancellationToken ct)
     {
-        var nextId = await _db.Tickets.CountAsync(ct) + 1; // Simple way to generate a ticket number, in real app consider using a more robust approach
+        var nextNumber = $"HDH-{(await _db.Tickets.CountAsync(ct) + 1):0000}";
 
         var entity = new Ticket
         {
-            Number = $"HDH-{nextId:0000}",
+            Number = nextNumber,
             Title = dto.Title,
             Description = dto.Description,
             Priority = dto.Priority,
@@ -79,7 +78,7 @@ public sealed class TicketsController : ControllerBase
         _db.Tickets.Add(entity);
         await _db.SaveChangesAsync(ct);
 
-        var result = new TicketDetailsDto
+        var result = new TicketDto
         {
             Id = entity.Id,
             Number = entity.Number,
@@ -94,32 +93,33 @@ public sealed class TicketsController : ControllerBase
     }
 
     [HttpPut("{id:int}")]
+    [Authorize(Policy = "AgentOrAdmin")]
     public async Task<IActionResult> Update(int id, UpdateTicketDto dto, CancellationToken ct)
     {
-        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
-        if (entity is null)
+        var ticket = await _db.Tickets.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (ticket is null)
             return NotFound();
 
-        entity.Title = dto.Title;
-        entity.Description = dto.Description;
-        entity.Status = dto.Status;
-        entity.Priority = dto.Priority;
-        entity.UpdatedAtUtc = DateTime.UtcNow;
+        ticket.Title = dto.Title;
+        ticket.Description = dto.Description;
+        ticket.Status = dto.Status;
+        ticket.Priority = dto.Priority;
 
         await _db.SaveChangesAsync(ct);
         return NoContent();
     }
 
     [HttpDelete("{id:int}")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
-        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
-        if (entity is null)
+        var ticket = await _db.Tickets.SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (ticket is null)
             return NotFound();
 
-        _db.Tickets.Remove(entity);
+        _db.Tickets.Remove(ticket);
         await _db.SaveChangesAsync(ct);
+
         return NoContent();
     }
 }
