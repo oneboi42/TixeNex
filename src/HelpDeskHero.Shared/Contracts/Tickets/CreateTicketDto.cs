@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace HelpDeskHero.Shared.Contracts.Tickets;
 
-public sealed class UpdateTicketDto
+public sealed class CreateTicketDto
 {
     [Required]
     [StringLength(200, MinimumLength = 3)]
@@ -11,10 +11,6 @@ public sealed class UpdateTicketDto
     [Required]
     [StringLength(4000, MinimumLength = 5)]
     public string Description { get; set; } = string.Empty;
-
-    [Required]
-    [RegularExpression("New|InProgress|Resolved|Closed")]
-    public string Status { get; set; } = "New";
 
     [Required]
     [RegularExpression("Low|Medium|High|Critical")]
