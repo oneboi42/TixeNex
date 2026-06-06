@@ -2,6 +2,18 @@
   "version": 3,
   "targets": {
     "net10.0": {
+      "Blazored.LocalStorage/4.5.0": {
+        "type": "package",
+        "dependencies": {
+          "Microsoft.AspNetCore.Components.Web": "8.0.0"
+        },
+        "compile": {
+          "lib/net8.0/Blazored.LocalStorage.dll": {}
+        },
+        "runtime": {
+          "lib/net8.0/Blazored.LocalStorage.dll": {}
+        }
+      },
       "Microsoft.AspNetCore.App.Internal.Assets/10.0.7": {
         "type": "package",
         "build": {
@@ -650,6 +662,18 @@
       }
     },
     "net10.0/browser-wasm": {
+      "Blazored.LocalStorage/4.5.0": {
+        "type": "package",
+        "dependencies": {
+          "Microsoft.AspNetCore.Components.Web": "8.0.0"
+        },
+        "compile": {
+          "lib/net8.0/Blazored.LocalStorage.dll": {}
+        },
+        "runtime": {
+          "lib/net8.0/Blazored.LocalStorage.dll": {}
+        }
+      },
       "Microsoft.AspNetCore.App.Internal.Assets/10.0.7": {
         "type": "package",
         "build": {
@@ -1299,6 +1323,22 @@
     }
   },
   "libraries": {
+    "Blazored.LocalStorage/4.5.0": {
+      "sha512": "6nZuJwA7zNIKx83IsObiHXZb09ponJOpCClU3en+hI8ZFvrOKXeOw+H7TegQZQrvdR1n9fkrVkEBQZg8vx6ZTw==",
+      "type": "package",
+      "path": "blazored.localstorage/4.5.0",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "README.md",
+        "blazored.localstorage.4.5.0.nupkg.sha512",
+        "blazored.localstorage.nuspec",
+        "icon.png",
+        "lib/net6.0/Blazored.LocalStorage.dll",
+        "lib/net7.0/Blazored.LocalStorage.dll",
+        "lib/net8.0/Blazored.LocalStorage.dll"
+      ]
+    },
     "Microsoft.AspNetCore.App.Internal.Assets/10.0.7": {
       "sha512": "ao3i+ks0uOQ7FWacI1hqHkUczebmXrGkUB63Xhkc34QbSzG9nYBlDv9v5l6rtCrHMsDW+13kZlpJrSj1HXddqg==",
       "type": "package",
@@ -2489,6 +2529,7 @@
   },
   "projectFileDependencyGroups": {
     "net10.0": [
+      "Blazored.LocalStorage >= 4.5.0",
       "HelpDeskHero.Shared >= 1.0.0",
       "Microsoft.AspNetCore.App.Internal.Assets >= 10.0.7",
       "Microsoft.AspNetCore.Components.Authorization >= 10.0.8",
@@ -2547,6 +2588,10 @@
       "net10.0": {
         "targetAlias": "net10.0",
         "dependencies": {
+          "Blazored.LocalStorage": {
+            "target": "Package",
+            "version": "[4.5.0, )"
+          },
           "Microsoft.AspNetCore.App.Internal.Assets": {
             "suppressParent": "All",
             "target": "Package",

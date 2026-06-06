@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "sLg4CzDFkp0=",
+  "dgSpecHash": "D5fZ4leAGiY=",
   "success": true,
   "projectFilePath": "C:\\blad\\Documents\\GitHub\\HelpDeskHero\\src\\HelpDeskHero.UI\\HelpDeskHero.UI.csproj",
   "expectedPackageFiles": [
+    "C:\\Users\\Admin\\.nuget\\packages\\blazored.localstorage\\4.5.0\\blazored.localstorage.4.5.0.nupkg.sha512",
     "C:\\Users\\Admin\\.nuget\\packages\\microsoft.aspnetcore.app.internal.assets\\10.0.7\\microsoft.aspnetcore.app.internal.assets.10.0.7.nupkg.sha512",
     "C:\\Users\\Admin\\.nuget\\packages\\microsoft.aspnetcore.authorization\\10.0.8\\microsoft.aspnetcore.authorization.10.0.8.nupkg.sha512",
     "C:\\Users\\Admin\\.nuget\\packages\\microsoft.aspnetcore.components\\10.0.8\\microsoft.aspnetcore.components.10.0.8.nupkg.sha512",
