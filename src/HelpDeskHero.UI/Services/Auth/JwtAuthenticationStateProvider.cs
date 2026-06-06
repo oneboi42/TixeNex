@@ -1,50 +1,52 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using HelpDeskHero.Shared.Contracts.Auth;
 using Microsoft.AspNetCore.Components.Authorization;
 
 namespace HelpDeskHero.UI.Services.Auth;
 
 public sealed class JwtAuthenticationStateProvider : AuthenticationStateProvider
 {
-    private readonly TokenStorageService _tokenStorage;
+    private readonly SessionTokenStore _tokenStore;
 
-    public JwtAuthenticationStateProvider(TokenStorageService tokenStorage)
+    public JwtAuthenticationStateProvider(SessionTokenStore tokenStore)
     {
-        _tokenStorage = tokenStorage;
+        _tokenStore = tokenStore;
     }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        var token = await _tokenStorage.GetTokenAsync();
+        var auth = await _tokenStore.GetAsync();
+        if (auth is null || string.IsNullOrWhiteSpace(auth.AccessToken))
+            return Anonymous();
 
-        if (string.IsNullOrWhiteSpace(token))
+        var claims = new List<Claim>
         {
-            return new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()));
-        }
+            new(ClaimTypes.Name, auth.UserName),
+            new(ClaimTypes.Role, auth.Role)
+        };
 
-        var identity = BuildIdentityFromToken(token);
+        var identity = new ClaimsIdentity(claims, "jwt");
         return new AuthenticationState(new ClaimsPrincipal(identity));
     }
 
-    public void NotifyUserAuthentication(string token)
+    public void NotifyUserAuthentication(AuthResponseDto auth)
     {
-        var identity = BuildIdentityFromToken(token);
-        NotifyAuthenticationStateChanged(Task.FromResult(
-            new AuthenticationState(new ClaimsPrincipal(identity))));
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.Name, auth.UserName),
+            new(ClaimTypes.Role, auth.Role)
+        };
+
+        var identity = new ClaimsIdentity(claims, "jwt");
+        NotifyAuthenticationStateChanged(
+            Task.FromResult(new AuthenticationState(new ClaimsPrincipal(identity))));
     }
 
     public void NotifyUserLogout()
     {
-        NotifyAuthenticationStateChanged(Task.FromResult(
-            new AuthenticationState(new ClaimsPrincipal(new ClaimsIdentity()))));
+        NotifyAuthenticationStateChanged(Task.FromResult(Anonymous()));
     }
 
-    private static ClaimsIdentity BuildIdentityFromToken(string token)
-    {
-        var handler = new JwtSecurityTokenHandler();
-        var jwt = handler.ReadJwtToken(token);
-
-        var claims = jwt.Claims.ToList();
-        return new ClaimsIdentity(claims, "jwt");
-    }
+    private static AuthenticationState Anonymous() =>
+        new(new ClaimsPrincipal(new ClaimsIdentity()));
 }
