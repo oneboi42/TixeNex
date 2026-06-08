@@ -1,0 +1,11 @@
+@page "/admin/dashboard"
+@attribute [Authorize(Roles = "Admin")]
+
+<PageTitle>Panel Administratora</PageTitle>
+
+<div class="container mt-4">
+    <div class="alert alert-success">
+        <h4>Strefa Administratora</h4>
+        <p>Jeśli widzisz tę stronę, to znaczy, że ochrona routingu działa poprawnie, a Twój użytkownik ma rolę <strong>Admin</strong>.</p>
+    </div>
+</div>
