@@ -1,52 +1,75 @@
 @page "/login"
-@attribute [AllowAnonymous]
-@inject NavigationManager Nav
-@inject HelpDeskHero.UI.Services.Auth.AuthService AuthService
+@using System.ComponentModel.DataAnnotations
+@using HelpDeskHero.Shared.Contracts.Auth
+@using HelpDeskHero.UI.Services.Api
+@using HelpDeskHero.UI.Services.Auth
+@inject AuthApiClient AuthApi
+@inject AuthSessionService AuthSession
+@inject NavigationManager Navigation
 
 <PageTitle>Login</PageTitle>
 
-<h3>Login</h3>
-
-@if (!string.IsNullOrWhiteSpace(_error))
-{
-    <p>@_error</p>
-}
+<h3>Logowanie</h3>
 
 <EditForm Model="_model" OnValidSubmit="HandleLoginAsync">
     <DataAnnotationsValidator />
+    <ValidationSummary />
 
-    <div>
+    <div class="mb-3">
         <label>Login</label>
-        <InputText @bind-Value="_model.UserName" />
+        <InputText class="form-control" @bind-Value="_model.UserName" />
+        <ValidationMessage For="@(() => _model.UserName)" />
     </div>
 
-    <div>
-        <label>Password</label>
-        <InputText @bind-Value="_model.Password" type="password" />
+    <div class="mb-3">
+        <label>Haslo</label>
+        <InputText class="form-control" type="password" @bind-Value="_model.Password" />
+        <ValidationMessage For="@(() => _model.Password)" />
     </div>
 
-    <button type="submit">Zaloguj</button>
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    <button class="btn btn-primary" type="submit" disabled="@_busy">Zaloguj</button>
 </EditForm>
 
 @code {
-    private LoginVm _model = new();
+    private bool _busy;
     private string? _error;
+    private LoginVm _model = new();
 
     private async Task HandleLoginAsync()
     {
-        var ok = await AuthService.LoginAsync(_model.UserName, _model.Password);
-        if (!ok)
+        _busy = true;
+        _error = null;
+
+        var result = await AuthApi.LoginAsync(new LoginRequestDto
+        {
+            UserName = _model.UserName,
+            Password = _model.Password
+        });
+
+        if (result is null)
         {
             _error = "Niepoprawny login lub haslo.";
+            _busy = false;
             return;
         }
 
-        Nav.NavigateTo("/tickets");
+        await AuthSession.LoginAsync(result);
+        _busy = false;
+
+        Navigation.NavigateTo("/tickets");
     }
 
     private sealed class LoginVm
     {
+        [Required]
         public string UserName { get; set; } = string.Empty;
+
+        [Required]
         public string Password { get; set; } = string.Empty;
     }
 }
