@@ -1,48 +1,77 @@
 @page "/tickets/create"
 @attribute [Authorize]
 @using HelpDeskHero.Shared.Contracts.Tickets
-@inject HelpDeskHero.UI.Services.Api.TicketApiClient TicketApi
-@inject NavigationManager Nav
+@using HelpDeskHero.UI.Services.Api
+@inject TicketApiClient TicketApi
+@inject NavigationManager Navigation
+
+<PageTitle>Nowe zgloszenie</PageTitle>
 
 <h3>Nowe zgloszenie</h3>
 
-<EditForm Model="_model" OnValidSubmit="HandleSaveAsync">
+<EditForm Model="_model" OnValidSubmit="HandleSubmitAsync">
     <DataAnnotationsValidator />
+    <ValidationSummary />
 
-    <div>
+    <div class="mb-3">
         <label>Tytul</label>
-        <InputText @bind-Value="_model.Title" />
+        <InputText class="form-control" @bind-Value="_model.Title" />
+        <ValidationMessage For="@(() => _model.Title)" />
     </div>
 
-    <div>
+    <div class="mb-3">
         <label>Opis</label>
-        <InputTextArea @bind-Value="_model.Description" />
+        <InputTextArea class="form-control" @bind-Value="_model.Description" />
+        <ValidationMessage For="@(() => _model.Description)" />
     </div>
 
-    <div>
+    <div class="mb-3">
         <label>Priorytet</label>
-        <InputSelect @bind-Value="_model.Priority">
+        <InputSelect class="form-select" @bind-Value="_model.Priority">
             <option>Low</option>
             <option>Medium</option>
             <option>High</option>
+            <option>Critical</option>
         </InputSelect>
+        <ValidationMessage For="@(() => _model.Priority)" />
     </div>
 
-    <button type="submit">Zapisz</button>
+    @if (!string.IsNullOrWhiteSpace(_error))
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+
+    <button class="btn btn-primary" type="submit" disabled="@_busy">Zapisz</button>
 </EditForm>
 
 @code {
-    private CreateTicketDto _model = new()
-    {
-        Priority = "Medium"
-    };
+    private bool _busy;
+    private string? _error;
+    private CreateTicketDto _model = new();
 
-    private async Task HandleSaveAsync()
+    private async Task HandleSubmitAsync()
     {
-        var created = await TicketApi.CreateAsync(_model);
-        if (created is null)
-            return;
+        _busy = true;
+        _error = null;
 
-        Nav.NavigateTo($"/tickets/{created.Id}");
+        try
+        {
+            var result = await TicketApi.CreateAsync(_model);
+            if (result is null)
+            {
+                _error = "Nie udalo sie zapisac zgloszenia.";
+                return;
+            }
+
+            Navigation.NavigateTo("/tickets");
+        }
+        catch
+        {
+            _error = "Wystapil blad podczas zapisu.";
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 }
