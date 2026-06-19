@@ -6,23 +6,24 @@
 
 <PageTitle>Tickets</PageTitle>
 
-<h3>Tickets</h3>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h3>Tickets</h3>
 
-<p>
-    <button @onclick='() => Nav.NavigateTo("/tickets/create")'>Nowe zgloszenie</button>
-</p>
+    <button class="btn btn-primary"
+            @onclick='() => Nav.NavigateTo("/tickets/create")'>
+        Nowe zgłoszenie
+    </button>
+</div>
 
-@if (_isLoading)
+<Loading Visible="@_isLoading" />
+
+@if (!_isLoading && _tickets.Count == 0)
 {
-    <p>Ladowanie...</p>
+    <p>Brak zgłoszeń.</p>
 }
-else if (_tickets.Count == 0)
+else if (!_isLoading)
 {
-    <p>Brak zgloszen.</p>
-}
-else
-{
-    <table class="table">
+    <table class="table table-striped align-middle">
         <thead>
             <tr>
                 <th>Number</th>
@@ -38,11 +39,24 @@ else
                 <tr>
                     <td>@ticket.Number</td>
                     <td>@ticket.Title</td>
-                    <td>@ticket.Status</td>
-                    <td>@ticket.Priority</td>
                     <td>
-                        <button @onclick='() => Nav.NavigateTo($"/tickets/{ticket.Id}")'>Szczegoly</button>
-                        <button @onclick='() => Nav.NavigateTo($"/tickets/edit/{ticket.Id}")'>Edytuj</button>
+                        <StatusBadge Status="@ticket.Status" />
+                    </td>
+                    <td>
+                        <PriorityBadge Priority="@ticket.Priority" />
+                    </td>
+                    <td>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-primary"
+                                    @onclick='() => Nav.NavigateTo($"/tickets/{ticket.Id}")'>
+                                Szczegóły
+                            </button>
+
+                            <button class="btn btn-sm btn-outline-secondary"
+                                    @onclick='() => Nav.NavigateTo($"/tickets/edit/{ticket.Id}")'>
+                                Edytuj
+                            </button>
+                        </div>
                     </td>
                 </tr>
             }

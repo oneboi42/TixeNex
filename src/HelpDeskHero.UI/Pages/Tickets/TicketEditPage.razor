@@ -11,11 +11,11 @@
 
 @if (_isLoading)
 {
-    <p><em>Ładowanie danych...</em></p>
+    <Loading Visible="true" />
 }
 else if (_model is null)
 {
-    <div class="alert alert-danger">Nie znaleziono takiego zgłoszenia.</div>
+    <ErrorBanner Message="@_error" />
 }
 else
 {
@@ -63,7 +63,9 @@ else
         }
 
         <div class="d-flex gap-2">
-            <button class="btn btn-primary" type="submit" disabled="@_busy">Zapisz zmiany</button>
+            <button class="btn btn-primary" type="submit" disabled="@_busy">
+            @(_busy ? "Zapisywanie..." : "Zapisz zmiany")
+            </button>
             <button class="btn btn-danger" type="button" @onclick="HandleDeleteAsync" disabled="@_busy">Usuń</button>
             <a class="btn btn-secondary" href="/tickets/@Id">Anuluj</a>
         </div>
@@ -144,7 +146,6 @@ else
         try
         {
             var success = await TicketApi.DeleteAsync(Id);
-            // Если твой DeleteAsync возвращает void, эту проверку (if !success) можно уbraть
             if (!success) 
             {
                 _error = "Nie udało się usunąć zgłoszenia.";

@@ -4,21 +4,33 @@
 @inject HelpDeskHero.UI.Services.Api.TicketApiClient TicketApi
 @inject NavigationManager Nav
 
-<h3>Szczegoly zgloszenia</h3>
+<h3>Szczegóły zgłoszenia</h3>
 
 @if (_ticket is null)
 {
-    <p>Ladowanie...</p>
+    <Loading Visible="true" />
 }
 else
 {
-    <p><strong>Numer:</strong> @_ticket.Number</p>
-    <p><strong>Tytul:</strong> @_ticket.Title</p>
-    <p><strong>Status:</strong> @_ticket.Status</p>
-    <p><strong>Priorytet:</strong> @_ticket.Priority</p>
-    <p><strong>Opis:</strong> @_ticket.Description</p>
+    <div class="card">
+        <div class="card-body">
+            <p><strong>Numer:</strong> @_ticket.Number</p>
+            <p><strong>Tytuł:</strong> @_ticket.Title</p>
+            <p><strong>Status:</strong> <StatusBadge Status="@_ticket.Status" /></p>
+            <p><strong>Priorytet:</strong> <PriorityBadge Priority="@_ticket.Priority" /></p>
+            <p><strong>Opis:</strong> @_ticket.Description</p>
 
-    <button @onclick='() => Nav.NavigateTo($"/tickets/edit/{Id}")'>Edytuj</button>
+            <button class="btn btn-primary"
+                    @onclick='() => Nav.NavigateTo($"/tickets/edit/{Id}")'>
+                Edytuj
+            </button>
+
+            <button class="btn btn-secondary"
+                    @onclick='() => Nav.NavigateTo("/tickets")'>
+                Powrót
+            </button>
+        </div>
+    </div>
 }
 
 @code {

@@ -1,0 +1,16 @@
+<span class="badge @GetCssClass(Priority)">
+    @Priority
+</span>
+
+@code {
+    [Parameter] public string Priority { get; set; } = "Medium";
+
+    private string GetCssClass(string priority) => priority switch
+    {
+        "Low" => "bg-success",
+        "Medium" => "bg-warning text-dark",
+        "High" => "bg-danger",
+        "Critical" => "bg-dark",
+        _ => "bg-secondary"
+    };
+}

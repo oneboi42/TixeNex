@@ -1,16 +1,27 @@
 ﻿@inherits LayoutComponentBase
+
 <div class="page">
     <div class="sidebar">
         <NavMenu />
     </div>
 
     <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+        <div class="topbar d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+            <h5 class="m-0">HelpDeskHero</h5>
+
+            <div>
+                @* TODO: Integrate authentication state here later *@
+                <span class="me-2">admin@helpdeskhero.com</span>
+                <span class="badge bg-primary me-2">Admin</span>
+
+                <button class="btn btn-outline-secondary btn-sm">
+                    Logout
+                </button>
+            </div>
         </div>
 
-        <article class="content px-4">
+        <div class="content px-4 py-3">
             @Body
-        </article>
+        </div>
     </main>
 </div>

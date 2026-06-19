@@ -1,0 +1,12 @@
+@if (Visible)
+{
+    <div class="text-center my-4">
+        <div class="spinner-border"></div>
+        <p>Loading...</p>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool Visible { get; set; }
+}

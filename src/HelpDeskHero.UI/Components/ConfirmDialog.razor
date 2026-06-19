@@ -1,0 +1,48 @@
+@if (Visible)
+{
+    <div class="modal d-block">
+        <div class="modal-dialog">
+            <div class="modal-content">
+
+                <div class="modal-header">
+                    <h5>@Title</h5>
+                </div>
+
+                <div class="modal-body">
+                    @Message
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-secondary"
+                            @onclick="Cancel">
+                        Cancel
+                    </button>
+
+                    <button class="btn btn-danger"
+                            @onclick="Confirm">
+                        Confirm
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+
+    [Parameter] public string Title { get; set; } = "";
+
+    [Parameter] public string Message { get; set; } = "";
+
+    [Parameter] public EventCallback OnConfirm { get; set; }
+
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private async Task Confirm()
+        => await OnConfirm.InvokeAsync();
+
+    private async Task Cancel()
+        => await OnCancel.InvokeAsync();
+}
