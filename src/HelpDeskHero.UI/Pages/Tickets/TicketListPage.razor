@@ -17,11 +17,13 @@
 
 <Loading Visible="@_isLoading" />
 
-@if (!_isLoading && _tickets.Count == 0)
+<ErrorBanner Message="@_error" />
+
+@if (!_isLoading && string.IsNullOrWhiteSpace(_error) && _tickets.Count == 0)
 {
     <p>Brak zgłoszeń.</p>
 }
-else if (!_isLoading)
+else if (!_isLoading && string.IsNullOrWhiteSpace(_error))
 {
     <table class="table table-striped align-middle">
         <thead>
@@ -66,11 +68,22 @@ else if (!_isLoading)
 
 @code {
     private bool _isLoading = true;
+    private string? _error;
     private List<TicketDto> _tickets = new();
 
     protected override async Task OnInitializedAsync()
     {
-        _tickets = (await TicketApi.GetAllAsync()).ToList();
-        _isLoading = false;
+        try
+        {
+            _tickets = (await TicketApi.GetAllAsync()).ToList();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Nie udało się pobrać zgłoszeń: {ex.Message}";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
     }
 }

@@ -4,20 +4,23 @@ namespace HelpDeskHero.UI.Services.Auth;
 
 public sealed class AuthTokenHandler : DelegatingHandler
 {
-    private readonly TokenStorageService _tokenStorage;
+    private readonly AuthSessionService _session;
 
-    public AuthTokenHandler(TokenStorageService tokenStorage)
+    public AuthTokenHandler(AuthSessionService session)
     {
-        _tokenStorage = tokenStorage;
+        _session = session;
     }
 
-    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    protected override async Task<HttpResponseMessage> SendAsync(
+        HttpRequestMessage request,
+        CancellationToken cancellationToken)
     {
-        var token = await _tokenStorage.GetTokenAsync();
+        var token = await _session.GetValidAccessTokenAsync(cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(token))
         {
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            request.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", token);
         }
 
         return await base.SendAsync(request, cancellationToken);

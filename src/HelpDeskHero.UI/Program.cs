@@ -14,9 +14,7 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddBlazoredLocalStorage();
 
-builder.Services.AddScoped<TokenStorageService>();
 builder.Services.AddScoped<SessionTokenStore>();
-builder.Services.AddScoped<AuthSessionService>();
 
 builder.Services.AddScoped<JwtAuthenticationStateProvider>();
 builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
@@ -24,12 +22,20 @@ builder.Services.AddScoped<AuthenticationStateProvider>(sp =>
 
 builder.Services.AddAuthorizationCore();
 
-builder.Services.AddScoped<AuthTokenHandler>();
+builder.Services.AddScoped<AuthSessionService>();
 builder.Services.AddScoped<AuthHttpMessageHandler>();
 
 var apiBaseUrl = builder.Configuration["Api:BaseUrl"]
     ?? throw new InvalidOperationException("Missing Api:BaseUrl.");
 
+// klient bez tokena — tylko login/refresh
+builder.Services.AddScoped(sp =>
+    new AuthApiClient(new HttpClient
+    {
+        BaseAddress = new Uri(apiBaseUrl)
+    }));
+
+// klient z tokenem — tickets itd.
 builder.Services.AddScoped(sp =>
 {
     var handler = sp.GetRequiredService<AuthHttpMessageHandler>();
@@ -41,8 +47,6 @@ builder.Services.AddScoped(sp =>
     };
 });
 
-builder.Services.AddScoped<AuthApiClient>();
 builder.Services.AddScoped<TicketApiClient>();
-builder.Services.AddScoped<AuthService>();
 
 await builder.Build().RunAsync();

@@ -16,21 +16,27 @@ public sealed class JwtAuthenticationStateProvider : AuthenticationStateProvider
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
         var auth = await _tokenStore.GetAsync();
+
         if (auth is null || string.IsNullOrWhiteSpace(auth.AccessToken))
             return Anonymous();
 
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.Name, auth.UserName),
-            new(ClaimTypes.Role, auth.Role)
-        };
-
-        var identity = new ClaimsIdentity(claims, "jwt");
-        return new AuthenticationState(new ClaimsPrincipal(identity));
+        return CreateAuthenticationState(auth);
     }
 
     public void NotifyUserAuthentication(AuthResponseDto auth)
     {
+        NotifyAuthenticationStateChanged(
+            Task.FromResult(CreateAuthenticationState(auth)));
+    }
+
+    public void NotifyUserLogout()
+    {
+        NotifyAuthenticationStateChanged(
+            Task.FromResult(Anonymous()));
+    }
+
+    private static AuthenticationState CreateAuthenticationState(AuthResponseDto auth)
+    {
         var claims = new List<Claim>
         {
             new(ClaimTypes.Name, auth.UserName),
@@ -38,15 +44,14 @@ public sealed class JwtAuthenticationStateProvider : AuthenticationStateProvider
         };
 
         var identity = new ClaimsIdentity(claims, "jwt");
-        NotifyAuthenticationStateChanged(
-            Task.FromResult(new AuthenticationState(new ClaimsPrincipal(identity))));
+        var user = new ClaimsPrincipal(identity);
+
+        return new AuthenticationState(user);
     }
 
-    public void NotifyUserLogout()
+    private static AuthenticationState Anonymous()
     {
-        NotifyAuthenticationStateChanged(Task.FromResult(Anonymous()));
+        return new AuthenticationState(
+            new ClaimsPrincipal(new ClaimsIdentity()));
     }
-
-    private static AuthenticationState Anonymous() =>
-        new(new ClaimsPrincipal(new ClaimsIdentity()));
 }

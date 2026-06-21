@@ -117,12 +117,7 @@ else
 
         try
         {
-            var success = await TicketApi.UpdateAsync(Id, _model);
-            if (!success)
-            {
-                _error = "Nie udało się zaktualizować zgłoszenia.";
-                return;
-            }
+            await TicketApi.UpdateAsync(Id, _model);
 
             Nav.NavigateTo($"/tickets/{Id}");
         }
@@ -145,12 +140,7 @@ else
 
         try
         {
-            var success = await TicketApi.DeleteAsync(Id);
-            if (!success) 
-            {
-                _error = "Nie udało się usunąć zgłoszenia.";
-                return;
-            }
+            await TicketApi.DeleteAsync(Id);
 
             Nav.NavigateTo("/tickets");
         }

@@ -1,23 +1,17 @@
 using System.Net.Http.Json;
 using HelpDeskHero.Shared.Contracts.Auth;
-using Microsoft.AspNetCore.Components.Authorization;
 
 namespace HelpDeskHero.UI.Services.Auth;
 
 public sealed class AuthService
 {
     private readonly HttpClient _http;
-    private readonly TokenStorageService _tokenStorage;
-    private readonly JwtAuthenticationStateProvider _authStateProvider;
+    private readonly AuthSessionService _session;
 
-    public AuthService(
-        HttpClient http,
-        TokenStorageService tokenStorage,
-        AuthenticationStateProvider authStateProvider)
+    public AuthService(HttpClient http, AuthSessionService session)
     {
         _http = http;
-        _tokenStorage = tokenStorage;
-        _authStateProvider = (JwtAuthenticationStateProvider)authStateProvider;
+        _session = session;
     }
 
     public async Task<bool> LoginAsync(string userName, string password, CancellationToken ct = default)
@@ -32,18 +26,16 @@ public sealed class AuthService
         if (!response.IsSuccessStatusCode)
             return false;
 
-        var dto = await response.Content.ReadFromJsonAsync<LoginResponseDto>(cancellationToken: ct);
-        if (dto is null || string.IsNullOrWhiteSpace(dto.Token))
+        var auth = await response.Content.ReadFromJsonAsync<AuthResponseDto>(cancellationToken: ct);
+        if (auth is null || string.IsNullOrWhiteSpace(auth.AccessToken))
             return false;
 
-        await _tokenStorage.SetTokenAsync(dto.Token);
-        _authStateProvider.NotifyUserAuthentication(dto.Token);
+        await _session.LoginAsync(auth, ct);
         return true;
     }
 
-    public async Task LogoutAsync()
+    public Task LogoutAsync()
     {
-        await _tokenStorage.RemoveTokenAsync();
-        _authStateProvider.NotifyUserLogout();
+        return _session.LogoutAsync();
     }
 }

@@ -13,12 +13,12 @@ public sealed class SessionTokenStore
         _localStorage = localStorage;
     }
 
-    public Task SetAsync(AuthResponseDto auth, CancellationToken ct = default) =>
+    public ValueTask SetAsync(AuthResponseDto auth, CancellationToken ct = default) =>
         _localStorage.SetItemAsync(Key, auth, ct);
 
-    public Task<AuthResponseDto?> GetAsync(CancellationToken ct = default) =>
+    public ValueTask<AuthResponseDto?> GetAsync(CancellationToken ct = default) =>
         _localStorage.GetItemAsync<AuthResponseDto>(Key, ct);
 
-    public Task RemoveAsync(CancellationToken ct = default) =>
+    public ValueTask RemoveAsync(CancellationToken ct = default) =>
         _localStorage.RemoveItemAsync(Key, ct);
 }

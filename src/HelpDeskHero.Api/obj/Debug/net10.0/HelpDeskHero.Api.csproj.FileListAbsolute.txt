@@ -8,6 +8,7 @@ C:\blad\Documents\GitHub\HelpDeskHero\src\HelpDeskHero.Api\bin\Debug\net10.0\Hel
 C:\blad\Documents\GitHub\HelpDeskHero\src\HelpDeskHero.Api\bin\Debug\net10.0\HelpDeskHero.Api.pdb
 C:\blad\Documents\GitHub\HelpDeskHero\src\HelpDeskHero.Api\bin\Debug\net10.0\Azure.Core.dll
 C:\blad\Documents\GitHub\HelpDeskHero\src\HelpDeskHero.Api\bin\Debug\net10.0\Azure.Identity.dll
+C:\blad\Documents\GitHub\HelpDeskHero\src\HelpDeskHero.Api\bin\Debug\net10.0\BCrypt-Net-Next.dll
 C:\blad\Documents\GitHub\HelpDeskHero\src\HelpDeskHero.Api\bin\Debug\net10.0\Humanizer.dll
 C:\blad\Documents\GitHub\HelpDeskHero\src\HelpDeskHero.Api\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
 C:\blad\Documents\GitHub\HelpDeskHero\src\HelpDeskHero.Api\bin\Debug\net10.0\Microsoft.AspNetCore.OpenApi.dll

@@ -1,27 +1,86 @@
-private async Task HandleSubmitAsync()
-{
-    if (_busy) return;
+@page "/tickets/create"
+@attribute [Authorize]
 
-    _busy = true;
-    _error = null;
+@using HelpDeskHero.Shared.Contracts.Tickets
+@using HelpDeskHero.UI.Services.Api
+@inject TicketApiClient TicketApi
+@inject NavigationManager Navigation
 
-    try
+<PageTitle>Nowe zgłoszenie</PageTitle>
+
+<h3>Nowe zgłoszenie</h3>
+
+<ErrorBanner Message="@_error" />
+
+<EditForm Model="_model" OnValidSubmit="HandleSubmitAsync">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label class="form-label">Tytuł</label>
+        <InputText class="form-control" @bind-Value="_model.Title" />
+        <ValidationMessage For="@(() => _model.Title)" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Opis</label>
+        <InputTextArea class="form-control" @bind-Value="_model.Description" />
+        <ValidationMessage For="@(() => _model.Description)" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label">Priorytet</label>
+        <InputSelect class="form-select" @bind-Value="_model.Priority">
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
+        </InputSelect>
+        <ValidationMessage For="@(() => _model.Priority)" />
+    </div>
+
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" type="submit" disabled="@_busy">
+            @(_busy ? "Zapisywanie..." : "Zapisz")
+        </button>
+
+        <a class="btn btn-secondary" href="/tickets">
+            Anuluj
+        </a>
+    </div>
+</EditForm>
+
+@code {
+    private bool _busy;
+    private string? _error;
+    private CreateTicketDto _model = new();
+
+    private async Task HandleSubmitAsync()
     {
-        var result = await TicketApi.CreateAsync(_model);
-        if (result is null)
+        if (_busy) return;
+
+        _busy = true;
+        _error = null;
+
+        try
         {
-            _error = "Nie udało się zapisać zgłoszenia.";
-            return;
-        }
+            var result = await TicketApi.CreateAsync(_model);
 
-        Navigation.NavigateTo("/tickets");
-    }
-    catch
-    {
-        _error = "Wystąpił błąd podczas zapisu.";
-    }
-    finally
-    {
-        _busy = false;
+            if (result is null)
+            {
+                _error = "Nie udało się zapisać zgłoszenia.";
+                return;
+            }
+
+            Navigation.NavigateTo("/tickets");
+        }
+        catch
+        {
+            _error = "Wystąpił błąd podczas zapisu.";
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 }

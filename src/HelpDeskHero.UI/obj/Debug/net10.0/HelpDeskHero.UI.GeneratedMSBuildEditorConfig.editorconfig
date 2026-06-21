@@ -32,12 +32,44 @@ build_property.EnableCodeStyleSeverity =
 build_metadata.AdditionalFiles.TargetPath = QXBwLnJhem9y
 build_metadata.AdditionalFiles.CssScope = 
 
+[C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Components/AppToast.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xBcHBUb2FzdC5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Components/ConfirmDialog.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xDb25maXJtRGlhbG9nLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Components/ErrorBanner.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xFcnJvckJhbm5lci5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Components/Loading.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xMb2FkaW5nLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Components/PriorityBadge.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xQcmlvcml0eUJhZGdlLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Components/StatusBadge.razor]
+build_metadata.AdditionalFiles.TargetPath = Q29tcG9uZW50c1xTdGF0dXNCYWRnZS5yYXpvcg==
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Pages/Admin/AdminDashboard.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQWRtaW5cQWRtaW5EYXNoYm9hcmQucmF6b3I=
+build_metadata.AdditionalFiles.CssScope = 
+
 [C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Pages/Auth/LoginPage.razor]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQXV0aFxMb2dpblBhZ2UucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Pages/Auth/LogoutPage.razor]
 build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQXV0aFxMb2dvdXRQYWdlLnJhem9y
+build_metadata.AdditionalFiles.CssScope = 
+
+[C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Pages/Auth/RedirectToLogin.razor]
+build_metadata.AdditionalFiles.TargetPath = UGFnZXNcQXV0aFxSZWRpcmVjdFRvTG9naW4ucmF6b3I=
 build_metadata.AdditionalFiles.CssScope = 
 
 [C:/blad/Documents/GitHub/HelpDeskHero/src/HelpDeskHero.UI/Pages/Counter.razor]

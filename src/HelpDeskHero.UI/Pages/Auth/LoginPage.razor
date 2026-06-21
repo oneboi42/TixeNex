@@ -1,8 +1,11 @@
 @page "/login"
+@attribute [AllowAnonymous]
+
 @using System.ComponentModel.DataAnnotations
 @using HelpDeskHero.Shared.Contracts.Auth
 @using HelpDeskHero.UI.Services.Api
 @using HelpDeskHero.UI.Services.Auth
+
 @inject AuthApiClient AuthApi
 @inject AuthSessionService AuthSession
 @inject NavigationManager Navigation
@@ -16,13 +19,13 @@
     <ValidationSummary />
 
     <div class="mb-3">
-        <label>Login</label>
+        <label class="form-label">Login</label>
         <InputText class="form-control" @bind-Value="_model.UserName" />
         <ValidationMessage For="@(() => _model.UserName)" />
     </div>
 
     <div class="mb-3">
-        <label>Haslo</label>
+        <label class="form-label">Hasło</label>
         <InputText class="form-control" type="password" @bind-Value="_model.Password" />
         <ValidationMessage For="@(() => _model.Password)" />
     </div>
@@ -32,7 +35,9 @@
         <div class="alert alert-danger">@_error</div>
     }
 
-    <button class="btn btn-primary" type="submit" disabled="@_busy">Zaloguj</button>
+    <button class="btn btn-primary" type="submit" disabled="@_busy">
+        @(_busy ? "Logowanie..." : "Zaloguj")
+    </button>
 </EditForm>
 
 @code {
@@ -42,26 +47,37 @@
 
     private async Task HandleLoginAsync()
     {
+        if (_busy) return;
+
         _busy = true;
         _error = null;
 
-        var result = await AuthApi.LoginAsync(new LoginRequestDto
+        try
         {
-            UserName = _model.UserName,
-            Password = _model.Password
-        });
+            var result = await AuthApi.LoginAsync(new LoginRequestDto
+            {
+                UserName = _model.UserName,
+                Password = _model.Password
+            });
 
-        if (result is null)
-        {
-            _error = "Niepoprawny login lub haslo.";
-            _busy = false;
-            return;
+            if (result is null)
+            {
+                _error = "Niepoprawny login lub hasło.";
+                return;
+            }
+
+            await AuthSession.LoginAsync(result);
+
+            Navigation.NavigateTo("/tickets");
         }
-
-        await AuthSession.LoginAsync(result);
-        _busy = false;
-
-        Navigation.NavigateTo("/tickets");
+        catch (Exception ex)
+        {
+            _error = $"Błąd logowania: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private sealed class LoginVm
