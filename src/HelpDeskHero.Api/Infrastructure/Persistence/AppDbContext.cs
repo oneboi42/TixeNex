@@ -26,6 +26,11 @@ public sealed class AppDbContext : DbContext
             b.Property(x => x.Status).HasMaxLength(30).IsRequired();
             b.Property(x => x.Priority).HasMaxLength(30).IsRequired();
             b.Property(x => x.CreatedAtUtc).IsRequired();
+
+            b.HasQueryFilter(x => !x.IsDeleted);
+
+            b.Property(x => x.RowVersion)
+             .IsRowVersion();
         });
 
         modelBuilder.Entity<AppUser>(b =>
@@ -45,17 +50,43 @@ public sealed class AppDbContext : DbContext
             b.ToTable("RefreshTokens");
             b.HasKey(x => x.Id);
 
+            // Configure the UserId property as a foreign key to the Users table
+            b.Property(x => x.UserId).HasMaxLength(100).IsRequired();
+
             b.Property(x => x.Token).HasMaxLength(200).IsRequired();
-            b.HasIndex(x => x.Token).IsUnique();
+
+            b.Property(x => x.TokenHash).HasMaxLength(200).IsRequired();
+            b.HasIndex(x => x.TokenHash).IsUnique();
 
             b.Property(x => x.CreatedAtUtc).IsRequired();
             b.Property(x => x.ExpiresAtUtc).IsRequired();
-            b.Property(x => x.ReplacedByToken).HasMaxLength(200);
+            
+    
+            b.Property(x => x.DeviceName).HasMaxLength(200).IsRequired();
+            b.Property(x => x.IpAddress).HasMaxLength(50);
+            b.Property(x => x.RevokedAtUtc);
 
-            b.HasOne(x => x.AppUser)
-             .WithMany(x => x.RefreshTokens)
-             .HasForeignKey(x => x.AppUserId)
+            b.Ignore(x => x.IsActive);
+
+            b.HasOne(x => x.User)
+             .WithMany() 
+             .HasForeignKey(x => x.UserId)
              .OnDelete(DeleteBehavior.Cascade);
         });
+    }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        foreach (var entry in ChangeTracker.Entries<Ticket>())
+        {
+            if (entry.State == EntityState.Deleted)
+            {
+                entry.State = EntityState.Modified;
+                entry.Entity.IsDeleted = true;
+                entry.Entity.DeletedAtUtc = DateTime.UtcNow;
+            }
+        }
+
+        return base.SaveChangesAsync(cancellationToken);
     }
 }

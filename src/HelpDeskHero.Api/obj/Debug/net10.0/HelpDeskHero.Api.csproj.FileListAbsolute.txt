@@ -164,3 +164,4 @@ C:\blad\Documents\GitHub\HelpDeskHero\src\HelpDeskHero.Api\obj\Debug\net10.0\ref
 C:\blad\Documents\GitHub\HelpDeskHero\src\HelpDeskHero.Api\obj\Debug\net10.0\HelpDeskHero.Api.pdb
 C:\blad\Documents\GitHub\HelpDeskHero\src\HelpDeskHero.Api\obj\Debug\net10.0\HelpDeskHero.Api.genruntimeconfig.cache
 C:\blad\Documents\GitHub\HelpDeskHero\src\HelpDeskHero.Api\obj\Debug\net10.0\ref\HelpDeskHero.Api.dll
+C:\blad\Documents\GitHub\HelpDeskHero\src\HelpDeskHero.Api\bin\Debug\net10.0\Microsoft.AspNetCore.Identity.EntityFrameworkCore.dll
