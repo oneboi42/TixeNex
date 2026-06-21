@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("HelpDeskHero.Shared")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+30f7dfe6391a2b26c65c638afe837479b90553da")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+59b014c1330456cf36b21d430d6beb619b29e0ea")]
 [assembly: System.Reflection.AssemblyProductAttribute("HelpDeskHero.Shared")]
 [assembly: System.Reflection.AssemblyTitleAttribute("HelpDeskHero.Shared")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
