@@ -34,7 +34,7 @@ public sealed class AuthController : ControllerBase
             .Include(x => x.RefreshTokens)
             .SingleOrDefaultAsync(x => x.UserName == dto.UserName, ct);
 
-        if (user is null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
+        if (user is null || string.IsNullOrEmpty(user.PasswordHash) || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
             return Unauthorized("Invalid username or password.");
 
         var accessExpires = DateTime.UtcNow.AddMinutes(_jwt.AccessTokenMinutes);
@@ -52,7 +52,7 @@ public sealed class AuthController : ControllerBase
             AccessTokenExpiresAtUtc = accessExpires,
             RefreshToken = refreshToken.Token,
             RefreshTokenExpiresAtUtc = refreshExpires,
-            UserName = user.UserName,
+            UserName = user.UserName ?? string.Empty,
             Role = user.Role
         });
     }
@@ -102,7 +102,7 @@ public sealed class AuthController : ControllerBase
             AccessTokenExpiresAtUtc = accessExpires,
             RefreshToken = newRefreshToken.Token,
             RefreshTokenExpiresAtUtc = refreshExpires,
-            UserName = user.UserName,
+            UserName = user.UserName ?? string.Empty,
             Role = user.Role
         });
     }
