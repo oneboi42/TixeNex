@@ -5,7 +5,6 @@ namespace HelpDeskHero.Api.Infrastructure.Security;
 
 public interface ITokenService
 {
-    string CreateAccessToken(AppUser user, DateTime expiresAtUtc);
-    RefreshToken CreateRefreshToken(DateTime expiresAtUtc);
+    Task<(string Token, DateTime ExpiresAtUtc)> CreateAccessTokenAsync(ApplicationUser user);
     ClaimsPrincipal? GetPrincipalFromExpiredToken(string token);
 }

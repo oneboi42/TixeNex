@@ -1,11 +1,10 @@
 using HelpDeskHero.Api.Domain;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace HelpDeskHero.Api.Infrastructure.Persistence;
 
-public sealed class AppDbContext : IdentityDbContext<AppUser, IdentityRole<int>, int>
+public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
     {
@@ -18,50 +17,13 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, IdentityRole<int>,
     {
         base.OnModelCreating(modelBuilder);
 
-        modelBuilder.Entity<AppUser>(b =>
+        modelBuilder.Entity<ApplicationUser>(b =>
         {
             b.ToTable("Users");
 
-            b.Property(x => x.UserName)
-                .HasMaxLength(100)
-                .IsRequired();
-
-            b.Property(x => x.PasswordHash)
-                .HasMaxLength(500);
-
-            b.Property(x => x.Role)
-                .HasMaxLength(50)
-                .IsRequired();
-        });
-
-        modelBuilder.Entity<IdentityRole<int>>(b =>
-        {
-            b.ToTable("Roles");
-        });
-
-        modelBuilder.Entity<IdentityUserRole<int>>(b =>
-        {
-            b.ToTable("UserRoles");
-        });
-
-        modelBuilder.Entity<IdentityUserClaim<int>>(b =>
-        {
-            b.ToTable("UserClaims");
-        });
-
-        modelBuilder.Entity<IdentityUserLogin<int>>(b =>
-        {
-            b.ToTable("UserLogins");
-        });
-
-        modelBuilder.Entity<IdentityRoleClaim<int>>(b =>
-        {
-            b.ToTable("RoleClaims");
-        });
-
-        modelBuilder.Entity<IdentityUserToken<int>>(b =>
-        {
-            b.ToTable("UserTokens");
+            b.Property(x => x.DisplayName).HasMaxLength(200).IsRequired();
+            b.Property(x => x.IsActive).IsRequired();
+            b.Property(x => x.CreatedAtUtc).IsRequired();
         });
 
         modelBuilder.Entity<Ticket>(b =>
@@ -76,10 +38,9 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, IdentityRole<int>,
             b.Property(x => x.Priority).HasMaxLength(30).IsRequired();
             b.Property(x => x.CreatedAtUtc).IsRequired();
 
-            b.HasQueryFilter(x => !x.IsDeleted);
+            b.Property(x => x.RowVersion).IsRowVersion();
 
-            b.Property(x => x.RowVersion)
-                .IsRowVersion();
+            b.HasQueryFilter(x => !x.IsDeleted);
         });
 
         modelBuilder.Entity<RefreshToken>(b =>
@@ -87,24 +48,22 @@ public sealed class AppDbContext : IdentityDbContext<AppUser, IdentityRole<int>,
             b.ToTable("RefreshTokens");
             b.HasKey(x => x.Id);
 
-            b.Property(x => x.UserId).IsRequired();
-
-            b.Property(x => x.Token).HasMaxLength(200).IsRequired();
+            b.Property(x => x.UserId).HasMaxLength(450).IsRequired();
 
             b.Property(x => x.TokenHash).HasMaxLength(256).IsRequired();
             b.HasIndex(x => x.TokenHash).IsUnique();
 
-            b.Property(x => x.CreatedAtUtc).IsRequired();
-            b.Property(x => x.ExpiresAtUtc).IsRequired();
-
             b.Property(x => x.DeviceName).HasMaxLength(200).IsRequired();
             b.Property(x => x.IpAddress).HasMaxLength(64);
+
+            b.Property(x => x.CreatedAtUtc).IsRequired();
+            b.Property(x => x.ExpiresAtUtc).IsRequired();
             b.Property(x => x.RevokedAtUtc);
 
             b.Ignore(x => x.IsActive);
 
             b.HasOne(x => x.User)
-                .WithMany(x => x.RefreshTokens)
+                .WithMany()
                 .HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });

@@ -3,13 +3,10 @@ namespace HelpDeskHero.Api.Domain;
 public sealed class RefreshToken
 {
     public int Id { get; set; }
-    public int UserId { get; set; }
-    
-    public string Token { get; set; } = string.Empty;
-    public string TokenHash { get; set; } = string.Empty;
 
-    public string? ReplacedByToken { get; set; }
-    
+    public string UserId { get; set; } = string.Empty;
+
+    public string TokenHash { get; set; } = string.Empty;
     public string DeviceName { get; set; } = string.Empty;
     public string? IpAddress { get; set; }
 
@@ -19,5 +16,5 @@ public sealed class RefreshToken
 
     public bool IsActive => RevokedAtUtc is null && ExpiresAtUtc > DateTime.UtcNow;
 
-    public AppUser? User { get; set; }
+    public ApplicationUser? User { get; set; }
 }

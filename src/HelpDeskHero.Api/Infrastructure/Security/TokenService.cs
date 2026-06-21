@@ -1,8 +1,8 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Text;
 using HelpDeskHero.Api.Domain;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 
@@ -11,20 +11,29 @@ namespace HelpDeskHero.Api.Infrastructure.Security;
 public sealed class TokenService : ITokenService
 {
     private readonly JwtOptions _options;
+    private readonly UserManager<ApplicationUser> _userManager;
 
-    public TokenService(IOptions<JwtOptions> options)
+    public TokenService(IOptions<JwtOptions> options, UserManager<ApplicationUser> userManager)
     {
         _options = options.Value;
+        _userManager = userManager;
     }
 
-    public string CreateAccessToken(AppUser user, DateTime expiresAtUtc)
+    public async Task<(string Token, DateTime ExpiresAtUtc)> CreateAccessTokenAsync(ApplicationUser user)
     {
+        var expiresAtUtc = DateTime.UtcNow.AddMinutes(_options.AccessTokenMinutes);
+        var roles = await _userManager.GetRolesAsync(user);
+
         var claims = new List<Claim>
         {
-            new(JwtRegisteredClaimNames.Sub, user.UserName ?? string.Empty),
-            new Claim(ClaimTypes.Name, user.UserName ?? string.Empty),
-            new(ClaimTypes.Role, user.Role)
+            new(JwtRegisteredClaimNames.Sub, user.Id),
+            new(JwtRegisteredClaimNames.UniqueName, user.UserName ?? string.Empty),
+            new(ClaimTypes.NameIdentifier, user.Id),
+            new(ClaimTypes.Name, user.UserName ?? string.Empty),
+            new("display_name", user.DisplayName)
         };
+
+        claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.Key));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -33,23 +42,11 @@ public sealed class TokenService : ITokenService
             issuer: _options.Issuer,
             audience: _options.Audience,
             claims: claims,
+            notBefore: DateTime.UtcNow,
             expires: expiresAtUtc,
             signingCredentials: creds);
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
-    }
-
-    public RefreshToken CreateRefreshToken(DateTime expiresAtUtc)
-    {
-        var bytes = RandomNumberGenerator.GetBytes(64);
-        var token = Convert.ToBase64String(bytes);
-
-        return new RefreshToken
-        {
-            Token = token,
-            CreatedAtUtc = DateTime.UtcNow,
-            ExpiresAtUtc = expiresAtUtc
-        };
+        return (new JwtSecurityTokenHandler().WriteToken(token), expiresAtUtc);
     }
 
     public ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)

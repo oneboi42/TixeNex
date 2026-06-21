@@ -1,134 +1,72 @@
+using System.Security.Cryptography;
+using System.Text;
+using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
-using HelpDeskHero.Api.Infrastructure.Security;
-using HelpDeskHero.Shared.Contracts.Auth;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Configuration;
 
-namespace HelpDeskHero.Api.Controllers;
+namespace HelpDeskHero.Api.Infrastructure.Security;
 
-[ApiController]
-[Route("api/[controller]")]
-public sealed class AuthController : ControllerBase
+public sealed class RefreshTokenService
 {
     private readonly AppDbContext _db;
-    private readonly ITokenService _tokenService;
-    private readonly JwtOptions _jwt;
+    private readonly IConfiguration _configuration;
 
-    public AuthController(
-        AppDbContext db,
-        ITokenService tokenService,
-        IOptions<JwtOptions> jwtOptions)
+    public RefreshTokenService(AppDbContext db, IConfiguration configuration)
     {
         _db = db;
-        _tokenService = tokenService;
-        _jwt = jwtOptions.Value;
+        _configuration = configuration;
     }
 
-    [HttpPost("login")]
-    [AllowAnonymous]
-    public async Task<ActionResult<AuthResponseDto>> Login(LoginRequestDto dto, CancellationToken ct)
+    public async Task<(string rawToken, DateTime expiresAtUtc)> CreateAsync(
+        string userId,
+        string deviceName,
+        string? ipAddress,
+        CancellationToken ct = default)
     {
-        var user = await _db.Users
-            .Include(x => x.RefreshTokens)
-            .SingleOrDefaultAsync(x => x.UserName == dto.UserName, ct);
+        var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+        var hash = ComputeSha256(rawToken);
 
-        if (user is null || string.IsNullOrEmpty(user.PasswordHash) || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
-            return Unauthorized("Invalid username or password.");
+        var days = int.Parse(_configuration["Jwt:RefreshTokenDays"] ?? "7");
+        var expiresAtUtc = DateTime.UtcNow.AddDays(days);
 
-        var accessExpires = DateTime.UtcNow.AddMinutes(_jwt.AccessTokenMinutes);
-        var refreshExpires = DateTime.UtcNow.AddDays(_jwt.RefreshTokenDays);
-
-        var accessToken = _tokenService.CreateAccessToken(user, accessExpires);
-        var refreshToken = _tokenService.CreateRefreshToken(refreshExpires);
-
-        user.RefreshTokens.Add(refreshToken);
-        await _db.SaveChangesAsync(ct);
-
-        return Ok(new AuthResponseDto
+        var refresh = new RefreshToken
         {
-            AccessToken = accessToken,
-            AccessTokenExpiresAtUtc = accessExpires,
-            RefreshToken = refreshToken.Token,
-            RefreshTokenExpiresAtUtc = refreshExpires,
-            UserName = user.UserName ?? string.Empty,
-            Role = user.Role
-        });
-    }
+            UserId = userId,
+            TokenHash = hash,
+            DeviceName = deviceName,
+            IpAddress = ipAddress,
+            CreatedAtUtc = DateTime.UtcNow,
+            ExpiresAtUtc = expiresAtUtc
+        };
 
-    [HttpPost("refresh")]
-    [AllowAnonymous]
-    public async Task<ActionResult<AuthResponseDto>> Refresh(RefreshTokenRequestDto dto, CancellationToken ct)
-    {
-        var principal = _tokenService.GetPrincipalFromExpiredToken(dto.AccessToken);
-        if (principal is null)
-            return Unauthorized("Invalid access token.");
-
-        var userName = principal.Identity?.Name;
-        if (string.IsNullOrWhiteSpace(userName))
-            return Unauthorized("Invalid identity.");
-
-        var user = await _db.Users
-            .Include(x => x.RefreshTokens)
-            .SingleOrDefaultAsync(x => x.UserName == userName, ct);
-
-        if (user is null)
-            return Unauthorized("User not found.");
-
-        var existingRefresh = user.RefreshTokens
-            .OrderByDescending(x => x.Id)
-            .FirstOrDefault(x => x.Token == dto.RefreshToken);
-
-        if (existingRefresh is null || !existingRefresh.IsActive)
-            return Unauthorized("Invalid refresh token.");
-
-        existingRefresh.RevokedAtUtc = DateTime.UtcNow;
-
-        var accessExpires = DateTime.UtcNow.AddMinutes(_jwt.AccessTokenMinutes);
-        var refreshExpires = DateTime.UtcNow.AddDays(_jwt.RefreshTokenDays);
-
-        var newAccessToken = _tokenService.CreateAccessToken(user, accessExpires);
-        var newRefreshToken = _tokenService.CreateRefreshToken(refreshExpires);
-
-        existingRefresh.ReplacedByToken = newRefreshToken.Token;
-        user.RefreshTokens.Add(newRefreshToken);
-
+        _db.RefreshTokens.Add(refresh);
         await _db.SaveChangesAsync(ct);
 
-        return Ok(new AuthResponseDto
-        {
-            AccessToken = newAccessToken,
-            AccessTokenExpiresAtUtc = accessExpires,
-            RefreshToken = newRefreshToken.Token,
-            RefreshTokenExpiresAtUtc = refreshExpires,
-            UserName = user.UserName ?? string.Empty,
-            Role = user.Role
-        });
+        return (rawToken, expiresAtUtc);
     }
 
-    [HttpPost("revoke")]
-    [Authorize]
-    public async Task<IActionResult> Revoke([FromBody] string refreshToken, CancellationToken ct)
+    public async Task<RefreshToken?> GetActiveByRawTokenAsync(
+        string rawToken,
+        CancellationToken ct = default)
     {
-        var userName = User.Identity?.Name;
-        if (string.IsNullOrWhiteSpace(userName))
-            return Unauthorized();
+        var hash = ComputeSha256(rawToken);
 
-        var user = await _db.Users
-            .Include(x => x.RefreshTokens)
-            .SingleOrDefaultAsync(x => x.UserName == userName, ct);
+        return await _db.RefreshTokens
+            .Include(x => x.User)
+            .FirstOrDefaultAsync(x => x.TokenHash == hash && x.RevokedAtUtc == null, ct);
+    }
 
-        if (user is null)
-            return Unauthorized();
-
-        var token = user.RefreshTokens.FirstOrDefault(x => x.Token == refreshToken);
-        if (token is null)
-            return NotFound();
-
-        token.RevokedAtUtc = DateTime.UtcNow;
+    public async Task RevokeAsync(RefreshToken refreshToken, CancellationToken ct = default)
+    {
+        refreshToken.RevokedAtUtc = DateTime.UtcNow;
         await _db.SaveChangesAsync(ct);
+    }
 
-        return NoContent();
+    private static string ComputeSha256(string input)
+    {
+        var bytes = Encoding.UTF8.GetBytes(input);
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash);
     }
 }
