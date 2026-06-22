@@ -75,6 +75,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ClockSkew = TimeSpan.FromSeconds(30)
         };
     });
+// Register AuditService and HttpContextAccessor
+builder.Services.AddScoped<AuditService>();
+builder.Services.AddHttpContextAccessor();
 
 // Authorization policies
 builder.Services.AddAuthorization(options =>
