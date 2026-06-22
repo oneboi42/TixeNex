@@ -85,14 +85,13 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));
     options.AddPolicy("AgentOrAdmin", policy => policy.RequireRole("Agent", "Admin"));
     options.AddPolicy("CanManageTickets", policy => policy.RequireRole("User", "Agent", "Admin"));
-
     options.AddPolicy("CanViewAudit", policy => policy.RequireRole("Admin"));
 });
 
 var app = builder.Build();
 
-// Global Exception Handling Middleware
-app.UseMiddleware<ExceptionHandlingMiddleware>();
+// Global exception handling middleware
+app.UseMiddleware<GlobalExceptionMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
