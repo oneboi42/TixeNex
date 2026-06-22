@@ -5,7 +5,7 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
   "mainAssemblyName": "HelpDeskHero.UI",
   "applicationEnvironment": "Development",
   "resources": {
-    "hash": "sha256-p4VbgcygqJJVWTIsVkixP3xw2iDun515YRGYPGLpr9I=",
+    "hash": "sha256-JU2UlnhomLCOEevSa43VXhpKOgGkX2kl95FOj4jZfYE=",
     "jsModuleNative": [
       {
         "name": "dotnet.native.mx9wzm9o5h.js"
@@ -1284,28 +1284,28 @@ var e=!1;const t=async()=>WebAssembly.validate(new Uint8Array([0,97,115,109,1,0,
       },
       {
         "virtualPath": "HelpDeskHero.Shared.wasm",
-        "name": "HelpDeskHero.Shared.xspk29unnx.wasm",
-        "integrity": "sha256-oWWIJM02qzxdY8GfuGM/ALuXt3BnOEFwOxjNkYqMKDs=",
+        "name": "HelpDeskHero.Shared.0tc3f56y16.wasm",
+        "integrity": "sha256-lOYfBot1pV8IgiaGpjLmpiTokW9YchHmRztdy6Du7OY=",
         "cache": "force-cache"
       },
       {
         "virtualPath": "HelpDeskHero.UI.wasm",
-        "name": "HelpDeskHero.UI.v0mge9mdpf.wasm",
-        "integrity": "sha256-gfrj0va6IOywQznDIDDydwkF7kcq//lb/AHYYalrzg8=",
+        "name": "HelpDeskHero.UI.pezikt3796.wasm",
+        "integrity": "sha256-P2RbgfgfMdT9aKelcOP0EwQpEc0tpii2/y5lmtjXQpQ=",
         "cache": "force-cache"
       }
     ],
     "pdb": [
       {
         "virtualPath": "HelpDeskHero.Shared.pdb",
-        "name": "HelpDeskHero.Shared.gxjspxth5x.pdb",
-        "integrity": "sha256-HL/7xGiPucvKe3wdnx6zJIXQJIZ32xLfNrSyar51VjY=",
+        "name": "HelpDeskHero.Shared.cjiddi1jil.pdb",
+        "integrity": "sha256-6NslQnDj7/LT5jUqHlTvr+2fmcdr6qQ7DG8hZQvKpa4=",
         "cache": "force-cache"
       },
       {
         "virtualPath": "HelpDeskHero.UI.pdb",
-        "name": "HelpDeskHero.UI.vgsl0df3kc.pdb",
-        "integrity": "sha256-oXhVUnsSq52IagEkwkSMEGWZo9b2H2kDc1dm7KfyfkY=",
+        "name": "HelpDeskHero.UI.yieeohf9qj.pdb",
+        "integrity": "sha256-9pLBjXMSmvKAz7YEgmtSwj4Gg7NNTtdXn7Pfm4x3f2k=",
         "cache": "force-cache"
       }
     ],

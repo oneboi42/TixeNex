@@ -1,72 +1,117 @@
-using System.Security.Cryptography;
-using System.Text;
 using HelpDeskHero.Api.Domain;
-using HelpDeskHero.Api.Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
+using HelpDeskHero.Api.Infrastructure.Services;
+using HelpDeskHero.Shared.Contracts.Auth;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
 
-namespace HelpDeskHero.Api.Infrastructure.Security;
+namespace HelpDeskHero.Api.Controllers;
 
-public sealed class RefreshTokenService
+[ApiController]
+[Route("api/[controller]")]
+public sealed class AuthController : ControllerBase
 {
-    private readonly AppDbContext _db;
-    private readonly IConfiguration _configuration;
+    private readonly SignInManager<ApplicationUser> _signInManager;
+    private readonly UserManager<ApplicationUser> _userManager;
+    private readonly TokenService _tokenService;
+    private readonly RefreshTokenService _refreshTokenService;
 
-    public RefreshTokenService(AppDbContext db, IConfiguration configuration)
+    public AuthController(
+        SignInManager<ApplicationUser> signInManager,
+        UserManager<ApplicationUser> userManager,
+        TokenService tokenService,
+        RefreshTokenService refreshTokenService)
     {
-        _db = db;
-        _configuration = configuration;
+        _signInManager = signInManager;
+        _userManager = userManager;
+        _tokenService = tokenService;
+        _refreshTokenService = refreshTokenService;
     }
 
-    public async Task<(string rawToken, DateTime expiresAtUtc)> CreateAsync(
-        string userId,
-        string deviceName,
-        string? ipAddress,
-        CancellationToken ct = default)
+    [HttpPost("login")]
+    [AllowAnonymous]
+    public async Task<ActionResult<TokenResponseDto>> Login(LoginRequestDto dto, CancellationToken ct)
     {
-        var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
-        var hash = ComputeSha256(rawToken);
+        var user = await _userManager.FindByNameAsync(dto.UserName);
+        if (user is null || !user.IsActive)
+            return Unauthorized();
 
-        var days = int.Parse(_configuration["Jwt:RefreshTokenDays"] ?? "7");
-        var expiresAtUtc = DateTime.UtcNow.AddDays(days);
+        var result = await _signInManager.CheckPasswordSignInAsync(
+            user,
+            dto.Password,
+            lockoutOnFailure: false);
 
-        var refresh = new RefreshToken
+        if (!result.Succeeded)
+            return Unauthorized();
+
+        var (accessToken, accessExp) = await _tokenService.CreateAccessTokenAsync(user);
+
+        var (refreshToken, refreshExp) = await _refreshTokenService.CreateAsync(
+            user.Id,
+            dto.DeviceName,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            ct);
+
+        var roles = await _userManager.GetRolesAsync(user);
+
+        return Ok(new TokenResponseDto
         {
-            UserId = userId,
-            TokenHash = hash,
-            DeviceName = deviceName,
-            IpAddress = ipAddress,
-            CreatedAtUtc = DateTime.UtcNow,
-            ExpiresAtUtc = expiresAtUtc
-        };
-
-        _db.RefreshTokens.Add(refresh);
-        await _db.SaveChangesAsync(ct);
-
-        return (rawToken, expiresAtUtc);
+            AccessToken = accessToken,
+            AccessTokenExpiresAtUtc = accessExp,
+            RefreshToken = refreshToken,
+            RefreshTokenExpiresAtUtc = refreshExp,
+            UserName = user.UserName ?? string.Empty,
+            DisplayName = user.DisplayName,
+            Roles = roles.ToArray()
+        });
     }
 
-    public async Task<RefreshToken?> GetActiveByRawTokenAsync(
-        string rawToken,
-        CancellationToken ct = default)
+    [HttpPost("refresh")]
+    [AllowAnonymous]
+    public async Task<ActionResult<TokenResponseDto>> Refresh(RefreshRequestDto dto, CancellationToken ct)
     {
-        var hash = ComputeSha256(rawToken);
+        var refresh = await _refreshTokenService.GetActiveByRawTokenAsync(dto.RefreshToken, ct);
 
-        return await _db.RefreshTokens
-            .Include(x => x.User)
-            .FirstOrDefaultAsync(x => x.TokenHash == hash && x.RevokedAtUtc == null, ct);
+        if (refresh is null || refresh.User is null || !refresh.IsActive || !refresh.User.IsActive)
+            return Unauthorized();
+
+        await _refreshTokenService.RevokeAsync(refresh, ct);
+
+        var user = refresh.User;
+
+        var (accessToken, accessExp) = await _tokenService.CreateAccessTokenAsync(user);
+
+        var (newRefreshToken, refreshExp) = await _refreshTokenService.CreateAsync(
+            user.Id,
+            dto.DeviceName,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            ct);
+
+        var roles = await _userManager.GetRolesAsync(user);
+
+        return Ok(new TokenResponseDto
+        {
+            AccessToken = accessToken,
+            AccessTokenExpiresAtUtc = accessExp,
+            RefreshToken = newRefreshToken,
+            RefreshTokenExpiresAtUtc = refreshExp,
+            UserName = user.UserName ?? string.Empty,
+            DisplayName = user.DisplayName,
+            Roles = roles.ToArray()
+        });
     }
 
-    public async Task RevokeAsync(RefreshToken refreshToken, CancellationToken ct = default)
+    [HttpPost("logout")]
+    [Authorize]
+    public async Task<IActionResult> Logout(RefreshRequestDto dto, CancellationToken ct)
     {
-        refreshToken.RevokedAtUtc = DateTime.UtcNow;
-        await _db.SaveChangesAsync(ct);
-    }
+        var refresh = await _refreshTokenService.GetActiveByRawTokenAsync(dto.RefreshToken, ct);
 
-    private static string ComputeSha256(string input)
-    {
-        var bytes = Encoding.UTF8.GetBytes(input);
-        var hash = SHA256.HashData(bytes);
-        return Convert.ToHexString(hash);
+        if (refresh is not null)
+        {
+            await _refreshTokenService.RevokeAsync(refresh, ct);
+        }
+
+        return NoContent();
     }
 }

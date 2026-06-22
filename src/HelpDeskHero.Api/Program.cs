@@ -2,11 +2,13 @@ using System.Text;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using HelpDeskHero.Api.Infrastructure.Security;
+using HelpDeskHero.Api.Infrastructure.Services;
 using HelpDeskHero.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -52,9 +54,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 
 // TokenService registration
 builder.Services.AddScoped<TokenService>();
-builder.Services.AddScoped<ITokenService>(sp => sp.GetRequiredService<TokenService>());
-
-
+builder.Services.AddScoped<RefreshTokenService>();
 
 // JWT authentication
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
