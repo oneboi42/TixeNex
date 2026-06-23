@@ -1,52 +1,50 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using HelpDeskHero.Shared.Contracts.Auth;
 using Microsoft.AspNetCore.Components.Authorization;
 
 namespace HelpDeskHero.UI.Services.Auth;
 
 public sealed class JwtAuthenticationStateProvider : AuthenticationStateProvider
 {
-    private readonly SessionTokenStore _tokenStore;
+    private readonly TokenStore _tokenStore;
 
-    public JwtAuthenticationStateProvider(SessionTokenStore tokenStore)
+    public JwtAuthenticationStateProvider(TokenStore tokenStore)
     {
         _tokenStore = tokenStore;
     }
 
     public override async Task<AuthenticationState> GetAuthenticationStateAsync()
     {
-        var auth = await _tokenStore.GetAsync();
+        var token = await _tokenStore.GetAccessTokenAsync();
 
-        if (auth is null || string.IsNullOrWhiteSpace(auth.AccessToken))
+        if (string.IsNullOrWhiteSpace(token))
             return Anonymous();
 
-        return CreateAuthenticationState(auth);
+        var handler = new JwtSecurityTokenHandler();
+        var jwt = handler.ReadJwtToken(token);
+
+        if (jwt.ValidTo <= DateTime.UtcNow)
+            return Anonymous();
+
+        var identity = new ClaimsIdentity(jwt.Claims, "jwt");
+        var user = new ClaimsPrincipal(identity);
+
+        return new AuthenticationState(user);
     }
 
-    public void NotifyUserAuthentication(AuthResponseDto auth)
+    public void NotifyUserAuthentication(IEnumerable<Claim> claims)
     {
+        var identity = new ClaimsIdentity(claims, "jwt");
+        var user = new ClaimsPrincipal(identity);
+
         NotifyAuthenticationStateChanged(
-            Task.FromResult(CreateAuthenticationState(auth)));
+            Task.FromResult(new AuthenticationState(user)));
     }
 
     public void NotifyUserLogout()
     {
         NotifyAuthenticationStateChanged(
             Task.FromResult(Anonymous()));
-    }
-
-    private static AuthenticationState CreateAuthenticationState(AuthResponseDto auth)
-    {
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.Name, auth.UserName),
-            new(ClaimTypes.Role, auth.Role)
-        };
-
-        var identity = new ClaimsIdentity(claims, "jwt");
-        var user = new ClaimsPrincipal(identity);
-
-        return new AuthenticationState(user);
     }
 
     private static AuthenticationState Anonymous()

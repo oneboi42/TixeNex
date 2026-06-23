@@ -2,12 +2,15 @@
 @attribute [AllowAnonymous]
 
 @using System.ComponentModel.DataAnnotations
+@using System.IdentityModel.Tokens.Jwt
 @using HelpDeskHero.Shared.Contracts.Auth
 @using HelpDeskHero.UI.Services.Api
 @using HelpDeskHero.UI.Services.Auth
+@using Microsoft.AspNetCore.Authorization
 
 @inject AuthApiClient AuthApi
-@inject AuthSessionService AuthSession
+@inject TokenStore TokenStore
+@inject JwtAuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 
 <PageTitle>Login</PageTitle>
@@ -66,7 +69,13 @@
                 return;
             }
 
-            await AuthSession.LoginAsync(result);
+            await TokenStore.SetAccessTokenAsync(result.AccessToken);
+            await TokenStore.SetRefreshTokenAsync(result.RefreshToken);
+
+            var handler = new JwtSecurityTokenHandler();
+            var jwt = handler.ReadJwtToken(result.AccessToken);
+
+            AuthStateProvider.NotifyUserAuthentication(jwt.Claims);
 
             Navigation.NavigateTo("/tickets");
         }

@@ -2,7 +2,10 @@
 @attribute [Authorize]
 
 @using HelpDeskHero.UI.Services.Auth
-@inject AuthSessionService AuthSession
+@using Microsoft.AspNetCore.Authorization
+
+@inject TokenStore TokenStore
+@inject JwtAuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Navigation
 
 <p>Wylogowywanie...</p>
@@ -10,7 +13,9 @@
 @code {
     protected override async Task OnInitializedAsync()
     {
-        await AuthSession.LogoutAsync();
+        await TokenStore.ClearAsync();
+        AuthStateProvider.NotifyUserLogout();
+
         Navigation.NavigateTo("/login", replace: true);
     }
 }
