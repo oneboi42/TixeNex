@@ -102,11 +102,10 @@ public sealed class TicketsController : ControllerBase
     [Authorize(Policy = "CanManageTickets")]
     public async Task<ActionResult<TicketDto>> Create(CreateTicketDto dto, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(dto.Title))
-            return BadRequest(new { code = "validation_error", message = "Title is required." });
+        var errors = ValidateCreate(dto);
 
-        if (string.IsNullOrWhiteSpace(dto.Description))
-            return BadRequest(new { code = "validation_error", message = "Description is required." });
+        if (errors.Count > 0)
+            return ValidationError(errors);
 
         var nextNumber = $"HDH-{DateTime.UtcNow:yyyyMMddHHmmss}";
 
@@ -134,12 +133,15 @@ public sealed class TicketsController : ControllerBase
     [Authorize(Policy = "CanManageTickets")]
     public async Task<IActionResult> Update(int id, UpdateTicketDto dto, CancellationToken ct)
     {
+        var errors = ValidateUpdate(dto);
+
+        if (errors.Count > 0)
+            return ValidationError(errors);
+
         var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+
         if (entity is null)
             return NotFound();
-
-        if (string.IsNullOrWhiteSpace(dto.RowVersionBase64))
-            return BadRequest(new { code = "validation_error", message = "RowVersion is required." });
 
         var originalRowVersion = Convert.FromBase64String(dto.RowVersionBase64);
         _db.Entry(entity).Property(x => x.RowVersion).OriginalValue = originalRowVersion;
@@ -176,6 +178,105 @@ public sealed class TicketsController : ControllerBase
 
         return NoContent();
     }
+
+    private static readonly string[] AllowedPriorities =
+    [
+        "Low",
+        "Medium",
+        "High",
+        "Critical"
+    ];
+
+    private static readonly string[] AllowedStatuses =
+    [
+        "New",
+        "InProgress",
+        "Resolved",
+        "Closed"
+    ];
+
+    private static BadRequestObjectResult ValidationError(Dictionary<string, string[]> errors)
+    {
+        return new BadRequestObjectResult(new
+        {
+            code = "validation_error",
+            errors
+        });
+    }
+
+    private static Dictionary<string, string[]> ValidateCreate(CreateTicketDto dto)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (string.IsNullOrWhiteSpace(dto.Title))
+        {
+            errors["Title"] = ["Title is required."];
+        }
+        else if (dto.Title.Trim().Length < 3 || dto.Title.Trim().Length > 200)
+        {
+            errors["Title"] = ["Title must be between 3 and 200 characters."];
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.Description))
+        {
+            errors["Description"] = ["Description is required."];
+        }
+        else if (dto.Description.Trim().Length < 5 || dto.Description.Trim().Length > 4000)
+        {
+            errors["Description"] = ["Description must be between 5 and 4000 characters."];
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.Priority))
+        {
+            errors["Priority"] = ["Priority is required."];
+        }
+        else if (!AllowedPriorities.Contains(dto.Priority))
+        {
+            errors["Priority"] = ["Priority must be one of: Low, Medium, High, Critical."];
+        }
+
+        return errors;
+    }
+
+    private static Dictionary<string, string[]> ValidateUpdate(UpdateTicketDto dto)
+    {
+        var errors = ValidateCreate(new CreateTicketDto
+        {
+            Title = dto.Title,
+            Description = dto.Description,
+            Priority = dto.Priority
+        });
+
+        if (string.IsNullOrWhiteSpace(dto.Status))
+        {
+            errors["Status"] = ["Status is required."];
+        }
+        else if (!AllowedStatuses.Contains(dto.Status))
+        {
+            errors["Status"] = ["Status must be one of: New, InProgress, Resolved, Closed."];
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.RowVersionBase64))
+        {
+            errors["RowVersionBase64"] = ["RowVersion is required."];
+        }
+        else
+        {
+            try
+            {
+                Convert.FromBase64String(dto.RowVersionBase64);
+            }
+            catch
+            {
+                errors["RowVersionBase64"] = ["RowVersion has invalid format."];
+            }
+        }
+
+        return errors;
+    }
+
+
+
 
     private static TicketDto ToDto(Ticket entity) => new()
     {

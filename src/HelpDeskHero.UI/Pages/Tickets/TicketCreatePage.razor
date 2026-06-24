@@ -1,6 +1,7 @@
 @page "/tickets/create"
 @attribute [Authorize(Roles = "Admin,Agent")]
 
+@using System.Text.Json
 @using HelpDeskHero.Shared.Contracts.Tickets
 @using HelpDeskHero.UI.Services.Api
 @using Microsoft.AspNetCore.Authorization
@@ -85,7 +86,10 @@
 
             if (!result.IsSuccessStatusCode)
             {
-                _error = "Nie udało się zapisać zgłoszenia.";
+                _error = await ReadApiErrorAsync(
+                    result,
+                    "Nie udało się zapisać zgłoszenia.");
+
                 return;
             }
 
@@ -100,4 +104,58 @@
             _busy = false;
         }
     }
+
+    private static async Task<string> ReadApiErrorAsync(
+        HttpResponseMessage response,
+        string fallbackMessage)
+    {
+        var content = await response.Content.ReadAsStringAsync();
+
+        if (string.IsNullOrWhiteSpace(content))
+            return fallbackMessage;
+
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            var root = document.RootElement;
+
+            if (root.TryGetProperty("errors", out var errorsElement) &&
+                errorsElement.ValueKind == JsonValueKind.Object)
+            {
+                var messages = new List<string>();
+
+                foreach (var property in errorsElement.EnumerateObject())
+                {
+                    if (property.Value.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var item in property.Value.EnumerateArray())
+                        {
+                            var message = item.GetString();
+
+                            if (!string.IsNullOrWhiteSpace(message))
+                                messages.Add($"{property.Name}: {message}");
+                        }
+                    }
+                }
+
+                if (messages.Count > 0)
+                    return string.Join('\n', messages);
+            }
+
+            if (root.TryGetProperty("message", out var messageElement))
+            {
+                var message = messageElement.GetString();
+
+                if (!string.IsNullOrWhiteSpace(message))
+                    return message;
+            }
+        }
+        catch
+        {
+        //   Ignore any exceptions during error parsing and fallback to the default message.
+        }
+
+        return fallbackMessage;
+    }
+
 }
