@@ -1,156 +1,105 @@
 @page "/tickets/edit/{Id:int}"
-@attribute [Authorize]
+@attribute [Authorize(Roles = "Admin,Agent")]
+
 @using HelpDeskHero.Shared.Contracts.Tickets
-@using HelpDeskHero.UI.Services.Api
-@inject TicketApiClient TicketApi
+@inject HelpDeskHero.UI.Services.Api.TicketApiClient TicketApi
 @inject NavigationManager Nav
 
-<PageTitle>Edycja zgłoszenia</PageTitle>
+<h3>Edycja zgłoszenia</h3>
 
-<h3>Edycja zgłoszenia (ID: @Id)</h3>
-
-@if (_isLoading)
+@if (!string.IsNullOrWhiteSpace(_error))
 {
-    <Loading Visible="true" />
+    <div class="alert alert-danger">@_error</div>
 }
-else if (_model is null)
+
+@if (_model is null)
 {
-    <ErrorBanner Message="@_error" />
+    <p>Ładowanie...</p>
 }
 else
 {
-    <EditForm Model="_model" OnValidSubmit="HandleSaveAsync">
+    <EditForm Model="_model" OnValidSubmit="SaveAsync">
         <DataAnnotationsValidator />
         <ValidationSummary />
 
         <div class="mb-3">
-            <label class="form-label">Tytuł</label>
+            <label>Tytuł</label>
             <InputText class="form-control" @bind-Value="_model.Title" />
-            <ValidationMessage For="@(() => _model.Title)" />
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Opis</label>
+            <label>Opis</label>
             <InputTextArea class="form-control" @bind-Value="_model.Description" />
-            <ValidationMessage For="@(() => _model.Description)" />
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Status</label>
+            <label>Status</label>
             <InputSelect class="form-select" @bind-Value="_model.Status">
-                <option>New</option>
-                <option>InProgress</option>
-                <option>Resolved</option>
-                <option>Closed</option>
+                <option value="New">New</option>
+                <option value="InProgress">InProgress</option>
+                <option value="Closed">Closed</option>
             </InputSelect>
-            <ValidationMessage For="@(() => _model.Status)" />
         </div>
 
         <div class="mb-3">
-            <label class="form-label">Priorytet</label>
+            <label>Priorytet</label>
             <InputSelect class="form-select" @bind-Value="_model.Priority">
-                <option>Low</option>
-                <option>Medium</option>
-                <option>High</option>
-                <option>Critical</option>
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
             </InputSelect>
-            <ValidationMessage For="@(() => _model.Priority)" />
         </div>
 
-        @if (!string.IsNullOrWhiteSpace(_error))
-        {
-            <div class="alert alert-danger">@_error</div>
-        }
-
-        <div class="d-flex gap-2">
-            <button class="btn btn-primary" type="submit" disabled="@_busy">
-            @(_busy ? "Zapisywanie..." : "Zapisz zmiany")
-            </button>
-            <button class="btn btn-danger" type="button" @onclick="HandleDeleteAsync" disabled="@_busy">Usuń</button>
-            <a class="btn btn-secondary" href="/tickets/@Id">Anuluj</a>
-        </div>
+        <button class="btn btn-primary">Zapisz</button>
     </EditForm>
 }
 
 @code {
-    [Parameter] 
-    public int Id { get; set; }
+    [Parameter] public int Id { get; set; }
 
-    private bool _isLoading = true;
-    private bool _busy;
-    private string? _error;
     private UpdateTicketDto? _model;
+    private string? _error;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
-        _error = null;
-        try
+        var dto = await TicketApi.GetByIdAsync(Id);
+        if (dto is null)
         {
-            var ticket = await TicketApi.GetByIdAsync(Id);
-            if (ticket is not null)
-            {
-                _model = new UpdateTicketDto
-                {
-                    Title = ticket.Title,
-                    Description = ticket.Description,
-                    Status = ticket.Status,
-                    Priority = ticket.Priority
-                };
-            }
+            _error = "Nie znaleziono zgłoszenia.";
+            return;
         }
-        catch
+
+        _model = new UpdateTicketDto
         {
-            _error = "Nie udało się pobrać danych zgłoszenia.";
-        }
-        finally
-        {
-            _isLoading = false;
-        }
+            Title = dto.Title,
+            Description = dto.Description,
+            Status = dto.Status,
+            Priority = dto.Priority,
+            RowVersionBase64 = dto.RowVersionBase64
+        };
     }
 
-    private async Task HandleSaveAsync()
+    private async Task SaveAsync()
     {
-        if (_model is null || _busy) return;
+        if (_model is null)
+            return;
 
-        _busy = true;
         _error = null;
 
-        try
-        {
-            await TicketApi.UpdateAsync(Id, _model);
+        var response = await TicketApi.UpdateAsync(Id, _model);
 
+        if (response.IsSuccessStatusCode)
+        {
             Nav.NavigateTo($"/tickets/{Id}");
+            return;
         }
-        catch
-        {
-            _error = "Wystąpił błąd podczas zapisu zmian.";
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
 
-    private async Task HandleDeleteAsync()
-    {
-        if (_busy) return;
-
-        _busy = true;
-        _error = null;
-
-        try
+        if ((int)response.StatusCode == 409)
         {
-            await TicketApi.DeleteAsync(Id);
+            _error = "Konflikt zapisu: rekord został zmieniony przez innego użytkownika.";
+            return;
+        }
 
-            Nav.NavigateTo("/tickets");
-        }
-        catch
-        {
-            _error = "Wystąpił błąd podczas usuwania.";
-        }
-        finally
-        {
-            _busy = false;
-        }
+        _error = "Nie udało się zapisać zmian.";
     }
 }

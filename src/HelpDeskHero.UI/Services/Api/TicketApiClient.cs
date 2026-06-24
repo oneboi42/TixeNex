@@ -6,71 +6,44 @@ namespace HelpDeskHero.UI.Services.Api;
 
 public sealed class TicketApiClient
 {
-    private readonly HttpClient _httpClient;
+    private readonly HttpClient _http;
 
-    public TicketApiClient(HttpClient httpClient)
+    public TicketApiClient(HttpClient http)
     {
-        _httpClient = httpClient;
+        _http = http;
     }
 
-    public async Task<IReadOnlyList<TicketDto>> GetAllAsync(CancellationToken ct = default)
+    public async Task<PagedResultDto<TicketDto>?> GetPageAsync(
+        TicketQueryDto query,
+        CancellationToken ct = default)
     {
-        var response = await _httpClient.GetAsync("api/tickets", ct);
-        await HandleResponseErrorAsync(response, ct);
-        
-        var result = await response.Content.ReadFromJsonAsync<List<TicketDto>>(cancellationToken: ct);
-        return result ?? [];
+        var url =
+            $"api/tickets?pageNumber={query.PageNumber}&pageSize={query.PageSize}" +
+            $"&search={Uri.EscapeDataString(query.Search ?? string.Empty)}" +
+            $"&status={Uri.EscapeDataString(query.Status ?? string.Empty)}" +
+            $"&priority={Uri.EscapeDataString(query.Priority ?? string.Empty)}" +
+            $"&sortBy={Uri.EscapeDataString(query.SortBy)}" +
+            $"&desc={query.Desc}";
+
+        return await _http.GetFromJsonAsync<PagedResultDto<TicketDto>>(url, ct);
     }
 
-    public async Task<TicketDetailsDto?> GetByIdAsync(int id, CancellationToken ct = default)
-    {
-        var response = await _httpClient.GetAsync($"api/tickets/{id}", ct);
-        await HandleResponseErrorAsync(response, ct);
-        
-        return await response.Content.ReadFromJsonAsync<TicketDetailsDto>(cancellationToken: ct);
-    }
+    public Task<TicketDto?> GetByIdAsync(int id, CancellationToken ct = default) =>
+    _http.GetFromJsonAsync<TicketDto>($"api/tickets/{id}", ct);
 
-    public async Task<TicketDetailsDto?> CreateAsync(CreateTicketDto dto, CancellationToken ct = default)
-    {
-        var response = await _httpClient.PostAsJsonAsync("api/tickets", dto, ct);
-        await HandleResponseErrorAsync(response, ct);
-        
-        return await response.Content.ReadFromJsonAsync<TicketDetailsDto>(cancellationToken: ct);
-    }
+    public async Task<HttpResponseMessage> CreateAsync(
+        CreateTicketDto dto,
+        CancellationToken ct = default) =>
+        await _http.PostAsJsonAsync("api/tickets", dto, ct);
 
-    public async Task UpdateAsync(int id, UpdateTicketDto dto, CancellationToken ct = default)
-    {
-        var response = await _httpClient.PutAsJsonAsync($"api/tickets/{id}", dto, ct);
-        await HandleResponseErrorAsync(response, ct);
-    }
+    public async Task<HttpResponseMessage> UpdateAsync(
+        int id,
+        UpdateTicketDto dto,
+        CancellationToken ct = default) =>
+        await _http.PutAsJsonAsync($"api/tickets/{id}", dto, ct);
 
-    public async Task DeleteAsync(int id, CancellationToken ct = default)
-    {
-        var response = await _httpClient.DeleteAsync($"api/tickets/{id}", ct);
-        await HandleResponseErrorAsync(response, ct);
-    }
-
-    private static async Task HandleResponseErrorAsync(HttpResponseMessage response, CancellationToken ct)
-    {
-        // If 200-299, just exit the helper
-        if (response.IsSuccessStatusCode)
-        {
-            return;
-        }
-
-        int statusCode = (int)response.StatusCode;
-        ApiErrorDto? errorDto = null;
-
-        try
-        {
-            // We are trying to read JSON with error details from the backend.
-            errorDto = await response.Content.ReadFromJsonAsync<ApiErrorDto>(cancellationToken: ct);
-        }
-        catch
-        {
-            // If parsing fails, we ignore the error and continue
-        }
-
-        throw new ApiException($"The API request failed: {statusCode}", statusCode, errorDto);
-    }
+    public async Task<HttpResponseMessage> DeleteAsync(
+        int id,
+        CancellationToken ct = default) =>
+        await _http.DeleteAsync($"api/tickets/{id}", ct);
 }

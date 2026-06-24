@@ -1,21 +1,21 @@
 @page "/login"
 @attribute [AllowAnonymous]
 
-@using System.ComponentModel.DataAnnotations
-@using System.IdentityModel.Tokens.Jwt
 @using HelpDeskHero.Shared.Contracts.Auth
 @using HelpDeskHero.UI.Services.Api
-@using HelpDeskHero.UI.Services.Auth
 @using Microsoft.AspNetCore.Authorization
 
+@inject NavigationManager Nav
 @inject AuthApiClient AuthApi
-@inject TokenStore TokenStore
-@inject JwtAuthenticationStateProvider AuthStateProvider
-@inject NavigationManager Navigation
 
 <PageTitle>Login</PageTitle>
 
 <h3>Logowanie</h3>
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
 
 <EditForm Model="_model" OnValidSubmit="HandleLoginAsync">
     <DataAnnotationsValidator />
@@ -33,51 +33,39 @@
         <ValidationMessage For="@(() => _model.Password)" />
     </div>
 
-    @if (!string.IsNullOrWhiteSpace(_error))
-    {
-        <div class="alert alert-danger">@_error</div>
-    }
-
     <button class="btn btn-primary" type="submit" disabled="@_busy">
         @(_busy ? "Logowanie..." : "Zaloguj")
     </button>
 </EditForm>
 
 @code {
+    private LoginRequestDto _model = new()
+    {
+        DeviceName = Environment.MachineName
+    };
+
     private bool _busy;
     private string? _error;
-    private LoginVm _model = new();
 
     private async Task HandleLoginAsync()
     {
-        if (_busy) return;
+        if (_busy)
+            return;
 
         _busy = true;
         _error = null;
 
         try
         {
-            var result = await AuthApi.LoginAsync(new LoginRequestDto
-            {
-                UserName = _model.UserName,
-                Password = _model.Password
-            });
+            var ok = await AuthApi.LoginAsync(_model);
 
-            if (result is null)
+            if (!ok)
             {
-                _error = "Niepoprawny login lub hasło.";
+                _error = "Nieprawidłowy login lub hasło.";
                 return;
             }
 
-            await TokenStore.SetAccessTokenAsync(result.AccessToken);
-            await TokenStore.SetRefreshTokenAsync(result.RefreshToken);
-
-            var handler = new JwtSecurityTokenHandler();
-            var jwt = handler.ReadJwtToken(result.AccessToken);
-
-            AuthStateProvider.NotifyUserAuthentication(jwt.Claims);
-
-            Navigation.NavigateTo("/tickets");
+            Nav.NavigateTo("/tickets");
         }
         catch (Exception ex)
         {
@@ -87,14 +75,5 @@
         {
             _busy = false;
         }
-    }
-
-    private sealed class LoginVm
-    {
-        [Required]
-        public string UserName { get; set; } = string.Empty;
-
-        [Required]
-        public string Password { get; set; } = string.Empty;
     }
 }
