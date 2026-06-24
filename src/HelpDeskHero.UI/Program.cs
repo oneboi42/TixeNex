@@ -13,7 +13,14 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 var apiBaseUrl = builder.Configuration["Api:BaseUrl"]
     ?? throw new InvalidOperationException("Missing Api:BaseUrl.");
 
-builder.Services.AddAuthorizationCore();
+builder.Services.AddAuthorizationCore(options =>
+{
+    options.AddPolicy("CanManageTickets", policy =>
+        policy.RequireRole("Admin"));
+
+    options.AddPolicy("CanViewAudit", policy =>
+        policy.RequireRole("Admin, Agent"));
+});
 
 builder.Services.AddScoped<TokenStore>();
 

@@ -129,6 +129,57 @@ public sealed class TicketsController : ControllerBase
         return File(bytes, "text/csv", $"tickets-{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
     }
 
+    [HttpGet("deleted")]
+    [Authorize(Policy = "CanManageTickets")]
+    public async Task<ActionResult<List<TicketDto>>> GetDeleted(CancellationToken ct)
+    {
+        var items = await _db.Tickets
+            .IgnoreQueryFilters()
+            .Where(x => x.IsDeleted)
+            .OrderByDescending(x => x.DeletedAtUtc ?? x.CreatedAtUtc)
+            .Select(x => new TicketDto
+            {
+                Id = x.Id,
+                Number = x.Number,
+                Title = x.Title,
+                Description = x.Description,
+                Status = x.Status,
+                Priority = x.Priority,
+                CreatedAtUtc = x.CreatedAtUtc,
+                UpdatedAtUtc = x.UpdatedAtUtc,
+                RowVersionBase64 = Convert.ToBase64String(x.RowVersion)
+            })
+            .ToListAsync(ct);
+
+        return Ok(items);
+    }
+
+    [HttpPost("{id:int}/restore")]
+    [Authorize(Policy = "CanManageTickets")]
+    public async Task<IActionResult> Restore(int id, CancellationToken ct)
+    {
+        var ticket = await _db.Tickets
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
+
+        if (ticket is null)
+            return NotFound();
+
+        if (!ticket.IsDeleted)
+            return BadRequest(new { message = "Ticket is not deleted." });
+
+        ticket.IsDeleted = false;
+        ticket.DeletedAtUtc = null;
+        ticket.DeletedByUserId = null;
+        ticket.UpdatedAtUtc = DateTime.UtcNow;
+
+        await _db.SaveChangesAsync(ct);
+
+        await _audit.WriteAsync("Restore", "Ticket", ticket.Id.ToString(), new { ticket.Number, ticket.Title }, ct);
+
+        return NoContent();
+    }
+
     [HttpGet("{id:int}")]
     public async Task<ActionResult<TicketDto>> GetById(int id, CancellationToken ct)
     {
