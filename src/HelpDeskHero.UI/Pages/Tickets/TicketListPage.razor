@@ -3,81 +3,200 @@
 
 @using HelpDeskHero.Shared.Contracts.Common
 @using HelpDeskHero.Shared.Contracts.Tickets
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+
 @inject HelpDeskHero.UI.Services.Api.TicketApiClient TicketApi
+@inject NavigationManager Navigation
 
-<h3>Zgłoszenia</h3>
+<PageTitle>Zgłoszenia</PageTitle>
 
-<div class="row g-2 mb-3">
-    <div class="col-md-4">
-        <InputText class="form-control" @bind-Value="_query.Search" placeholder="Szukaj..." />
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <div>
+        <h3 class="mb-0">Zgłoszenia</h3>
+        <div class="text-muted">Lista zgłoszeń w systemie HelpDeskHero</div>
     </div>
-    <div class="col-md-2">
-        <InputSelect class="form-select" @bind-Value="_query.Status">
-            <option value="">Wszystkie statusy</option>
-            <option value="New">New</option>
-            <option value="InProgress">InProgress</option>
-            <option value="Closed">Closed</option>
-        </InputSelect>
-    </div>
-    <div class="col-md-2">
-        <InputSelect class="form-select" @bind-Value="_query.Priority">
-            <option value="">Wszystkie priorytety</option>
-            <option value="Low">Low</option>
-            <option value="Medium">Medium</option>
-            <option value="High">High</option>
-        </InputSelect>
-    </div>
-    <div class="col-md-2">
-        <button class="btn btn-primary w-100" @onclick="ReloadAsync">Filtruj</button>
+
+    <AuthorizeView Roles="Admin,Agent">
+        <Authorized>
+            <NavLink class="btn btn-primary" href="tickets/create">
+                Nowe zgłoszenie
+            </NavLink>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+<ErrorBanner Message="@_error" />
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-md-4">
+                <InputText class="form-control"
+                           @bind-Value="_query.Search"
+                           placeholder="Szukaj..." />
+            </div>
+
+            <div class="col-md-2">
+                <InputSelect class="form-select" @bind-Value="_query.Status">
+                    <option value="">Wszystkie statusy</option>
+                    <option value="New">New</option>
+                    <option value="InProgress">InProgress</option>
+                    <option value="Resolved">Resolved</option>
+                    <option value="Closed">Closed</option>
+                </InputSelect>
+            </div>
+
+            <div class="col-md-2">
+                <InputSelect class="form-select" @bind-Value="_query.Priority">
+                    <option value="">Wszystkie priorytety</option>
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Critical">Critical</option>
+                </InputSelect>
+            </div>
+
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100"
+                        disabled="@_loading"
+                        @onclick="ReloadAsync">
+                    Filtruj
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
-@if (_result is null)
+@if (_loading)
 {
-    <p>Ładowanie...</p>
+    <LoadingSpinner Text="Ładowanie zgłoszeń..." />
+}
+else if (_result is null)
+{
+    <div class="alert alert-info">
+        Brak danych do wyświetlenia.
+    </div>
 }
 else
 {
-    <p>Łącznie: @_result.TotalCount</p>
+    <div class="mb-2 text-muted">
+        Łącznie: @_result.TotalCount
+    </div>
 
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th>Nr</th>
-                <th>Tytuł</th>
-                <th>Status</th>
-                <th>Priorytet</th>
-                <th>Utworzono</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var item in _result.Items)
-            {
-                <tr>
-                    <td>@item.Number</td>
-                    <td><a href="@($"/tickets/{item.Id}")">@item.Title</a></td>
-                    <td>@item.Status</td>
-                    <td>@item.Priority</td>
-                    <td>@item.CreatedAtUtc.ToLocalTime()</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    @if (!_result.Items.Any())
+    {
+        <div class="alert alert-info">
+            Nie znaleziono zgłoszeń.
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Nr</th>
+                        <th>Tytuł</th>
+                        <th>Status</th>
+                        <th>Priorytet</th>
+                        <th>Utworzono</th>
+                        <th class="text-end">Akcje</th>
+                    </tr>
+                </thead>
 
-    <div class="d-flex gap-2">
-        <button class="btn btn-outline-secondary" disabled="@(_query.PageNumber <= 1)" @onclick="PrevAsync">Poprzednia</button>
-        <span>Strona @_query.PageNumber</span>
+                <tbody>
+                    @foreach (var item in _result.Items)
+                    {
+                        <tr>
+                            <td>@item.Number</td>
+
+                            <td>
+                                <a href="@($"/tickets/{item.Id}")">
+                                    @item.Title
+                                </a>
+                            </td>
+
+                            <td>
+                                <StatusBadge Status="@item.Status" />
+                            </td>
+
+                            <td>
+                                <PriorityBadge Priority="@item.Priority" />
+                            </td>
+
+                            <td>
+                                @item.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                            </td>
+
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary"
+                                            @onclick='() => Navigation.NavigateTo($"/tickets/{item.Id}")'>
+                                        Szczegóły
+                                    </button>
+
+                                    <AuthorizeView Roles="Admin,Agent">
+                                        <Authorized>
+                                            <button class="btn btn-outline-primary"
+                                                    @onclick='() => Navigation.NavigateTo($"/tickets/edit/{item.Id}")'>
+                                                Edytuj
+                                            </button>
+                                        </Authorized>
+                                    </AuthorizeView>
+
+                                    <AuthorizeView Roles="Admin">
+                                        <Authorized>
+                                            <button class="btn btn-outline-danger"
+                                                    @onclick="() => AskDelete(item)">
+                                                Usuń
+                                            </button>
+                                        </Authorized>
+                                    </AuthorizeView>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <div class="d-flex align-items-center gap-2">
         <button class="btn btn-outline-secondary"
-                disabled="@((_query.PageNumber * _query.PageSize) >= _result.TotalCount)"
+                disabled="@(_query.PageNumber <= 1 || _loading)"
+                @onclick="PrevAsync">
+            Poprzednia
+        </button>
+
+        <span>Strona @_query.PageNumber</span>
+
+        <button class="btn btn-outline-secondary"
+                disabled="@((_query.PageNumber * _query.PageSize) >= _result.TotalCount || _loading)"
                 @onclick="NextAsync">
             Następna
         </button>
     </div>
 }
 
+<ConfirmDeleteDialog Visible="@_showDeleteDialog"
+                     Busy="@_deleteBusy"
+                     Title="Usuwanie zgłoszenia"
+                     Message="@_deleteMessage"
+                     OnConfirm="DeleteAsync"
+                     OnCancel="CancelDelete" />
+
 @code {
     private TicketQueryDto _query = new();
     private PagedResultDto<TicketDto>? _result;
+
+    private bool _loading;
+    private bool _deleteBusy;
+    private bool _showDeleteDialog;
+
+    private int? _ticketIdToDelete;
+    private string? _error;
+    private string _deleteMessage = "Czy na pewno chcesz usunąć to zgłoszenie?";
 
     protected override async Task OnInitializedAsync()
     {
@@ -86,21 +205,81 @@ else
 
     private async Task ReloadAsync()
     {
-        _result = await TicketApi.GetPageAsync(_query);
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _result = await TicketApi.GetPageAsync(_query);
+        }
+        catch
+        {
+            _error = "Nie udało się pobrać listy zgłoszeń.";
+        }
+        finally
+        {
+            _loading = false;
+        }
     }
 
     private async Task PrevAsync()
     {
-        if (_query.PageNumber > 1)
-        {
-            _query.PageNumber--;
-            await ReloadAsync();
-        }
+        if (_query.PageNumber <= 1)
+            return;
+
+        _query.PageNumber--;
+        await ReloadAsync();
     }
 
     private async Task NextAsync()
     {
         _query.PageNumber++;
         await ReloadAsync();
+    }
+
+    private void AskDelete(TicketDto ticket)
+    {
+        _ticketIdToDelete = ticket.Id;
+        _deleteMessage = $"Czy na pewno chcesz usunąć zgłoszenie {ticket.Number}?";
+        _showDeleteDialog = true;
+    }
+
+    private void CancelDelete()
+    {
+        _showDeleteDialog = false;
+        _ticketIdToDelete = null;
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_ticketIdToDelete is null)
+            return;
+
+        _deleteBusy = true;
+        _error = null;
+
+        try
+        {
+            var response = await TicketApi.DeleteAsync(_ticketIdToDelete.Value);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = "Nie udało się usunąć zgłoszenia.";
+                return;
+            }
+
+            _showDeleteDialog = false;
+            _ticketIdToDelete = null;
+
+            await ReloadAsync();
+        }
+        catch
+        {
+            _error = "Wystąpił błąd podczas usuwania zgłoszenia.";
+        }
+        finally
+        {
+            _deleteBusy = false;
+        }
     }
 }

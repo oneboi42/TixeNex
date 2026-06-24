@@ -1,11 +1,10 @@
 @page "/logout"
 @attribute [Authorize]
 
-@using HelpDeskHero.UI.Services.Auth
+@using HelpDeskHero.UI.Services.Api
 @using Microsoft.AspNetCore.Authorization
 
-@inject TokenStore TokenStore
-@inject JwtAuthenticationStateProvider AuthStateProvider
+@inject AuthApiClient AuthApi
 @inject NavigationManager Navigation
 
 <p>Wylogowywanie...</p>
@@ -13,8 +12,7 @@
 @code {
     protected override async Task OnInitializedAsync()
     {
-        await TokenStore.ClearAsync();
-        AuthStateProvider.NotifyUserLogout();
+        await AuthApi.LogoutAsync();
 
         Navigation.NavigateTo("/login", replace: true);
     }

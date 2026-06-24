@@ -1,41 +1,77 @@
 ﻿@inherits LayoutComponentBase
+@using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 
-<div class="page">
-    <div class="sidebar">
+<div class="app-shell">
+    <aside class="app-sidebar">
         <NavMenu />
-    </div>
+    </aside>
 
-    <main>
-        <div class="topbar d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
-            <h5 class="m-0">HelpDeskHero</h5>
+    <div class="app-main">
+        <header class="app-topbar">
+            <div>
+                <div class="app-title">HelpDeskHero</div>
+                <div class="app-subtitle">Panel obsługi zgłoszeń</div>
+            </div>
 
-            <AuthorizeView>
+            <AuthorizeView Context="topbarAuth">
                 <Authorized>
-                    <div>
-                        <span class="me-2">
-                            @context.User.Identity?.Name
-                        </span>
+                    <div class="user-panel">
+                        <div class="user-info">
+                            <div class="user-name">
+                                @GetDisplayName(topbarAuth.User)
+                            </div>
 
-                        @if (context.User.IsInRole("Admin"))
-                        {
-                            <span class="badge bg-primary me-2">Admin</span>
-                        }
-                        else if (context.User.IsInRole("Agent"))
-                        {
-                            <span class="badge bg-info text-dark me-2">Agent</span>
-                        }
-                        else if (context.User.IsInRole("User"))
-                        {
-                            <span class="badge bg-secondary me-2">User</span>
-                        }
+                            <div class="user-role">
+                                @GetRole(topbarAuth.User)
+                            </div>
+                        </div>
+
+                        <NavLink class="btn btn-outline-danger btn-sm" href="logout">
+                            Wyloguj
+                        </NavLink>
                     </div>
                 </Authorized>
-            </AuthorizeView>
-        </div>
 
-        <div class="content px-4 py-3">
+                <NotAuthorized>
+                    <NavLink class="btn btn-outline-primary btn-sm" href="login">
+                        Zaloguj
+                    </NavLink>
+                </NotAuthorized>
+            </AuthorizeView>
+        </header>
+
+        <main class="app-content">
             @Body
-        </div>
-    </main>
+        </main>
+    </div>
 </div>
+
+@code {
+    private static string GetDisplayName(ClaimsPrincipal user)
+    {
+        return user.Identity?.Name
+            ?? user.FindFirst("name")?.Value
+            ?? user.FindFirst(ClaimTypes.Name)?.Value
+            ?? user.FindFirst("unique_name")?.Value
+            ?? user.FindFirst("sub")?.Value
+            ?? "Użytkownik";
+    }
+
+    private static string GetRole(ClaimsPrincipal user)
+    {
+        if (user.IsInRole("Admin"))
+            return "Admin";
+
+        if (user.IsInRole("Agent"))
+            return "Agent";
+
+        if (user.IsInRole("User"))
+            return "User";
+
+        return user.FindFirst(ClaimTypes.Role)?.Value
+            ?? user.FindFirst("role")?.Value
+            ?? user.FindFirst("roles")?.Value
+            ?? "Brak roli";
+    }
+}

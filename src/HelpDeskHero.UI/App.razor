@@ -1,8 +1,22 @@
 ﻿<CascadingAuthenticationState>
     <Router AppAssembly="@typeof(Program).Assembly">
         <Found Context="routeData">
-            <RouteView RouteData="@routeData"
-                       DefaultLayout="@typeof(MainLayout)" />
+            <AuthorizeRouteView RouteData="@routeData"
+                                DefaultLayout="@typeof(MainLayout)">
+                <NotAuthorized>
+                    <LayoutView Layout="@typeof(MainLayout)">
+                        <div class="alert alert-warning">
+                            Nie masz dostępu do tej strony. Zaloguj się lub użyj konta z odpowiednimi uprawnieniami.
+                        </div>
+                    </LayoutView>
+                </NotAuthorized>
+
+                <Authorizing>
+                    <LayoutView Layout="@typeof(MainLayout)">
+                        <p>Sprawdzanie uprawnień...</p>
+                    </LayoutView>
+                </Authorizing>
+            </AuthorizeRouteView>
 
             <FocusOnNavigate RouteData="@routeData"
                              Selector="h1" />
@@ -10,7 +24,9 @@
 
         <NotFound>
             <LayoutView Layout="@typeof(MainLayout)">
-                <p>Nie znaleziono strony.</p>
+                <div class="alert alert-warning">
+                    Nie znaleziono strony.
+                </div>
             </LayoutView>
         </NotFound>
     </Router>
