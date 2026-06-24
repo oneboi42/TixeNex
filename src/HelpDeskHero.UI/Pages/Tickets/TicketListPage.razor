@@ -9,6 +9,8 @@
 @inject HelpDeskHero.UI.Services.Api.TicketApiClient TicketApi
 @inject NavigationManager Navigation
 
+@inject IJSRuntime JS
+
 <PageTitle>Zgłoszenia</PageTitle>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
@@ -22,6 +24,9 @@
             <NavLink class="btn btn-primary" href="tickets/create">
                 Nowe zgłoszenie
             </NavLink>
+            <button class="btn btn-outline-secondary" @onclick="ExportCsv">
+                Export CSV
+            </button>
         </Authorized>
     </AuthorizeView>
 </div>
@@ -281,5 +286,25 @@ else
         {
             _deleteBusy = false;
         }
+    }
+
+
+    private async Task ExportCsv()
+    {
+        var parameters = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(_query.Status))
+            parameters.Add($"status={Uri.EscapeDataString(_query.Status)}");
+
+        if (!string.IsNullOrWhiteSpace(_query.Priority))
+            parameters.Add($"priority={Uri.EscapeDataString(_query.Priority)}");
+
+        var queryString = parameters.Count > 0
+            ? "?" + string.Join("&", parameters)
+            : "";
+
+        var url = $"https://localhost:5001/api/tickets/export{queryString}";
+
+        await JS.InvokeVoidAsync("open", url, "_blank");
     }
 }
