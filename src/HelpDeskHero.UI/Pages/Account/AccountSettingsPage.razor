@@ -1,0 +1,102 @@
+@page "/account/settings"
+@attribute [Authorize]
+
+@using Microsoft.AspNetCore.Authorization
+@inject HelpDeskHero.UI.Services.Api.AuthApiClient AuthApiClient
+@inject NavigationManager Navigation
+
+<PageTitle>Ustawienia konta</PageTitle>
+
+<div class="account-page">
+    <h1>Ustawienia konta</h1>
+
+    <section class="security-card">
+        <h2>Bezpieczeństwo</h2>
+
+        <p class="security-description">
+            Ta opcja wyloguje użytkownika ze wszystkich urządzeń poprzez unieważnienie
+            wszystkich aktywnych tokenów odświeżania.
+        </p>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-danger">
+                @_error
+            </div>
+        }
+
+        <button class="btn btn-danger"
+                disabled="@_isLoading"
+                @onclick="ShowConfirm">
+            Wyloguj wszystkie urządzenia
+        </button>
+    </section>
+</div>
+
+@if (_showConfirm)
+{
+    <div class="confirm-backdrop">
+        <div class="confirm-dialog">
+            <h3>Potwierdzenie</h3>
+
+            <p>
+                Czy na pewno chcesz wylogować wszystkie urządzenia?
+                Po wykonaniu tej operacji zostaniesz przekierowany na stronę logowania.
+            </p>
+
+            <div class="confirm-actions">
+                <button class="btn btn-secondary"
+                        disabled="@_isLoading"
+                        @onclick="HideConfirm">
+                    Anuluj
+                </button>
+
+                <button class="btn btn-danger"
+                        disabled="@_isLoading"
+                        @onclick="RevokeAllSessions">
+                    Tak, wyloguj
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _showConfirm;
+    private bool _isLoading;
+    private string? _error;
+
+    private void ShowConfirm()
+    {
+        _error = null;
+        _showConfirm = true;
+    }
+
+    private void HideConfirm()
+    {
+        _showConfirm = false;
+    }
+
+    private async Task RevokeAllSessions()
+    {
+        _isLoading = true;
+        _error = null;
+
+        try
+        {
+            await AuthApiClient.RevokeAllSessionsAsync();
+            await AuthApiClient.LogoutAsync();
+
+            Navigation.NavigateTo("/login", forceLoad: true);
+        }
+        catch
+        {
+            _error = "Nie udało się wylogować wszystkich urządzeń.";
+            _showConfirm = false;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

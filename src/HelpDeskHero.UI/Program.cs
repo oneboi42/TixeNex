@@ -16,10 +16,10 @@ var apiBaseUrl = builder.Configuration["Api:BaseUrl"]
 builder.Services.AddAuthorizationCore(options =>
 {
     options.AddPolicy("CanManageTickets", policy =>
-        policy.RequireRole("Admin"));
+        policy.RequireRole("Admin", "Agent"));
 
     options.AddPolicy("CanViewAudit", policy =>
-        policy.RequireRole("Admin, Agent"));
+        policy.RequireRole("Admin"));
 });
 
 builder.Services.AddScoped<TokenStore>();
@@ -36,6 +36,12 @@ builder.Services.AddHttpClient("AnonymousApi", client =>
 });
 
 builder.Services.AddHttpClient("Api", client =>
+{
+    client.BaseAddress = new Uri(apiBaseUrl);
+})
+.AddHttpMessageHandler<AuthHttpMessageHandler>();
+
+builder.Services.AddHttpClient("AuthorizedApi", client =>
 {
     client.BaseAddress = new Uri(apiBaseUrl);
 })

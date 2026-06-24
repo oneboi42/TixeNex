@@ -48,7 +48,7 @@ public sealed class AuthApiClient
 
     public async Task LogoutAsync(CancellationToken ct = default)
     {
-        var client = _httpClientFactory.CreateClient("Api");
+        var client = _httpClientFactory.CreateClient("AuthorizedApi");
 
         var refresh = await _tokenStore.GetRefreshTokenAsync();
 
@@ -65,4 +65,13 @@ public sealed class AuthApiClient
 
         _authStateProvider.NotifyUserLogout();
     }
+    public async Task RevokeAllSessionsAsync(CancellationToken ct = default)
+    {
+        var client = _httpClientFactory.CreateClient("AuthorizedApi");
+
+        var response = await client.PostAsync("api/auth/revoke-all", null, ct);
+
+        response.EnsureSuccessStatusCode();
+    }
+
 }

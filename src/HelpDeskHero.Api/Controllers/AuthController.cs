@@ -1,9 +1,12 @@
 using HelpDeskHero.Api.Domain;
+using HelpDeskHero.Api.Infrastructure.Persistence;
 using HelpDeskHero.Api.Infrastructure.Services;
 using HelpDeskHero.Shared.Contracts.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace HelpDeskHero.Api.Controllers;
 
@@ -15,17 +18,20 @@ public sealed class AuthController : ControllerBase
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly TokenService _tokenService;
     private readonly RefreshTokenService _refreshTokenService;
+    private readonly AppDbContext _db;
 
     public AuthController(
         SignInManager<ApplicationUser> signInManager,
         UserManager<ApplicationUser> userManager,
         TokenService tokenService,
-        RefreshTokenService refreshTokenService)
+        RefreshTokenService refreshTokenService,
+        AppDbContext db)
     {
         _signInManager = signInManager;
         _userManager = userManager;
         _tokenService = tokenService;
         _refreshTokenService = refreshTokenService;
+        _db = db;
     }
 
     [HttpPost("login")]
@@ -99,6 +105,32 @@ public sealed class AuthController : ControllerBase
             DisplayName = user.DisplayName,
             Roles = roles.ToArray()
         });
+    }
+
+
+    [HttpPost("revoke-all")]
+    [Authorize]
+    public async Task<IActionResult> RevokeAllSessions(CancellationToken ct)
+    {
+        var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (string.IsNullOrWhiteSpace(userId))
+            return Unauthorized();
+
+        var now = DateTime.UtcNow;
+
+        var tokens = await _db.RefreshTokens
+            .Where(x => x.UserId == userId && x.RevokedAtUtc == null)
+            .ToListAsync(ct);
+
+        foreach (var token in tokens)
+        {
+            token.RevokedAtUtc = now;
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        return NoContent();
     }
 
     [HttpPost("logout")]
