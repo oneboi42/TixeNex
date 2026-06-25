@@ -1,4 +1,6 @@
 using System.Text;
+using Hangfire;
+using Hangfire.SqlServer;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Notifications;
 using HelpDeskHero.Api.Infrastructure.Persistence;
@@ -64,6 +66,20 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.AddHangfire(config =>
+{
+    config.UseSimpleAssemblyNameTypeSerializer()
+          .UseRecommendedSerializerSettings()
+          .UseSqlServerStorage(
+              builder.Configuration.GetConnectionString("DefaultConnection"),
+              new SqlServerStorageOptions
+              {
+                  PrepareSchemaIfNecessary = true
+              });
+});
+
+builder.Services.AddHangfireServer();
+
 // Identity configuration
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
 {
@@ -110,6 +126,9 @@ builder.Services.AddHttpContextAccessor();
 
 // Notification dispatcher registration
 builder.Services.AddScoped<INotificationSender, InAppNotificationSender>();
+builder.Services.AddScoped<INotificationSender, EmailNotificationSender>();
+builder.Services.AddHttpClient<WebhookNotificationSender>();
+builder.Services.AddScoped<INotificationSender, WebhookNotificationSender>();
 builder.Services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
 
 // Authorization policies
@@ -137,6 +156,8 @@ app.UseCors(CorsPolicyName);
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseHangfireDashboard("/hangfire");
 
 app.MapControllers();
 

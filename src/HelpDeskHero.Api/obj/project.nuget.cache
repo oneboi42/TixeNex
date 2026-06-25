@@ -1,12 +1,16 @@
 {
   "version": 2,
-  "dgSpecHash": "5zzCg2wXLS4=",
+  "dgSpecHash": "Xo4sDlQNNns=",
   "success": true,
   "projectFilePath": "C:\\blad\\Documents\\GitHub\\HelpDeskHero\\src\\HelpDeskHero.Api\\HelpDeskHero.Api.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\Admin\\.nuget\\packages\\azure.core\\1.47.1\\azure.core.1.47.1.nupkg.sha512",
     "C:\\Users\\Admin\\.nuget\\packages\\azure.identity\\1.14.2\\azure.identity.1.14.2.nupkg.sha512",
     "C:\\Users\\Admin\\.nuget\\packages\\bcrypt.net-next\\4.2.0\\bcrypt.net-next.4.2.0.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\hangfire.aspnetcore\\1.8.23\\hangfire.aspnetcore.1.8.23.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\hangfire.core\\1.8.23\\hangfire.core.1.8.23.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\hangfire.netcore\\1.8.23\\hangfire.netcore.1.8.23.nupkg.sha512",
+    "C:\\Users\\Admin\\.nuget\\packages\\hangfire.sqlserver\\1.8.23\\hangfire.sqlserver.1.8.23.nupkg.sha512",
     "C:\\Users\\Admin\\.nuget\\packages\\humanizer.core\\2.14.1\\humanizer.core.2.14.1.nupkg.sha512",
     "C:\\Users\\Admin\\.nuget\\packages\\microsoft.aspnetcore.authentication.jwtbearer\\10.0.9\\microsoft.aspnetcore.authentication.jwtbearer.10.0.9.nupkg.sha512",
     "C:\\Users\\Admin\\.nuget\\packages\\microsoft.aspnetcore.identity.entityframeworkcore\\10.0.9\\microsoft.aspnetcore.identity.entityframeworkcore.10.0.9.nupkg.sha512",
