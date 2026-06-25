@@ -1,4 +1,5 @@
 using Hangfire;
+using HelpDeskHero.Api.Application.Interfaces;
 using HelpDeskHero.Api.BackgroundJobs.Contracts;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
@@ -18,11 +19,22 @@ public sealed class TicketsController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly AuditService _audit;
+    private readonly ISlaCalculator _slaCalculator;
+    private readonly ITicketAssignmentService _ticketAssignmentService;
+    private readonly IOutboxWriter _outboxWriter;
 
-    public TicketsController(AppDbContext db, AuditService audit)
+    public TicketsController(
+        AppDbContext db,
+        AuditService audit,
+        ISlaCalculator slaCalculator,
+        ITicketAssignmentService ticketAssignmentService,
+        IOutboxWriter outboxWriter)
     {
         _db = db;
         _audit = audit;
+        _slaCalculator = slaCalculator;
+        _ticketAssignmentService = ticketAssignmentService;
+        _outboxWriter = outboxWriter;
     }
 
     [HttpGet]
@@ -219,7 +231,13 @@ public sealed class TicketsController : ControllerBase
             CreatedAtUtc = DateTime.UtcNow
         };
 
+        await _slaCalculator.ApplySlaAsync(entity, ct);
+        await _ticketAssignmentService.AssignAsync(entity, ct);
+
         _db.Tickets.Add(entity);
+        await _db.SaveChangesAsync(ct);
+
+        await _outboxWriter.AddAsync("TicketChanged", ToLiveUpdateDto(entity, "Created"), ct);
         await _db.SaveChangesAsync(ct);
 
         await _audit.WriteAsync("Create", "Ticket", entity.Id.ToString(), new { entity.Number, entity.Title }, ct);
@@ -246,6 +264,8 @@ public sealed class TicketsController : ControllerBase
         if (entity is null)
             return TicketNotFound(id);
 
+        var originalPriority = entity.Priority;
+
         var originalRowVersion = Convert.FromBase64String(dto.RowVersionBase64);
         _db.Entry(entity).Property(x => x.RowVersion).OriginalValue = originalRowVersion;
 
@@ -254,6 +274,18 @@ public sealed class TicketsController : ControllerBase
         entity.Status = dto.Status;
         entity.Priority = dto.Priority;
         entity.UpdatedAtUtc = DateTime.UtcNow;
+
+        if (entity.Status == "Closed" && entity.ResolvedAtUtc is null)
+        {
+            entity.ResolvedAtUtc = DateTime.UtcNow;
+        }
+
+        if (originalPriority != entity.Priority)
+        {
+            await _slaCalculator.ApplySlaAsync(entity, ct);
+        }
+
+        await _outboxWriter.AddAsync("TicketChanged", ToLiveUpdateDto(entity, "Updated"), ct);
 
         try
         {
@@ -282,6 +314,8 @@ public sealed class TicketsController : ControllerBase
         entity.DeletedAtUtc = DateTime.UtcNow;
         entity.DeletedByUserId = User.Identity?.Name;
         entity.UpdatedAtUtc = DateTime.UtcNow;
+
+        await _outboxWriter.AddAsync("TicketChanged", ToLiveUpdateDto(entity, "Deleted"), ct);
 
         await _db.SaveChangesAsync(ct);
 
@@ -441,5 +475,16 @@ public sealed class TicketsController : ControllerBase
         CreatedAtUtc = entity.CreatedAtUtc,
         UpdatedAtUtc = entity.UpdatedAtUtc,
         RowVersionBase64 = Convert.ToBase64String(entity.RowVersion)
+    };
+
+    private static TicketLiveUpdateDto ToLiveUpdateDto(Ticket entity, string eventType) => new()
+    {
+        TicketId = entity.Id,
+        EventType = eventType,
+        Status = entity.Status,
+        Priority = entity.Priority,
+        AssignedToUserId = entity.AssignedToUserId,
+        EscalationLevel = entity.EscalationLevel,
+        ChangedAtUtc = DateTime.UtcNow
     };
 }

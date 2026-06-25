@@ -1,6 +1,8 @@
 using System.Text;
 using Hangfire;
 using Hangfire.SqlServer;
+using HelpDeskHero.Api.Application.Interfaces;
+using HelpDeskHero.Api.Application.Services;
 using HelpDeskHero.Api.BackgroundJobs;
 using HelpDeskHero.Api.BackgroundJobs.Contracts;
 using HelpDeskHero.Api.Domain;
@@ -9,6 +11,7 @@ using HelpDeskHero.Api.Infrastructure.Persistence;
 using HelpDeskHero.Api.Infrastructure.Security;
 using HelpDeskHero.Api.Infrastructure.Services;
 using HelpDeskHero.Api.Infrastructure.Storage;
+using HelpDeskHero.Api.Hubs;
 using HelpDeskHero.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -28,11 +31,13 @@ builder.Services.AddCors(options =>
                 "https://localhost:7045",
                 "http://localhost:5045")
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
@@ -104,6 +109,10 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<RefreshTokenService>();
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
+builder.Services.AddScoped<ISlaCalculator, SlaCalculator>();
+builder.Services.AddScoped<ITicketAssignmentService, TicketAssignmentService>();
+builder.Services.AddScoped<IOutboxWriter, OutboxWriter>();
+builder.Services.AddScoped<ITicketLiveNotifier, SignalRTicketLiveNotifier>();
 
 // JWT authentication
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
@@ -171,6 +180,7 @@ recurringJobManager.AddOrUpdate<INotificationJob>(
     "0 7 * * *");
 
 app.MapControllers();
+app.MapHub<TicketsHub>("/hubs/tickets");
 
 // Apply migrations automatically and seed database on startup
 await DbSeeder.SeedAsync(app.Services);
