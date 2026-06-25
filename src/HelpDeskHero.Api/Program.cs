@@ -6,6 +6,7 @@ using HelpDeskHero.Api.Application.Services;
 using HelpDeskHero.Api.BackgroundJobs;
 using HelpDeskHero.Api.BackgroundJobs.Contracts;
 using HelpDeskHero.Api.Domain;
+using HelpDeskHero.Api.Infrastructure.Background;
 using HelpDeskHero.Api.Infrastructure.Notifications;
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using HelpDeskHero.Api.Infrastructure.Security;
@@ -111,8 +112,11 @@ builder.Services.AddScoped<RefreshTokenService>();
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
 builder.Services.AddScoped<ISlaCalculator, SlaCalculator>();
 builder.Services.AddScoped<ITicketAssignmentService, TicketAssignmentService>();
+builder.Services.AddScoped<ISlaMonitorService, SlaMonitorService>();
 builder.Services.AddScoped<IOutboxWriter, OutboxWriter>();
 builder.Services.AddScoped<ITicketLiveNotifier, SignalRTicketLiveNotifier>();
+builder.Services.AddHostedService<OutboxProcessorService>();
+builder.Services.AddHostedService<SlaWatchdogService>();
 
 // JWT authentication
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
