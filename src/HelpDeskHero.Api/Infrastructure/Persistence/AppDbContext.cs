@@ -14,6 +14,7 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
+    public DbSet<TicketComment> TicketComments => Set<TicketComment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -120,6 +121,35 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
             b.Property(x => x.ReadAtUtc);
 
             b.HasIndex(x => new { x.UserId, x.IsRead, x.CreatedAtUtc });
+        });
+
+        modelBuilder.Entity<TicketComment>(b =>
+        {
+            b.ToTable("TicketComments");
+            b.HasKey(x => x.Id);
+
+            b.Property(x => x.Body)
+                .HasMaxLength(4000)
+                .IsRequired();
+
+            b.Property(x => x.CreatedAtUtc).IsRequired();
+
+            b.Property(x => x.CreatedByUserId)
+                .HasMaxLength(450)
+                .IsRequired();
+
+            b.Property(x => x.CreatedByDisplayName)
+                .HasMaxLength(200)
+                .IsRequired();
+
+            b.HasOne(x => x.Ticket)
+                .WithMany()
+                .HasForeignKey(x => x.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasQueryFilter(x => !x.Ticket.IsDeleted);
+
+            b.HasIndex(x => new { x.TicketId, x.CreatedAtUtc });
         });
     }
 

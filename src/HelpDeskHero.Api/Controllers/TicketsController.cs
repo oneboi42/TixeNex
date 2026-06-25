@@ -1,3 +1,5 @@
+using Hangfire;
+using HelpDeskHero.Api.BackgroundJobs.Contracts;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using HelpDeskHero.Api.Infrastructure.Services;
@@ -221,6 +223,9 @@ public sealed class TicketsController : ControllerBase
         await _db.SaveChangesAsync(ct);
 
         await _audit.WriteAsync("Create", "Ticket", entity.Id.ToString(), new { entity.Number, entity.Title }, ct);
+
+        BackgroundJob.Enqueue<INotificationJob>(job =>
+            job.SendTicketCreatedNotificationsAsync(entity.Id, default));
 
         var result = ToDto(entity);
 

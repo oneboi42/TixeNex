@@ -1,6 +1,8 @@
 using System.Text;
 using Hangfire;
 using Hangfire.SqlServer;
+using HelpDeskHero.Api.BackgroundJobs;
+using HelpDeskHero.Api.BackgroundJobs.Contracts;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Notifications;
 using HelpDeskHero.Api.Infrastructure.Persistence;
@@ -79,6 +81,7 @@ builder.Services.AddHangfire(config =>
 });
 
 builder.Services.AddHangfireServer();
+builder.Services.AddScoped<INotificationJob, NotificationJob>();
 
 // Identity configuration
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
@@ -158,6 +161,12 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.UseHangfireDashboard("/hangfire");
+
+var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
+recurringJobManager.AddOrUpdate<INotificationJob>(
+    "daily-summary",
+    job => job.SendDailySummaryAsync(default),
+    "0 7 * * *");
 
 app.MapControllers();
 
