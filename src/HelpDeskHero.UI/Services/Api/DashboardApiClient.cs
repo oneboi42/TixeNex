@@ -5,15 +5,15 @@ namespace HelpDeskHero.UI.Services.Api;
 
 public sealed class DashboardApiClient
 {
-    private readonly HttpClient _httpClient;
+    private readonly HttpClient _http;
 
-    public DashboardApiClient(HttpClient httpClient)
+    public DashboardApiClient(HttpClient http)
     {
-        _httpClient = httpClient;
+        _http = http;
     }
 
     public async Task<DashboardSummaryDto?> GetSummaryAsync(CancellationToken ct = default)
     {
-        return await _httpClient.GetFromJsonAsync<DashboardSummaryDto>("api/dashboard/summary", ct);
+        return await _http.GetFromJsonAsync<DashboardSummaryDto>("api/dashboard/summary", ct);
     }
 }

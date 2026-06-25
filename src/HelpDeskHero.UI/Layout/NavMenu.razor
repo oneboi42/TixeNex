@@ -1,6 +1,7 @@
 @using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.AspNetCore.Components.Authorization
 @using HelpDeskHero.UI.Services.Api
+@implements IDisposable
 
 @inject NotificationApiClient NotificationApi
 
@@ -107,14 +108,27 @@
 
     protected override async Task OnInitializedAsync()
     {
+        NotificationApi.UnreadCountChanged += OnUnreadCountChanged;
+
         try
         {
-            var notifications = await NotificationApi.GetMineAsync();
+            var notifications = await NotificationApi.GetMineAndUpdateUnreadCountAsync();
             _unreadCount = notifications.Count(x => !x.IsRead);
         }
         catch
         {
             _unreadCount = 0;
         }
+    }
+
+    private void OnUnreadCountChanged(int unreadCount)
+    {
+        _unreadCount = unreadCount;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        NotificationApi.UnreadCountChanged -= OnUnreadCountChanged;
     }
 }

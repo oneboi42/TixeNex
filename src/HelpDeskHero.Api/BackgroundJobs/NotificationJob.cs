@@ -61,19 +61,18 @@ public sealed class NotificationJob : INotificationJob
 
     private async Task<IReadOnlyList<string>> GetUserIdsInRolesAsync(string[] roleNames, CancellationToken ct)
     {
-        var roleIds = await _db.Roles
-            .AsNoTracking()
-            .Where(x => x.Name != null && roleNames.Contains(x.Name))
-            .Select(x => x.Id)
-            .ToListAsync(ct);
+        var normalizedRoleNames = roleNames
+            .Select(x => x.Trim().ToUpperInvariant())
+            .ToArray();
 
-        if (roleIds.Count == 0)
-            return [];
-
-        return await _db.UserRoles
-            .AsNoTracking()
-            .Where(x => roleIds.Contains(x.RoleId))
-            .Select(x => x.UserId)
+        return await (
+            from userRole in _db.UserRoles.AsNoTracking()
+            join role in _db.Roles.AsNoTracking() on userRole.RoleId equals role.Id
+            join user in _db.Users.AsNoTracking() on userRole.UserId equals user.Id
+            where role.NormalizedName != null
+                && normalizedRoleNames.Contains(role.NormalizedName)
+                && user.IsActive
+            select user.Id)
             .Distinct()
             .ToListAsync(ct);
     }

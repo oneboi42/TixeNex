@@ -28,6 +28,9 @@ public sealed class DashboardController : ControllerBase
             ClosedTickets = await _db.Tickets.CountAsync(x => x.Status == "Closed", ct),
             DeletedTickets = await _db.Tickets.IgnoreQueryFilters().CountAsync(x => x.IsDeleted, ct),
             HighPriorityOpenTickets = await _db.Tickets.CountAsync(x => x.Priority == "High" && x.Status != "Closed", ct),
+            TotalComments = await _db.TicketComments.CountAsync(ct),
+            TotalAttachments = await _db.TicketAttachments.CountAsync(ct),
+            UnreadNotifications = await _db.UserNotifications.CountAsync(x => !x.IsRead, ct),
             RecentAuditItems = await _db.AuditLogs
                 .OrderByDescending(x => x.CreatedAtUtc)
                 .Take(10)

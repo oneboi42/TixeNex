@@ -7,6 +7,9 @@ public sealed class DashboardSummaryDto
     public int ClosedTickets { get; set; }
     public int DeletedTickets { get; set; }
     public int HighPriorityOpenTickets { get; set; }
+    public int TotalComments { get; set; }
+    public int TotalAttachments { get; set; }
+    public int UnreadNotifications { get; set; }
     public List<RecentAuditItemDto> RecentAuditItems { get; set; } = new();
 }
 
