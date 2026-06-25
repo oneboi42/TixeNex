@@ -113,3 +113,64 @@ code {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
     text-align: start;
 }
+
+.app-toast {
+    position: fixed;
+    right: 1.5rem;
+    bottom: 1.5rem;
+    z-index: 2000;
+    min-width: 280px;
+    max-width: 420px;
+    padding: 1rem;
+    border-radius: 0.75rem;
+    box-shadow: 0 0.5rem 1.5rem rgba(0, 0, 0, 0.2);
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    align-items: flex-start;
+    background: #ffffff;
+    border-left: 0.4rem solid #6c757d;
+}
+
+.app-toast-success {
+    border-left-color: #198754;
+}
+
+.app-toast-error {
+    border-left-color: #dc3545;
+}
+
+.app-toast-warning {
+    border-left-color: #ffc107;
+}
+
+.app-toast-info {
+    border-left-color: #0dcaf0;
+}
+
+.app-toast-content {
+    font-size: 0.95rem;
+}
+
+.empty-state {
+    padding: 2rem;
+    border: 1px dashed #ced4da;
+    border-radius: 0.75rem;
+    background: #f8f9fa;
+    text-align: center;
+    color: #6c757d;
+}
+
+.empty-state-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #343a40;
+}
+
+.empty-state-message {
+    margin-top: 0.4rem;
+}
+
+.empty-state-actions {
+    margin-top: 1rem;
+}

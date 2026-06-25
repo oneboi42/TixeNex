@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace HelpDeskHero.Api.Middleware;
@@ -21,29 +22,50 @@ public sealed class GlobalExceptionMiddleware
         }
         catch (DbUpdateConcurrencyException)
         {
-            context.Response.StatusCode = (int)HttpStatusCode.Conflict;
-            context.Response.ContentType = "application/json";
-
-            var payload = new
-            {
-                code = "concurrency_conflict",
-                message = "Dane zostały zmienione przez innego użytkownika. Odśwież widok i spróbuj ponownie."
-            };
-
-            await context.Response.WriteAsync(JsonSerializer.Serialize(payload));
+            await WriteProblemAsync(
+                context,
+                HttpStatusCode.Conflict,
+                "Konflikt danych",
+                "Dane zostały zmienione przez innego użytkownika. Odśwież widok i spróbuj ponownie.",
+                "concurrency_conflict");
         }
         catch (Exception)
         {
-            context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
-            context.Response.ContentType = "application/json";
-
-            var payload = new
-            {
-                code = "server_error",
-                message = "Wystąpił nieoczekiwany błąd serwera."
-            };
-
-            await context.Response.WriteAsync(JsonSerializer.Serialize(payload));
+            await WriteProblemAsync(
+                context,
+                HttpStatusCode.InternalServerError,
+                "Błąd serwera",
+                "Wystąpił nieoczekiwany błąd serwera.",
+                "server_error");
         }
+    }
+
+    private static async Task WriteProblemAsync(
+        HttpContext context,
+        HttpStatusCode statusCode,
+        string title,
+        string detail,
+        string code)
+    {
+        context.Response.StatusCode = (int)statusCode;
+        context.Response.ContentType = "application/problem+json";
+
+        var problem = new ProblemDetails
+        {
+            Status = (int)statusCode,
+            Title = title,
+            Detail = detail,
+            Type = $"https://httpstatuses.com/{(int)statusCode}",
+            Instance = context.Request.Path
+        };
+
+        problem.Extensions["code"] = code;
+
+        var json = JsonSerializer.Serialize(problem, new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        await context.Response.WriteAsync(json);
     }
 }

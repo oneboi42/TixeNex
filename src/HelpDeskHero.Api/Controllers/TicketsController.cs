@@ -163,10 +163,15 @@ public sealed class TicketsController : ControllerBase
             .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         if (ticket is null)
-            return NotFound();
+            return TicketNotFound(id);
 
         if (!ticket.IsDeleted)
-            return BadRequest(new { message = "Ticket is not deleted." });
+        {
+            return BusinessProblem(
+                StatusCodes.Status400BadRequest,
+                "Ticket nie znajduje się w koszu",
+                "Nie można przywrócić zgłoszenia, które nie zostało usunięte.");
+        }
 
         ticket.IsDeleted = false;
         ticket.DeletedAtUtc = null;
@@ -184,8 +189,9 @@ public sealed class TicketsController : ControllerBase
     public async Task<ActionResult<TicketDto>> GetById(int id, CancellationToken ct)
     {
         var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+
         if (entity is null)
-            return NotFound();
+            return TicketNotFound(id);
 
         return Ok(ToDto(entity));
     }
@@ -233,7 +239,7 @@ public sealed class TicketsController : ControllerBase
         var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
 
         if (entity is null)
-            return NotFound();
+            return TicketNotFound(id);
 
         var originalRowVersion = Convert.FromBase64String(dto.RowVersionBase64);
         _db.Entry(entity).Property(x => x.RowVersion).OriginalValue = originalRowVersion;
@@ -244,7 +250,14 @@ public sealed class TicketsController : ControllerBase
         entity.Priority = dto.Priority;
         entity.UpdatedAtUtc = DateTime.UtcNow;
 
-        await _db.SaveChangesAsync(ct);
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ConflictProblem();
+        }
 
         await _audit.WriteAsync("Update", "Ticket", entity.Id.ToString(), new { entity.Number, entity.Title }, ct);
 
@@ -256,8 +269,9 @@ public sealed class TicketsController : ControllerBase
     public async Task<IActionResult> SoftDelete(int id, CancellationToken ct)
     {
         var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+
         if (entity is null)
-            return NotFound();
+            return TicketNotFound(id);
 
         entity.IsDeleted = true;
         entity.DeletedAtUtc = DateTime.UtcNow;
@@ -287,13 +301,57 @@ public sealed class TicketsController : ControllerBase
         "Closed"
     ];
 
-    private static BadRequestObjectResult ValidationError(Dictionary<string, string[]> errors)
+    private BadRequestObjectResult ValidationError(Dictionary<string, string[]> errors)
     {
-        return new BadRequestObjectResult(new
+        var details = new ValidationProblemDetails(errors)
         {
-            code = "validation_error",
-            errors
-        });
+            Title = "Nieprawidłowe dane zgłoszenia",
+            Detail = "Popraw błędy walidacji i spróbuj ponownie.",
+            Status = StatusCodes.Status400BadRequest,
+            Type = "https://httpstatuses.com/400"
+        };
+
+        details.Extensions["code"] = "validation_error";
+
+        return BadRequest(details);
+    }
+
+    private ObjectResult TicketNotFound(int id)
+    {
+        return BusinessProblem(
+            StatusCodes.Status404NotFound,
+            "Nie znaleziono zgłoszenia",
+            $"Zgłoszenie o ID {id} nie istnieje albo zostało usunięte.",
+            "ticket_not_found");
+    }
+
+    private ObjectResult ConflictProblem()
+    {
+        return BusinessProblem(
+            StatusCodes.Status409Conflict,
+            "Konflikt danych",
+            "Zgłoszenie zostało zmienione przez innego użytkownika. Odśwież widok i spróbuj ponownie.",
+            "concurrency_conflict");
+    }
+
+    private ObjectResult BusinessProblem(
+        int statusCode,
+        string title,
+        string detail,
+        string code = "business_error")
+    {
+        var problem = new ProblemDetails
+        {
+            Status = statusCode,
+            Title = title,
+            Detail = detail,
+            Type = $"https://httpstatuses.com/{statusCode}",
+            Instance = HttpContext.Request.Path
+        };
+
+        problem.Extensions["code"] = code;
+
+        return StatusCode(statusCode, problem);
     }
 
     private static Dictionary<string, string[]> ValidateCreate(CreateTicketDto dto)
@@ -366,9 +424,6 @@ public sealed class TicketsController : ControllerBase
 
         return errors;
     }
-
-
-
 
     private static TicketDto ToDto(Ticket entity) => new()
     {

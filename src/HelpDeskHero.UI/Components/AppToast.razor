@@ -1,14 +1,42 @@
 @if (Visible)
 {
-    <div class="toast show position-fixed bottom-0 end-0 m-3">
-        <div class="toast-body">
-            @Message
+    <div class="app-toast app-toast-@Type">
+        <div class="app-toast-content">
+            <strong>@Title</strong>
+
+            @if (!string.IsNullOrWhiteSpace(Message))
+            {
+                <div>@Message</div>
+            }
         </div>
+
+        <button type="button"
+                class="btn-close"
+                aria-label="Close"
+                @onclick="Hide">
+        </button>
     </div>
 }
 
 @code {
-    [Parameter] public bool Visible { get; set; }
+    [Parameter]
+    public bool Visible { get; set; }
 
-    [Parameter] public string Message { get; set; } = "";
+    [Parameter]
+    public string Type { get; set; } = "success";
+
+    [Parameter]
+    public string Title { get; set; } = "Sukces";
+
+    [Parameter]
+    public string? Message { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> VisibleChanged { get; set; }
+
+    private async Task Hide()
+    {
+        Visible = false;
+        await VisibleChanged.InvokeAsync(false);
+    }
 }

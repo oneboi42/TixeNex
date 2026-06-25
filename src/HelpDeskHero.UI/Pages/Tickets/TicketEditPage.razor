@@ -1,8 +1,8 @@
 @page "/tickets/edit/{Id:int}"
 @attribute [Authorize(Roles = "Admin,Agent")]
 
-@using System.Text.Json
 @using HelpDeskHero.Shared.Contracts.Tickets
+@using HelpDeskHero.UI.Services.Api
 @using Microsoft.AspNetCore.Authorization
 
 @inject HelpDeskHero.UI.Services.Api.TicketApiClient TicketApi
@@ -67,6 +67,13 @@ else if (_model is not null)
                         @(_saving ? "Zapisywanie..." : "Zapisz")
                     </button>
 
+                    <button class="btn btn-outline-secondary"
+                            type="button"
+                            disabled="@_saving"
+                            @onclick="ReloadAsync">
+                        Odśwież
+                    </button>
+
                     <button class="btn btn-secondary"
                             type="button"
                             disabled="@_saving"
@@ -90,6 +97,13 @@ else if (_model is not null)
 
     protected override async Task OnParametersSetAsync()
     {
+        await LoadAsync();
+    }
+
+    private Task ReloadAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
         _loading = true;
         _error = null;
 
@@ -99,6 +113,7 @@ else if (_model is not null)
 
             if (dto is null)
             {
+                _model = null;
                 _error = "Nie znaleziono zgłoszenia.";
                 return;
             }
@@ -111,6 +126,20 @@ else if (_model is not null)
                 Priority = dto.Priority,
                 RowVersionBase64 = dto.RowVersionBase64
             };
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            _error = "Sesja wygasła. Zaloguj się ponownie.";
+            Nav.NavigateTo("/login");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            _error = "Brak uprawnień do edycji zgłoszenia.";
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _model = null;
+            _error = "Nie znaleziono zgłoszenia.";
         }
         catch
         {
@@ -140,13 +169,7 @@ else if (_model is not null)
                 return;
             }
 
-            if ((int)response.StatusCode == 409)
-            {
-                _error = "Konflikt zapisu: rekord został zmieniony przez innego użytkownika.";
-                return;
-            }
-
-            _error = await ReadApiErrorAsync(
+            _error = await ApiErrorMapper.ToMessageAsync(
                 response,
                 "Nie udało się zapisać zmian.");
         }
@@ -158,57 +181,5 @@ else if (_model is not null)
         {
             _saving = false;
         }
-    }
-
-    private static async Task<string> ReadApiErrorAsync(
-        HttpResponseMessage response,
-        string fallbackMessage)
-    {
-        var content = await response.Content.ReadAsStringAsync();
-
-        if (string.IsNullOrWhiteSpace(content))
-            return fallbackMessage;
-
-        try
-        {
-            using var document = JsonDocument.Parse(content);
-            var root = document.RootElement;
-
-            if (root.TryGetProperty("errors", out var errorsElement) &&
-                errorsElement.ValueKind == JsonValueKind.Object)
-            {
-                var messages = new List<string>();
-
-                foreach (var property in errorsElement.EnumerateObject())
-                {
-                    if (property.Value.ValueKind == JsonValueKind.Array)
-                    {
-                        foreach (var item in property.Value.EnumerateArray())
-                        {
-                            var message = item.GetString();
-
-                            if (!string.IsNullOrWhiteSpace(message))
-                                messages.Add($"{property.Name}: {message}");
-                        }
-                    }
-                }
-
-                if (messages.Count > 0)
-                    return string.Join('\n', messages);
-            }
-
-            if (root.TryGetProperty("message", out var messageElement))
-            {
-                var message = messageElement.GetString();
-
-                if (!string.IsNullOrWhiteSpace(message))
-                    return message;
-            }
-        }
-        catch
-        {
-        }
-
-        return fallbackMessage;
     }
 }

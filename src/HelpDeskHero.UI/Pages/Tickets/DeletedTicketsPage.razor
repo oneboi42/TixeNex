@@ -29,9 +29,8 @@
 }
 else if (!_items.Any())
 {
-    <div class="alert alert-info">
-        Brak usuniętych zgłoszeń.
-    </div>
+    <EmptyState Title="Kosz jest pusty"
+                Message="Nie ma żadnych usuniętych zgłoszeń." />
 }
 else
 {
@@ -74,7 +73,27 @@ else
     </div>
 }
 
+<AppToast @bind-Visible="_toastVisible"
+          Type="@_toastType"
+          Title="@_toastTitle"
+          Message="@_toastMessage" />
+
+
 @code {
+
+    private bool _toastVisible;
+    private string _toastType = "success";
+    private string _toastTitle = "";
+    private string? _toastMessage;
+
+    private void ShowToast(string type, string title, string? message = null)
+    {
+        _toastType = type;
+        _toastTitle = title;
+        _toastMessage = message;
+        _toastVisible = true;
+    }
+
     private List<TicketDto> _items = [];
     private bool _loading;
     private bool _restoreBusy;
@@ -119,6 +138,8 @@ else
                 return;
             }
 
+            ShowToast("success", "Przywrócono zgłoszenie", "Zgłoszenie wróciło na główną listę.");
+            
             await LoadAsync();
         }
         catch

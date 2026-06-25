@@ -100,9 +100,8 @@
 }
 else if (_items.Count == 0)
 {
-    <div class="alert alert-info">
-        Brak wpisów audytu.
-    </div>
+    <EmptyState Title="Brak wpisów audytu"
+                Message="Nie znaleziono operacji pasujących do aktualnych filtrów." />
 }
 else
 {

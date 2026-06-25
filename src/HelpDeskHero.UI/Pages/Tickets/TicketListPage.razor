@@ -79,9 +79,8 @@
 }
 else if (_result is null)
 {
-    <div class="alert alert-info">
-        Brak danych do wyświetlenia.
-    </div>
+    <EmptyState Title="Brak danych"
+        Message="Nie udało się wyświetlić listy zgłoszeń." />
 }
 else
 {
@@ -91,9 +90,8 @@ else
 
     @if (!_result.Items.Any())
     {
-        <div class="alert alert-info">
-            Nie znaleziono zgłoszeń.
-        </div>
+        <EmptyState Title="Nie znaleziono zgłoszeń"
+            Message="Zmień filtry albo utwórz nowe zgłoszenie." />
     }
     else
     {
@@ -184,6 +182,11 @@ else
     </div>
 }
 
+<AppToast @bind-Visible="_toastVisible"
+          Type="@_toastType"
+          Title="@_toastTitle"
+          Message="@_toastMessage" />
+
 <ConfirmDeleteDialog Visible="@_showDeleteDialog"
                      Busy="@_deleteBusy"
                      Title="Usuwanie zgłoszenia"
@@ -199,6 +202,13 @@ else
     private bool _deleteBusy;
     private bool _showDeleteDialog;
 
+
+    private bool _toastVisible;
+    private string _toastType = "success";
+    private string _toastTitle = "";
+    private string? _toastMessage;
+    
+
     private int? _ticketIdToDelete;
     private string? _error;
     private string _deleteMessage = "Czy na pewno chcesz usunąć to zgłoszenie?";
@@ -208,6 +218,13 @@ else
         await ReloadAsync();
     }
 
+    private void ShowToast(string type, string title, string? message = null)
+    {
+        _toastType = type;
+        _toastTitle = title;
+        _toastMessage = message;
+        _toastVisible = true;
+    }
     private async Task ReloadAsync()
     {
         _loading = true;
@@ -275,6 +292,8 @@ else
 
             _showDeleteDialog = false;
             _ticketIdToDelete = null;
+
+            ShowToast("success", "Usunięto zgłoszenie", "Zgłoszenie zostało przeniesione do kosza.");
 
             await ReloadAsync();
         }

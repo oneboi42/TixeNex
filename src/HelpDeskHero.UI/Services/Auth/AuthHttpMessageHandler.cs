@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using HelpDeskHero.Shared.Contracts.Auth;
+using Microsoft.AspNetCore.Components;
 
 namespace HelpDeskHero.UI.Services.Auth;
 
@@ -10,13 +11,16 @@ public sealed class AuthHttpMessageHandler : DelegatingHandler
 {
     private readonly TokenStore _tokenStore;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly NavigationManager _navigationManager;
 
     public AuthHttpMessageHandler(
         TokenStore tokenStore,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        NavigationManager navigationManager)
     {
         _tokenStore = tokenStore;
         _httpClientFactory = httpClientFactory;
+        _navigationManager = navigationManager;
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(
@@ -27,10 +31,7 @@ public sealed class AuthHttpMessageHandler : DelegatingHandler
 
         if (!string.IsNullOrWhiteSpace(accessToken))
         {
-            var handler = new JwtSecurityTokenHandler();
-            var jwt = handler.ReadJwtToken(accessToken);
-
-            if (jwt.ValidTo <= DateTime.UtcNow.AddMinutes(1))
+            if (IsTokenExpiredOrCloseToExpiry(accessToken))
             {
                 await TryRefreshAsync(cancellationToken);
                 accessToken = await _tokenStore.GetAccessTokenAsync();
@@ -45,28 +46,43 @@ public sealed class AuthHttpMessageHandler : DelegatingHandler
 
         var response = await base.SendAsync(request, cancellationToken);
 
-        if (response.StatusCode == HttpStatusCode.Unauthorized)
+        if (response.StatusCode != HttpStatusCode.Unauthorized)
+            return response;
+
+        var refreshed = await TryRefreshAsync(cancellationToken);
+
+        if (!refreshed)
         {
-            var refreshed = await TryRefreshAsync(cancellationToken);
-
-            if (refreshed)
-            {
-                accessToken = await _tokenStore.GetAccessTokenAsync();
-
-                var clone = await CloneRequestAsync(request);
-
-                if (!string.IsNullOrWhiteSpace(accessToken))
-                {
-                    clone.Headers.Authorization =
-                        new AuthenticationHeaderValue("Bearer", accessToken);
-                }
-
-                response.Dispose();
-                return await base.SendAsync(clone, cancellationToken);
-            }
+            await LogoutAndRedirectAsync();
+            return response;
         }
 
-        return response;
+        accessToken = await _tokenStore.GetAccessTokenAsync();
+        var clone = await CloneRequestAsync(request);
+
+        if (!string.IsNullOrWhiteSpace(accessToken))
+        {
+            clone.Headers.Authorization =
+                new AuthenticationHeaderValue("Bearer", accessToken);
+        }
+
+        response.Dispose();
+        return await base.SendAsync(clone, cancellationToken);
+    }
+
+    private static bool IsTokenExpiredOrCloseToExpiry(string accessToken)
+    {
+        try
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var jwt = handler.ReadJwtToken(accessToken);
+
+            return jwt.ValidTo <= DateTime.UtcNow.AddMinutes(1);
+        }
+        catch
+        {
+            return true;
+        }
     }
 
     private async Task<bool> TryRefreshAsync(CancellationToken ct)
@@ -94,12 +110,21 @@ public sealed class AuthHttpMessageHandler : DelegatingHandler
             cancellationToken: ct);
 
         if (dto is null)
+        {
+            await _tokenStore.ClearAsync();
             return false;
+        }
 
         await _tokenStore.SetAccessTokenAsync(dto.AccessToken);
         await _tokenStore.SetRefreshTokenAsync(dto.RefreshToken);
 
         return true;
+    }
+
+    private async Task LogoutAndRedirectAsync()
+    {
+        await _tokenStore.ClearAsync();
+        _navigationManager.NavigateTo("/login", forceLoad: false);
     }
 
     private static async Task<HttpRequestMessage> CloneRequestAsync(
