@@ -1,4 +1,5 @@
 using HelpDeskHero.Api.Infrastructure.Persistence;
+using HelpDeskHero.Shared.Contracts.Audit;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -18,13 +19,56 @@ public sealed class AuditController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetLatest(CancellationToken ct)
+    public async Task<ActionResult<IReadOnlyList<AuditLogListItemDto>>> Get(
+        [FromQuery] string? action,
+        [FromQuery] string? entityName,
+        [FromQuery] string? performedBy,
+        [FromQuery] DateTime? fromUtc,
+        [FromQuery] DateTime? toUtc,
+        CancellationToken ct)
     {
-        var items = await _db.AuditLogs
+        var query = _db.AuditLogs.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(action))
+        {
+            query = query.Where(x => x.Action == action);
+        }
+
+        if (!string.IsNullOrWhiteSpace(entityName))
+        {
+            query = query.Where(x => x.EntityName == entityName);
+        }
+
+        if (!string.IsNullOrWhiteSpace(performedBy))
+        {
+            query = query.Where(x => x.UserName != null && x.UserName.Contains(performedBy));
+        }
+
+        if (fromUtc.HasValue)
+        {
+            query = query.Where(x => x.CreatedAtUtc >= fromUtc.Value);
+        }
+
+        if (toUtc.HasValue)
+        {
+            query = query.Where(x => x.CreatedAtUtc <= toUtc.Value);
+        }
+
+        var rows = await query
             .OrderByDescending(x => x.CreatedAtUtc)
             .Take(200)
+            .Select(x => new AuditLogListItemDto
+            {
+                CreatedAtUtc = x.CreatedAtUtc,
+                Action = x.Action,
+                EntityName = x.EntityName,
+                EntityId = x.EntityId,
+                PerformedBy = x.UserName ?? string.Empty,
+                IpAddress = x.IpAddress ?? string.Empty,
+                Details = x.DetailsJson ?? string.Empty
+            })
             .ToListAsync(ct);
 
-        return Ok(items);
+        return Ok(rows);
     }
 }

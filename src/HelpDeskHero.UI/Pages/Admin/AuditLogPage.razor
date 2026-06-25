@@ -2,9 +2,10 @@
 @attribute [Authorize(Roles = "Admin")]
 
 @using System.Net.Http.Json
+@using HelpDeskHero.Shared.Contracts.Audit
 @using Microsoft.AspNetCore.Authorization
 
-@inject HttpClient Http
+@inject IHttpClientFactory HttpClientFactory
 
 <PageTitle>Audit Log</PageTitle>
 
@@ -14,14 +15,81 @@
         <div class="text-muted">Ostatnie operacje wykonane w systemie</div>
     </div>
 
-    <button class="btn btn-outline-primary"
-            disabled="@_loading"
-            @onclick="LoadAsync">
-        Odśwież
-    </button>
-    <NavLink class="btn btn-outline-secondary" href="tickets/deleted">
-        Przejdź do kosza
-    </NavLink>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary"
+                disabled="@_loading"
+                @onclick="LoadAsync">
+            Odśwież
+        </button>
+
+        <NavLink class="btn btn-outline-secondary" href="tickets/deleted">
+            Przejdź do kosza
+        </NavLink>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h5 class="card-title mb-3">Filtry</h5>
+
+        <div class="row g-3">
+            <div class="col-md-2">
+                <label class="form-label" for="actionFilter">Action</label>
+                <input id="actionFilter"
+                       class="form-control"
+                       @bind="_action"
+                       placeholder="np. Create" />
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label" for="entityNameFilter">EntityName</label>
+                <input id="entityNameFilter"
+                       class="form-control"
+                       @bind="_entityName"
+                       placeholder="np. Ticket" />
+            </div>
+
+            <div class="col-md-3">
+                <label class="form-label" for="performedByFilter">PerformedBy</label>
+                <input id="performedByFilter"
+                       class="form-control"
+                       @bind="_performedBy"
+                       placeholder="nazwa użytkownika" />
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label" for="fromUtcFilter">From UTC</label>
+                <input id="fromUtcFilter"
+                       class="form-control"
+                       type="datetime-local"
+                       @bind="_fromUtc" />
+            </div>
+
+            <div class="col-md-2">
+                <label class="form-label" for="toUtcFilter">To UTC</label>
+                <input id="toUtcFilter"
+                       class="form-control"
+                       type="datetime-local"
+                       @bind="_toUtc" />
+            </div>
+
+            <div class="col-md-1 d-flex align-items-end">
+                <button class="btn btn-primary w-100"
+                        disabled="@_loading"
+                        @onclick="LoadAsync">
+                    Szukaj
+                </button>
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <button class="btn btn-outline-secondary"
+                    disabled="@_loading"
+                    @onclick="ClearFiltersAsync">
+                Wyczyść filtry
+            </button>
+        </div>
+    </div>
 </div>
 
 <ErrorBanner Message="@_error" />
@@ -63,17 +131,17 @@ else
                             </span>
                         </td>
                         <td>@item.EntityName</td>
-                        <td>@item.EntityId</td>
-                        <td>@(item.UserName ?? "-")</td>
-                        <td>@(item.IpAddress ?? "-")</td>
+                        <td>@DisplayOrDash(item.EntityId)</td>
+                        <td>@DisplayOrDash(item.PerformedBy)</td>
+                        <td>@DisplayOrDash(item.IpAddress)</td>
                         <td>
-                            @if (string.IsNullOrWhiteSpace(item.DetailsJson))
+                            @if (string.IsNullOrWhiteSpace(item.Details))
                             {
                                 <span class="text-muted">-</span>
                             }
                             else
                             {
-                                <code>@item.DetailsJson</code>
+                                <code>@item.Details</code>
                             }
                         </td>
                     </tr>
@@ -84,9 +152,15 @@ else
 }
 
 @code {
-    private List<AuditLogItem> _items = [];
+    private List<AuditLogListItemDto> _items = [];
     private bool _loading;
     private string? _error;
+
+    private string? _action;
+    private string? _entityName;
+    private string? _performedBy;
+    private DateTime? _fromUtc;
+    private DateTime? _toUtc;
 
     protected override async Task OnInitializedAsync()
     {
@@ -100,7 +174,9 @@ else
 
         try
         {
-            var result = await Http.GetFromJsonAsync<List<AuditLogItem>>("api/audit");
+            var url = BuildUrl();
+            var client = HttpClientFactory.CreateClient("AuthorizedApi");
+            var result = await client.GetFromJsonAsync<List<AuditLogListItemDto>>(url);
             _items = result ?? [];
         }
         catch
@@ -113,6 +189,47 @@ else
         }
     }
 
+    private async Task ClearFiltersAsync()
+    {
+        _action = null;
+        _entityName = null;
+        _performedBy = null;
+        _fromUtc = null;
+        _toUtc = null;
+
+        await LoadAsync();
+    }
+
+    private string BuildUrl()
+    {
+        var query = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(_action))
+            query.Add($"action={Uri.EscapeDataString(_action)}");
+
+        if (!string.IsNullOrWhiteSpace(_entityName))
+            query.Add($"entityName={Uri.EscapeDataString(_entityName)}");
+
+        if (!string.IsNullOrWhiteSpace(_performedBy))
+            query.Add($"performedBy={Uri.EscapeDataString(_performedBy)}");
+
+        if (_fromUtc.HasValue)
+            query.Add($"fromUtc={Uri.EscapeDataString(_fromUtc.Value.ToUniversalTime().ToString("O"))}");
+
+        if (_toUtc.HasValue)
+            query.Add($"toUtc={Uri.EscapeDataString(_toUtc.Value.ToUniversalTime().ToString("O"))}");
+
+        if (query.Count == 0)
+            return "api/audit";
+
+        return $"api/audit?{string.Join("&", query)}";
+    }
+
+    private static string DisplayOrDash(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? "-" : value;
+    }
+
     private static string GetActionBadge(string action)
     {
         return action switch
@@ -123,18 +240,5 @@ else
             "Delete" => "bg-danger",
             _ => "bg-secondary"
         };
-    }
-
-    private sealed class AuditLogItem
-    {
-        public long Id { get; set; }
-        public DateTime CreatedAtUtc { get; set; }
-        public string Action { get; set; } = string.Empty;
-        public string EntityName { get; set; } = string.Empty;
-        public string EntityId { get; set; } = string.Empty;
-        public string? UserId { get; set; }
-        public string? UserName { get; set; }
-        public string? IpAddress { get; set; }
-        public string? DetailsJson { get; set; }
     }
 }
