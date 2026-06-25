@@ -139,6 +139,14 @@ public sealed class TicketListPageTests : BunitContext
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
         }
 
+
+            public Task<HttpResponseMessage> ExportCsvAsync(
+            TicketQueryDto query,
+            CancellationToken ct = default)
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        }
+
         public Task<IReadOnlyList<TicketDto>> GetDeletedAsync(
             CancellationToken ct = default)
         {

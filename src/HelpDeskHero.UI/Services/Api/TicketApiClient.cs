@@ -61,4 +61,23 @@ public sealed class TicketApiClient : ITicketApiClient
     {
         return await _http.PostAsync($"api/tickets/{id}/restore", content: null, ct);
     }
+
+    public async Task<HttpResponseMessage> ExportCsvAsync(
+        TicketQueryDto query,
+        CancellationToken ct = default)
+    {
+        var parameters = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(query.Status))
+            parameters.Add($"status={Uri.EscapeDataString(query.Status)}");
+
+        if (!string.IsNullOrWhiteSpace(query.Priority))
+            parameters.Add($"priority={Uri.EscapeDataString(query.Priority)}");
+
+        var queryString = parameters.Count > 0
+            ? "?" + string.Join("&", parameters)
+            : "";
+
+        return await _http.GetAsync($"api/tickets/export{queryString}", ct);
+    }
 }

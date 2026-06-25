@@ -33,6 +33,28 @@ public sealed class NotificationApiClient
         return await _http.PostAsync($"api/notifications/{id}/read", content: null, ct);
     }
 
+    public async Task<HttpResponseMessage?> MarkAllAsReadAsync(
+        IEnumerable<UserNotificationDto> notifications,
+        CancellationToken ct = default)
+    {
+        var unreadIds = notifications
+            .Where(x => !x.IsRead)
+            .Select(x => x.Id)
+            .Distinct()
+            .ToArray();
+
+        foreach (var id in unreadIds)
+        {
+            var response = await MarkAsReadAsync(id, ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                return response;
+            }
+        }
+
+        return null;
+    }
+
     public void UpdateUnreadCount(IEnumerable<UserNotificationDto> notifications)
     {
         UnreadCountChanged?.Invoke(notifications.Count(x => !x.IsRead));
