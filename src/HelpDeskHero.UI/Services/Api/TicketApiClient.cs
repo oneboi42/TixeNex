@@ -4,7 +4,7 @@ using HelpDeskHero.Shared.Contracts.Tickets;
 
 namespace HelpDeskHero.UI.Services.Api;
 
-public sealed class TicketApiClient
+public sealed class TicketApiClient : ITicketApiClient
 {
     private readonly HttpClient _http;
 
@@ -29,7 +29,7 @@ public sealed class TicketApiClient
     }
 
     public Task<TicketDto?> GetByIdAsync(int id, CancellationToken ct = default) =>
-    _http.GetFromJsonAsync<TicketDto>($"api/tickets/{id}", ct);
+        _http.GetFromJsonAsync<TicketDto>($"api/tickets/{id}", ct);
 
     public async Task<HttpResponseMessage> CreateAsync(
         CreateTicketDto dto,
@@ -46,4 +46,19 @@ public sealed class TicketApiClient
         int id,
         CancellationToken ct = default) =>
         await _http.DeleteAsync($"api/tickets/{id}", ct);
+
+    public async Task<IReadOnlyList<TicketDto>> GetDeletedAsync(
+        CancellationToken ct = default)
+    {
+        return await _http.GetFromJsonAsync<List<TicketDto>>(
+            "api/tickets/deleted",
+            ct) ?? [];
+    }
+
+    public async Task<HttpResponseMessage> RestoreAsync(
+        int id,
+        CancellationToken ct = default)
+    {
+        return await _http.PostAsync($"api/tickets/{id}/restore", content: null, ct);
+    }
 }

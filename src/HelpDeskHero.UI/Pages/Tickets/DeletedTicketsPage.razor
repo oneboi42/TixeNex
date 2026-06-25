@@ -1,11 +1,11 @@
 @page "/tickets/deleted"
 @attribute [Authorize(Policy = "CanManageTickets")]
 
-@using System.Net.Http.Json
 @using HelpDeskHero.Shared.Contracts.Tickets
+@using HelpDeskHero.UI.Services.Api
 @using Microsoft.AspNetCore.Authorization
 
-@inject HttpClient Http
+@inject ITicketApiClient TicketApi
 @inject NavigationManager Navigation
 
 <PageTitle>Usunięte zgłoszenia</PageTitle>
@@ -92,7 +92,7 @@ else
 
         try
         {
-            _items = await Http.GetFromJsonAsync<List<TicketDto>>("api/tickets/deleted") ?? [];
+            _items = (await TicketApi.GetDeletedAsync()).ToList();
         }
         catch
         {
@@ -111,7 +111,7 @@ else
 
         try
         {
-            var response = await Http.PostAsync($"api/tickets/{id}/restore", content: null);
+            var response = await TicketApi.RestoreAsync(id);
 
             if (!response.IsSuccessStatusCode)
             {

@@ -1,0 +1,35 @@
+using HelpDeskHero.Shared.Contracts.Common;
+using HelpDeskHero.Shared.Contracts.Tickets;
+
+namespace HelpDeskHero.UI.Services.Api;
+
+public interface ITicketApiClient
+{
+    Task<PagedResultDto<TicketDto>?> GetPageAsync(
+        TicketQueryDto query,
+        CancellationToken ct = default);
+
+    Task<TicketDto?> GetByIdAsync(
+        int id,
+        CancellationToken ct = default);
+
+    Task<HttpResponseMessage> CreateAsync(
+        CreateTicketDto dto,
+        CancellationToken ct = default);
+
+    Task<HttpResponseMessage> UpdateAsync(
+        int id,
+        UpdateTicketDto dto,
+        CancellationToken ct = default);
+
+    Task<HttpResponseMessage> DeleteAsync(
+        int id,
+        CancellationToken ct = default);
+
+    Task<IReadOnlyList<TicketDto>> GetDeletedAsync(
+        CancellationToken ct = default);
+
+    Task<HttpResponseMessage> RestoreAsync(
+        int id,
+        CancellationToken ct = default);
+}

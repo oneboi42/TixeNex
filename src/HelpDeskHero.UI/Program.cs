@@ -51,6 +51,6 @@ builder.Services.AddScoped(sp =>
     sp.GetRequiredService<IHttpClientFactory>().CreateClient("Api"));
 
 builder.Services.AddScoped<AuthApiClient>();
-builder.Services.AddScoped<TicketApiClient>();
+builder.Services.AddScoped<ITicketApiClient, TicketApiClient>();
 
 await builder.Build().RunAsync();
