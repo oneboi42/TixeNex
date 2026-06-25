@@ -24,3 +24,6 @@ jobs:
 
       - name: Build
         run: dotnet build .\HelpDeskHero.slnx --configuration Release --no-restore
+
+      - name: Test UI
+        run: dotnet test .\tests\HelpDeskHero.UI.Tests\HelpDeskHero.UI.Tests.csproj --configuration Release --no-build
