@@ -1,5 +1,6 @@
 using System.Text;
 using HelpDeskHero.Api.Domain;
+using HelpDeskHero.Api.Infrastructure.Notifications;
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using HelpDeskHero.Api.Infrastructure.Security;
 using HelpDeskHero.Api.Infrastructure.Services;
@@ -106,6 +107,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // Register AuditService and HttpContextAccessor
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddHttpContextAccessor();
+
+// Notification dispatcher registration
+builder.Services.AddScoped<INotificationSender, InAppNotificationSender>();
+builder.Services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
 
 // Authorization policies
 builder.Services.AddAuthorization(options =>
