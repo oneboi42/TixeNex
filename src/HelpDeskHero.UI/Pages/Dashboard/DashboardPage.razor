@@ -1,0 +1,109 @@
+@page "/dashboard"
+@attribute [Authorize]
+@using HelpDeskHero.Shared.Contracts.Dashboard
+@using Microsoft.AspNetCore.Authorization
+@inject HelpDeskHero.UI.Services.Api.DashboardApiClient DashboardApi
+
+<PageTitle>Dashboard</PageTitle>
+
+<h3>Dashboard</h3>
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger">
+        @_error
+    </div>
+}
+else if (_model is null)
+{
+    <p>Ładowanie...</p>
+}
+else
+{
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card p-3">
+                <strong>Total</strong>
+                <span>@_model.TotalTickets</span>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card p-3">
+                <strong>Open</strong>
+                <span>@_model.OpenTickets</span>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card p-3">
+                <strong>Closed</strong>
+                <span>@_model.ClosedTickets</span>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card p-3">
+                <strong>Deleted</strong>
+                <span>@_model.DeletedTickets</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card p-3">
+                <strong>High priority open</strong>
+                <span>@_model.HighPriorityOpenTickets</span>
+            </div>
+        </div>
+    </div>
+
+    <h5>Recent audit</h5>
+
+    @if (_model.RecentAuditItems.Count == 0)
+    {
+        <p>Brak wpisów audytu.</p>
+    }
+    else
+    {
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>When</th>
+                    <th>Action</th>
+                    <th>Entity</th>
+                    <th>User</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in _model.RecentAuditItems)
+                {
+                    <tr>
+                        <td>@item.CreatedAtUtc.ToString("u")</td>
+                        <td>@item.Action</td>
+                        <td>@item.EntityName</td>
+                        <td>@item.PerformedBy</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private DashboardSummaryDto? _model;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _model = await DashboardApi.GetSummaryAsync();
+        }
+        catch
+        {
+            _error = "Nie udało się załadować dashboardu.";
+        }
+    }
+}

@@ -36,6 +36,7 @@ public sealed class DashboardController : ControllerBase
                     CreatedAtUtc = x.CreatedAtUtc,
                     Action = x.Action,
                     EntityName = x.EntityName,
+                    PerformedBy = x.UserName ?? "System"
                 })
                 .ToListAsync(ct)
         };
