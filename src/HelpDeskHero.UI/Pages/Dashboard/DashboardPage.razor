@@ -1,24 +1,39 @@
 @page "/dashboard"
 @attribute [Authorize]
+
+@implements IAsyncDisposable
+
 @using HelpDeskHero.Shared.Contracts.Dashboard
 @using Microsoft.AspNetCore.Authorization
+
 @inject HelpDeskHero.UI.Services.Api.DashboardApiClient DashboardApi
 
 <PageTitle>Dashboard</PageTitle>
 
-<h3>Dashboard</h3>
-
-@if (!string.IsNullOrWhiteSpace(_error))
-{
-    <div class="alert alert-danger">
-        @_error
+<div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+    <div>
+        <h3 class="mb-1">Dashboard</h3>
+        @if (_lastLoadedAt is not null)
+        {
+            <small class="text-muted">Last refreshed: @_lastLoadedAt.Value.ToLocalTime().ToString("T")</small>
+        }
     </div>
-}
-else if (_model is null)
+
+    <button class="btn btn-outline-primary"
+            type="button"
+            disabled="@_loading"
+            @onclick="RefreshAsync">
+        @(_loading ? "Refreshing..." : "Refresh")
+    </button>
+</div>
+
+<ErrorBanner Message="@_error" />
+
+@if (_loading && _model is null)
 {
-    <p>Ładowanie...</p>
+    <LoadingSpinner Text="Loading dashboard..." />
 }
-else
+else if (_model is not null)
 {
     <div class="row g-3 mb-4">
         <div class="col-md-3">
@@ -57,13 +72,34 @@ else
                 <span>@_model.HighPriorityOpenTickets</span>
             </div>
         </div>
+
+        <div class="col-md-3">
+            <div class="card p-3">
+                <strong>Comments</strong>
+                <span>@_model.TotalComments</span>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card p-3">
+                <strong>Attachments</strong>
+                <span>@_model.TotalAttachments</span>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card p-3">
+                <strong>Unread notifications</strong>
+                <span>@_model.UnreadNotifications</span>
+            </div>
+        </div>
     </div>
 
     <h5>Recent audit</h5>
 
     @if (_model.RecentAuditItems.Count == 0)
     {
-        <p>Brak wpisów audytu.</p>
+        <EmptyState Title="No audit entries" Message="There are no recent audit entries." />
     }
     else
     {
@@ -92,18 +128,63 @@ else
 }
 
 @code {
+    private readonly PeriodicTimer _refreshTimer = new(TimeSpan.FromSeconds(45));
+    private readonly CancellationTokenSource _disposeCts = new();
     private DashboardSummaryDto? _model;
     private string? _error;
+    private bool _loading;
+    private DateTime? _lastLoadedAt;
 
     protected override async Task OnInitializedAsync()
     {
+        await RefreshAsync();
+        _ = AutoRefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (_loading)
+            return;
+
+        _loading = true;
+        _error = null;
+
         try
         {
-            _model = await DashboardApi.GetSummaryAsync();
+            _model = await DashboardApi.GetSummaryAsync(_disposeCts.Token);
+            _lastLoadedAt = DateTime.Now;
+        }
+        catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
+        {
         }
         catch
         {
-            _error = "Nie udało się załadować dashboardu.";
+            _error = "Could not load dashboard.";
         }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task AutoRefreshAsync()
+    {
+        try
+        {
+            while (await _refreshTimer.WaitForNextTickAsync(_disposeCts.Token))
+            {
+                await InvokeAsync(RefreshAsync);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _disposeCts.CancelAsync();
+        _refreshTimer.Dispose();
+        _disposeCts.Dispose();
     }
 }

@@ -1,8 +1,14 @@
 using System.Text;
+using Hangfire;
+using Hangfire.SqlServer;
+using HelpDeskHero.Api.BackgroundJobs;
+using HelpDeskHero.Api.BackgroundJobs.Contracts;
 using HelpDeskHero.Api.Domain;
+using HelpDeskHero.Api.Infrastructure.Notifications;
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using HelpDeskHero.Api.Infrastructure.Security;
 using HelpDeskHero.Api.Infrastructure.Services;
+using HelpDeskHero.Api.Infrastructure.Storage;
 using HelpDeskHero.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -63,6 +69,21 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.AddHangfire(config =>
+{
+    config.UseSimpleAssemblyNameTypeSerializer()
+          .UseRecommendedSerializerSettings()
+          .UseSqlServerStorage(
+              builder.Configuration.GetConnectionString("DefaultConnection"),
+              new SqlServerStorageOptions
+              {
+                  PrepareSchemaIfNecessary = true
+              });
+});
+
+builder.Services.AddHangfireServer();
+builder.Services.AddScoped<INotificationJob, NotificationJob>();
+
 // Identity configuration
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
 {
@@ -82,6 +103,7 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 // TokenService registration
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<RefreshTokenService>();
+builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
 
 // JWT authentication
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
@@ -106,6 +128,13 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 // Register AuditService and HttpContextAccessor
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddHttpContextAccessor();
+
+// Notification dispatcher registration
+builder.Services.AddScoped<INotificationSender, InAppNotificationSender>();
+builder.Services.AddScoped<INotificationSender, EmailNotificationSender>();
+builder.Services.AddHttpClient<WebhookNotificationSender>();
+builder.Services.AddScoped<INotificationSender, WebhookNotificationSender>();
+builder.Services.AddScoped<INotificationDispatcher, NotificationDispatcher>();
 
 // Authorization policies
 builder.Services.AddAuthorization(options =>
@@ -132,6 +161,14 @@ app.UseCors(CorsPolicyName);
 
 app.UseAuthentication();
 app.UseAuthorization();
+
+app.UseHangfireDashboard("/hangfire");
+
+var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
+recurringJobManager.AddOrUpdate<INotificationJob>(
+    "daily-summary",
+    job => job.SendDailySummaryAsync(default),
+    "0 7 * * *");
 
 app.MapControllers();
 

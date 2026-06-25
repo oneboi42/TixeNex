@@ -52,6 +52,9 @@ builder.Services.AddScoped(sp =>
 
 builder.Services.AddScoped<AuthApiClient>();
 builder.Services.AddScoped<ITicketApiClient, TicketApiClient>();
+builder.Services.AddScoped<TicketCommentApiClient>();
+builder.Services.AddScoped<TicketAttachmentApiClient>();
+builder.Services.AddScoped<NotificationApiClient>();
 builder.Services.AddScoped<DashboardApiClient>();
 
 await builder.Build().RunAsync();

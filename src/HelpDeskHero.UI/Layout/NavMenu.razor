@@ -1,5 +1,9 @@
-﻿@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.AspNetCore.Components.Authorization
+@using HelpDeskHero.UI.Services.Api
+@implements IDisposable
+
+@inject NotificationApiClient NotificationApi
 
 <div class="sidebar-header">
     <a class="sidebar-brand" href="">
@@ -23,12 +27,22 @@
                     Tickets
                 </NavLink>
             </div>
+
             <div class="nav-item">
                 <NavLink class="nav-link" href="dashboard">
                     Dashboard
                 </NavLink>
             </div>
 
+            <div class="nav-item">
+                <NavLink class="nav-link d-flex justify-content-between align-items-center" href="notifications">
+                    <span>Notifications</span>
+                    @if (_unreadCount > 0)
+                    {
+                        <span class="badge bg-primary">@_unreadCount</span>
+                    }
+                </NavLink>
+            </div>
 
             <AuthorizeView Roles="Admin,Agent" Context="createAuth">
                 <Authorized>
@@ -55,10 +69,11 @@
                             Audit Log
                         </NavLink>
                     </div>
+
                     <div class="nav-item">
-                    <NavLink class="nav-link" href="tickets/deleted">
-                         Deleted tickets
-                    </NavLink>
+                        <NavLink class="nav-link" href="tickets/deleted">
+                            Deleted tickets
+                        </NavLink>
                     </div>
                 </Authorized>
             </AuthorizeView>
@@ -87,3 +102,33 @@
         </NotAuthorized>
     </AuthorizeView>
 </nav>
+
+@code {
+    private int _unreadCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        NotificationApi.UnreadCountChanged += OnUnreadCountChanged;
+
+        try
+        {
+            var notifications = await NotificationApi.GetMineAndUpdateUnreadCountAsync();
+            _unreadCount = notifications.Count(x => !x.IsRead);
+        }
+        catch
+        {
+            _unreadCount = 0;
+        }
+    }
+
+    private void OnUnreadCountChanged(int unreadCount)
+    {
+        _unreadCount = unreadCount;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        NotificationApi.UnreadCountChanged -= OnUnreadCountChanged;
+    }
+}
