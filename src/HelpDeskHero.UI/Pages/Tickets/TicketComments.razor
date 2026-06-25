@@ -4,17 +4,17 @@
 @inject TicketCommentApiClient CommentApi
 
 <section class="mt-4">
-    <h4>Komentarze</h4>
+    <h4>Comments</h4>
 
     <ErrorBanner Message="@_error" />
 
     @if (_loading)
     {
-        <LoadingSpinner Text="Ladowanie komentarzy..." />
+        <LoadingSpinner Text="Loading comments..." />
     }
     else if (_comments.Count == 0)
     {
-        <EmptyState Title="Brak komentarzy" Message="Ten ticket nie ma jeszcze komentarzy." />
+        <EmptyState Title="No comments" Message="This ticket does not have any comments yet." />
     }
     else
     {
@@ -36,7 +36,7 @@
         <DataAnnotationsValidator />
 
         <div class="mb-2">
-            <label class="form-label" for="@_bodyInputId">Nowy komentarz</label>
+            <label class="form-label" for="@_bodyInputId">New comment</label>
             <InputTextArea id="@_bodyInputId"
                            class="form-control"
                            rows="4"
@@ -46,13 +46,13 @@
         </div>
 
         <button class="btn btn-primary" type="submit" disabled="@_saving">
-            @(_saving ? "Zapisywanie..." : "Dodaj komentarz")
+            @(_saving ? "Saving..." : "Add comment")
         </button>
     </EditForm>
 
     <AppToast @bind-Visible="_toastVisible"
-              Title="Komentarz dodany"
-              Message="Komentarz zostal zapisany." />
+              Title="Comment added"
+              Message="The comment has been saved." />
 </section>
 
 @code {

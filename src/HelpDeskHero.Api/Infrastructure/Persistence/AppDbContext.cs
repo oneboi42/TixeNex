@@ -15,6 +15,7 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<UserNotification> UserNotifications => Set<UserNotification>();
     public DbSet<TicketComment> TicketComments => Set<TicketComment>();
+    public DbSet<TicketAttachment> TicketAttachments => Set<TicketAttachment>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -150,6 +151,44 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
             b.HasQueryFilter(x => !x.Ticket.IsDeleted);
 
             b.HasIndex(x => new { x.TicketId, x.CreatedAtUtc });
+        });
+
+        modelBuilder.Entity<TicketAttachment>(b =>
+        {
+            b.ToTable("TicketAttachments");
+            b.HasKey(x => x.Id);
+
+            b.Property(x => x.OriginalFileName)
+                .HasMaxLength(260)
+                .IsRequired();
+
+            b.Property(x => x.StoredFileName)
+                .HasMaxLength(260)
+                .IsRequired();
+
+            b.Property(x => x.RelativePath)
+                .HasMaxLength(520)
+                .IsRequired();
+
+            b.Property(x => x.ContentType)
+                .HasMaxLength(200)
+                .IsRequired();
+
+            b.Property(x => x.SizeBytes).IsRequired();
+            b.Property(x => x.UploadedAtUtc).IsRequired();
+
+            b.Property(x => x.UploadedByUserId)
+                .HasMaxLength(450)
+                .IsRequired();
+
+            b.HasOne(x => x.Ticket)
+                .WithMany()
+                .HasForeignKey(x => x.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            b.HasQueryFilter(x => !x.Ticket.IsDeleted);
+
+            b.HasIndex(x => new { x.TicketId, x.UploadedAtUtc });
         });
     }
 

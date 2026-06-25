@@ -8,25 +8,25 @@
 @inject HelpDeskHero.UI.Services.Api.ITicketApiClient TicketApi
 @inject NavigationManager Nav
 
-<PageTitle>Szczegóły zgłoszenia</PageTitle>
+<PageTitle>Ticket details</PageTitle>
 
-<h3>Szczegóły zgłoszenia</h3>
+<h3>Details</h3>
 
 <ErrorBanner Message="@_error" />
 
 @if (_loading)
 {
-    <LoadingSpinner Text="Ładowanie zgłoszenia..." />
+    <LoadingSpinner Text="Loading ticket..." />
 }
 else if (_ticket is not null)
 {
     <div class="card">
         <div class="card-body">
             <dl class="row mb-0">
-                <dt class="col-sm-3">Numer</dt>
+                <dt class="col-sm-3">Number</dt>
                 <dd class="col-sm-9">@_ticket.Number</dd>
 
-                <dt class="col-sm-3">Tytuł</dt>
+                <dt class="col-sm-3">Title</dt>
                 <dd class="col-sm-9">@_ticket.Title</dd>
 
                 <dt class="col-sm-3">Status</dt>
@@ -34,12 +34,12 @@ else if (_ticket is not null)
                     <StatusBadge Status="@_ticket.Status" />
                 </dd>
 
-                <dt class="col-sm-3">Priorytet</dt>
+                <dt class="col-sm-3">Priority</dt>
                 <dd class="col-sm-9">
                     <PriorityBadge Priority="@_ticket.Priority" />
                 </dd>
 
-                <dt class="col-sm-3">Opis</dt>
+                <dt class="col-sm-3">Description</dt>
                 <dd class="col-sm-9">@_ticket.Description</dd>
             </dl>
 
@@ -48,18 +48,20 @@ else if (_ticket is not null)
                     <Authorized>
                         <button class="btn btn-primary"
                                 @onclick='() => Nav.NavigateTo($"/tickets/edit/{Id}")'>
-                            Edytuj
+                            Edit
                         </button>
                     </Authorized>
                 </AuthorizeView>
 
                 <button class="btn btn-secondary"
                         @onclick='() => Nav.NavigateTo("/tickets")'>
-                    Powrót
+                    Back
                 </button>
             </div>
         </div>
     </div>
+
+    <TicketAttachments TicketId="Id" />
 
     <TicketComments TicketId="Id" />
 }
@@ -83,12 +85,12 @@ else if (_ticket is not null)
 
             if (_ticket is null)
             {
-                _error = "Nie znaleziono zgłoszenia.";
+                _error = "Ticket was not found.";
             }
         }
         catch
         {
-            _error = "Nie udało się pobrać szczegółów zgłoszenia.";
+            _error = "Could not load ticket details.";
         }
         finally
         {
