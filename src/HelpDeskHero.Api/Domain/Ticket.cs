@@ -11,6 +11,13 @@ public sealed class Ticket
 
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? UpdatedAtUtc { get; set; }
+    public DateTime? DueFirstResponseAtUtc { get; set; }
+    public DateTime? DueResolveAtUtc { get; set; }
+    public DateTime? FirstRespondedAtUtc { get; set; }
+    public DateTime? ResolvedAtUtc { get; set; }
+    public string? AssignedToUserId { get; set; }
+    public int EscalationLevel { get; set; }
+    public DateTime? LastNotifiedAtUtc { get; set; }
 
     public bool IsDeleted { get; set; }
     public DateTime? DeletedAtUtc { get; set; }

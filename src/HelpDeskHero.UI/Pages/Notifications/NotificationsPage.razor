@@ -11,12 +11,21 @@
 
 <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
     <h3 class="mb-0">Notifications</h3>
-    <button class="btn btn-outline-primary"
-            type="button"
-            disabled="@_loading"
-            @onclick="LoadNotificationsAsync">
-        @(_loading ? "Refreshing..." : "Refresh")
-    </button>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-secondary"
+                type="button"
+                disabled="@(_loading || _markingAllRead)"
+                @onclick="LoadNotificationsAsync">
+            @(_loading ? "Refreshing..." : "Refresh")
+        </button>
+
+        <button class="btn btn-outline-primary"
+                type="button"
+                disabled="@(_loading || _markingAllRead || !_notifications.Any(x => !x.IsRead))"
+                @onclick="MarkAllAsReadAsync">
+            @(_markingAllRead ? "Saving..." : "Read all")
+        </button>
+    </div>
 </div>
 
 <ErrorBanner Message="@_error" />
@@ -62,14 +71,15 @@ else
 }
 
 <AppToast @bind-Visible="_toastVisible"
-          Title="Notification updated"
-          Message="The notification was marked as read." />
+          Title="Notifications updated"
+          Message="Notifications were marked as read." />
 
 @code {
     private List<UserNotificationDto> _notifications = [];
     private string? _error;
     private bool _loading;
     private bool _toastVisible;
+    private bool _markingAllRead;
     private int? _markingReadId;
 
     protected override async Task OnInitializedAsync()
@@ -124,6 +134,36 @@ else
         finally
         {
             _markingReadId = null;
+        }
+    }
+
+    private async Task MarkAllAsReadAsync()
+    {
+        _error = null;
+        _toastVisible = false;
+        _markingAllRead = true;
+
+        try
+        {
+            var failedResponse = await NotificationApi.MarkAllAsReadAsync(_notifications);
+            if (failedResponse is not null)
+            {
+                _error = await ApiErrorMapper.ToMessageAsync(
+                    failedResponse,
+                    "Could not mark notifications as read.");
+                return;
+            }
+
+            await LoadNotificationsAsync();
+            _toastVisible = true;
+        }
+        catch
+        {
+            _error = "Could not mark notifications as read.";
+        }
+        finally
+        {
+            _markingAllRead = false;
         }
     }
 }

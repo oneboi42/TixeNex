@@ -148,3 +148,11 @@ C:\blad\Documents\GitHub\HelpDeskHero\tests\HelpDeskHero.UI.Tests\obj\Debug\net1
 C:\blad\Documents\GitHub\HelpDeskHero\tests\HelpDeskHero.UI.Tests\obj\Debug\net10.0\HelpDeskHero.UI.Tests.pdb
 C:\blad\Documents\GitHub\HelpDeskHero\tests\HelpDeskHero.UI.Tests\obj\Debug\net10.0\HelpDeskHero.UI.Tests.genruntimeconfig.cache
 C:\blad\Documents\GitHub\HelpDeskHero\tests\HelpDeskHero.UI.Tests\obj\Debug\net10.0\ref\HelpDeskHero.UI.Tests.dll
+C:\blad\Documents\GitHub\HelpDeskHero\tests\HelpDeskHero.UI.Tests\bin\Debug\net10.0\Microsoft.AspNetCore.Connections.Abstractions.dll
+C:\blad\Documents\GitHub\HelpDeskHero\tests\HelpDeskHero.UI.Tests\bin\Debug\net10.0\Microsoft.AspNetCore.Http.Connections.Client.dll
+C:\blad\Documents\GitHub\HelpDeskHero\tests\HelpDeskHero.UI.Tests\bin\Debug\net10.0\Microsoft.AspNetCore.Http.Connections.Common.dll
+C:\blad\Documents\GitHub\HelpDeskHero\tests\HelpDeskHero.UI.Tests\bin\Debug\net10.0\Microsoft.AspNetCore.SignalR.Client.dll
+C:\blad\Documents\GitHub\HelpDeskHero\tests\HelpDeskHero.UI.Tests\bin\Debug\net10.0\Microsoft.AspNetCore.SignalR.Client.Core.dll
+C:\blad\Documents\GitHub\HelpDeskHero\tests\HelpDeskHero.UI.Tests\bin\Debug\net10.0\Microsoft.AspNetCore.SignalR.Common.dll
+C:\blad\Documents\GitHub\HelpDeskHero\tests\HelpDeskHero.UI.Tests\bin\Debug\net10.0\Microsoft.AspNetCore.SignalR.Protocols.Json.dll
+C:\blad\Documents\GitHub\HelpDeskHero\tests\HelpDeskHero.UI.Tests\bin\Debug\net10.0\Microsoft.Extensions.Features.dll

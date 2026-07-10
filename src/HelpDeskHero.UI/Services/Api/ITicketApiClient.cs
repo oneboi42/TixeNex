@@ -32,4 +32,8 @@ public interface ITicketApiClient
     Task<HttpResponseMessage> RestoreAsync(
         int id,
         CancellationToken ct = default);
+
+    Task<HttpResponseMessage> ExportCsvAsync(
+        TicketQueryDto query,
+        CancellationToken ct = default);
 }

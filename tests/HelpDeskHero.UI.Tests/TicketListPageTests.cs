@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
+using HelpDeskHero.UI.Services.Realtime;
 
 namespace HelpDeskHero.UI.Tests;
 
@@ -25,6 +26,9 @@ public sealed class TicketListPageTests : BunitContext
             new FakeAuthenticationStateProvider());
 
         Services.AddSingleton<ITicketApiClient>(new FakeTicketApiClient());
+        
+        Services.AddSingleton<ITicketsRealtimeClient, FakeTicketsRealtimeClient>();
+
 
         var cut = Render(builder =>
         {
@@ -139,6 +143,14 @@ public sealed class TicketListPageTests : BunitContext
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
         }
 
+
+            public Task<HttpResponseMessage> ExportCsvAsync(
+            TicketQueryDto query,
+            CancellationToken ct = default)
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+        }
+
         public Task<IReadOnlyList<TicketDto>> GetDeletedAsync(
             CancellationToken ct = default)
         {
@@ -152,6 +164,18 @@ public sealed class TicketListPageTests : BunitContext
             CancellationToken ct = default)
         {
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+        }
+    }
+
+    private sealed class FakeTicketsRealtimeClient : ITicketsRealtimeClient
+    {
+        public event Func<TicketLiveUpdateDto, Task>? OnTicketChanged;
+
+        public Task StartAsync(CancellationToken ct = default)
+        {
+            _ = OnTicketChanged;
+
+            return Task.CompletedTask;
         }
     }
 }

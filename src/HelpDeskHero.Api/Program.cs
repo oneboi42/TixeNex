@@ -1,14 +1,18 @@
 using System.Text;
 using Hangfire;
 using Hangfire.SqlServer;
+using HelpDeskHero.Api.Application.Interfaces;
+using HelpDeskHero.Api.Application.Services;
 using HelpDeskHero.Api.BackgroundJobs;
 using HelpDeskHero.Api.BackgroundJobs.Contracts;
 using HelpDeskHero.Api.Domain;
+using HelpDeskHero.Api.Infrastructure.Background;
 using HelpDeskHero.Api.Infrastructure.Notifications;
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using HelpDeskHero.Api.Infrastructure.Security;
 using HelpDeskHero.Api.Infrastructure.Services;
 using HelpDeskHero.Api.Infrastructure.Storage;
+using HelpDeskHero.Api.Hubs;
 using HelpDeskHero.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -28,11 +32,13 @@ builder.Services.AddCors(options =>
                 "https://localhost:7045",
                 "http://localhost:5045")
               .AllowAnyHeader()
-              .AllowAnyMethod();
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
 builder.Services.AddControllers();
+builder.Services.AddSignalR();
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
@@ -104,6 +110,13 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
 builder.Services.AddScoped<TokenService>();
 builder.Services.AddScoped<RefreshTokenService>();
 builder.Services.AddScoped<IFileStorage, LocalFileStorage>();
+builder.Services.AddScoped<ISlaCalculator, SlaCalculator>();
+builder.Services.AddScoped<ITicketAssignmentService, TicketAssignmentService>();
+builder.Services.AddScoped<ISlaMonitorService, SlaMonitorService>();
+builder.Services.AddScoped<IOutboxWriter, OutboxWriter>();
+builder.Services.AddScoped<ITicketLiveNotifier, SignalRTicketLiveNotifier>();
+builder.Services.AddHostedService<OutboxProcessorService>();
+builder.Services.AddHostedService<SlaWatchdogService>();
 
 // JWT authentication
 var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
@@ -122,6 +135,23 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwt.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwt.Key)),
             ClockSkew = TimeSpan.FromSeconds(30)
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                if (!string.IsNullOrWhiteSpace(accessToken) &&
+                    path.StartsWithSegments("/hubs/tickets"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
         };
     });
 
@@ -171,6 +201,7 @@ recurringJobManager.AddOrUpdate<INotificationJob>(
     "0 7 * * *");
 
 app.MapControllers();
+app.MapHub<TicketsHub>("/hubs/tickets");
 
 // Apply migrations automatically and seed database on startup
 await DbSeeder.SeedAsync(app.Services);

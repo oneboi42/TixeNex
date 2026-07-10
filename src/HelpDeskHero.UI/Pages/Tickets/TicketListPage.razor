@@ -1,13 +1,17 @@
 @page "/tickets"
 @attribute [Authorize]
+@implements IAsyncDisposable
 
 @using HelpDeskHero.Shared.Contracts.Common
 @using HelpDeskHero.Shared.Contracts.Tickets
+@using HelpDeskHero.UI.Services.Api
+@using HelpDeskHero.UI.Services.Realtime
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 
 @inject HelpDeskHero.UI.Services.Api.ITicketApiClient TicketApi
 @inject NavigationManager Navigation
+@inject ITicketsRealtimeClient Realtime
 
 @inject IJSRuntime JS
 
@@ -18,17 +22,19 @@
         <h3 class="mb-0">Zgłoszenia</h3>
         <div class="text-muted">Lista zgłoszeń w systemie HelpDeskHero</div>
     </div>
-
     <AuthorizeView Roles="Admin,Agent">
         <Authorized>
-            <NavLink class="btn btn-primary" href="tickets/create">
-                Nowe zgłoszenie
-            </NavLink>
-            <button class="btn btn-outline-secondary" @onclick="ExportCsv">
-                Export CSV
-            </button>
+            <div class="d-flex gap-2 flex-wrap justify-content-end">
+                <NavLink class="btn btn-outline-secondary" href="tickets/create">
+                    Nowe zgłoszenie
+                </NavLink>
+                <button class="btn btn-outline-secondary" @onclick="ExportCsv">
+                    Export CSV
+                </button>
+            </div>
         </Authorized>
     </AuthorizeView>
+
 </div>
 
 <ErrorBanner Message="@_error" />
@@ -62,13 +68,14 @@
                 </InputSelect>
             </div>
 
-            <div class="col-md-2">
+            <div class="col-md-2 ms-md-auto">
                 <button class="btn btn-primary w-100"
                         disabled="@_loading"
                         @onclick="ReloadAsync">
                     Filtruj
                 </button>
             </div>
+
         </div>
     </div>
 </div>
@@ -215,7 +222,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        Realtime.OnTicketChanged += HandleTicketChangedAsync;
         await ReloadAsync();
+        await StartRealtimeAsync();
     }
 
     private void ShowToast(string type, string title, string? message = null)
@@ -242,6 +251,27 @@ else
         {
             _loading = false;
         }
+    }
+
+    private async Task StartRealtimeAsync()
+    {
+        try
+        {
+            await Realtime.StartAsync();
+        }
+        catch
+        {
+            _error ??= "Nie udało się połączyć z aktualizacjami na żywo.";
+        }
+    }
+
+    private async Task HandleTicketChangedAsync(TicketLiveUpdateDto update)
+    {
+        await InvokeAsync(async () =>
+        {
+            await ReloadAsync();
+            StateHasChanged();
+        });
     }
 
     private async Task PrevAsync()
@@ -310,20 +340,37 @@ else
 
     private async Task ExportCsv()
     {
-        var parameters = new List<string>();
+        _error = null;
 
-        if (!string.IsNullOrWhiteSpace(_query.Status))
-            parameters.Add($"status={Uri.EscapeDataString(_query.Status)}");
+        try
+        {
+            var response = await TicketApi.ExportCsvAsync(_query);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await ApiErrorMapper.ToMessageAsync(
+                    response,
+                    "Nie udaĹ‚o siÄ™ wyeksportowaÄ‡ pliku CSV.");
+                return;
+            }
 
-        if (!string.IsNullOrWhiteSpace(_query.Priority))
-            parameters.Add($"priority={Uri.EscapeDataString(_query.Priority)}");
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            var contentType = response.Content.Headers.ContentType?.ToString() ?? "text/csv";
 
-        var queryString = parameters.Count > 0
-            ? "?" + string.Join("&", parameters)
-            : "";
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBytes",
+                "tickets.csv",
+                contentType,
+                bytes);
+        }
+        catch
+        {
+            _error = "Nie udaĹ‚o siÄ™ wyeksportowaÄ‡ pliku CSV.";
+        }
+    }
 
-        var url = $"https://localhost:5001/api/tickets/export{queryString}";
-
-        await JS.InvokeVoidAsync("open", url, "_blank");
+    public ValueTask DisposeAsync()
+    {
+        Realtime.OnTicketChanged -= HandleTicketChangedAsync;
+        return ValueTask.CompletedTask;
     }
 }
