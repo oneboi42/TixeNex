@@ -1,0 +1,128 @@
+.app-shell[b-55tt3kyegq] {
+    min-height: 100vh;
+    display: flex;
+    background-color: #f5f6fa;
+}
+
+.app-sidebar[b-55tt3kyegq] {
+    width: 260px;
+    min-height: 100vh;
+    flex-shrink: 0;
+    background: linear-gradient(180deg, #052767 0%, #3a0647 100%);
+    color: white;
+    position: sticky;
+    top: 0;
+}
+
+.app-main[b-55tt3kyegq] {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.app-topbar[b-55tt3kyegq] {
+    min-height: 64px;
+    padding: 0.75rem 1.5rem;
+    background-color: white;
+    border-bottom: 1px solid #dee2e6;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.app-title[b-55tt3kyegq] {
+    font-size: 1.15rem;
+    font-weight: 700;
+    color: #212529;
+}
+
+.app-subtitle[b-55tt3kyegq] {
+    font-size: 0.85rem;
+    color: #6c757d;
+}
+
+.user-box[b-55tt3kyegq] {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    text-align: right;
+}
+
+.user-name[b-55tt3kyegq] {
+    font-weight: 600;
+    color: #212529;
+}
+
+.user-role[b-55tt3kyegq] {
+    white-space: nowrap;
+}
+
+.app-content[b-55tt3kyegq] {
+    flex: 1;
+    padding: 1.5rem;
+}
+
+@media (max-width: 768px) {
+    .app-shell[b-55tt3kyegq] {
+        flex-direction: column;
+    }
+
+    .app-sidebar[b-55tt3kyegq] {
+        width: 100%;
+        min-height: auto;
+        position: static;
+    }
+
+    .app-topbar[b-55tt3kyegq] {
+        position: static;
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .user-box[b-55tt3kyegq] {
+        text-align: left;
+    }
+
+    .app-content[b-55tt3kyegq] {
+        padding: 1rem;
+    }
+
+    .user-panel[b-55tt3kyegq] {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    }
+
+    .user-info[b-55tt3kyegq] {
+        text-align: right;
+        line-height: 1.2;
+    }
+
+    .user-name[b-55tt3kyegq] {
+        font-weight: 700;
+        color: #212529;
+    }
+
+    .user-role[b-55tt3kyegq] {
+        margin-top: 0.15rem;
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+
+    @media (max-width: 768px) {
+        .user-panel[b-55tt3kyegq] {
+            align-items: flex-start;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .user-info[b-55tt3kyegq] {
+            text-align: left;
+        }
+    }
+}

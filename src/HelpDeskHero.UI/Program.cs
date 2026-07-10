@@ -57,6 +57,6 @@ builder.Services.AddScoped<TicketCommentApiClient>();
 builder.Services.AddScoped<TicketAttachmentApiClient>();
 builder.Services.AddScoped<NotificationApiClient>();
 builder.Services.AddScoped<DashboardApiClient>();
-builder.Services.AddScoped<TicketsRealtimeClient>();
+builder.Services.AddScoped<ITicketsRealtimeClient, TicketsRealtimeClient>();
 
 await builder.Build().RunAsync();

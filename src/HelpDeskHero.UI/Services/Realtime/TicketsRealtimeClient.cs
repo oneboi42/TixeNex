@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 
 namespace HelpDeskHero.UI.Services.Realtime;
 
-public sealed class TicketsRealtimeClient : IAsyncDisposable
+public sealed class TicketsRealtimeClient : ITicketsRealtimeClient, IAsyncDisposable
 {
     private readonly IConfiguration _configuration;
     private readonly TokenStore _tokenStore;
