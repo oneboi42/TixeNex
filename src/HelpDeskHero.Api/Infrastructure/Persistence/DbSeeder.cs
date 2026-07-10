@@ -48,14 +48,21 @@ public static class DbSeeder
             configuration,
             "SeedUsers:User:Password",
             "Seed user password is not configured. Set 'SeedUsers:User:Password'.");
+        var resetPasswords = IsSeedPasswordResetEnabled(configuration);
 
-        await CreateUserIfMissingAsync(userManager, "admin", "admin@helpdeskhero.local", "System Admin", adminPassword, ["Admin", "Agent"]);
-        await CreateUserIfMissingAsync(userManager, "agent", "agent@helpdeskhero.local", "Support Agent", agentPassword, ["Agent"]);
-        await CreateUserIfMissingAsync(userManager, "agent1", "agent1@helpdeskhero.local", "Support Agent 1", agentPassword, ["Agent"]);
-        await CreateUserIfMissingAsync(userManager, "agent2", "agent2@helpdeskhero.local", "Support Agent 2", agentPassword, ["Agent"]);
-        await CreateUserIfMissingAsync(userManager, "user", "user@helpdeskhero.local", "Demo User", userPassword, ["User"]);
+        await CreateUserIfMissingAsync(userManager, "admin", "admin@helpdeskhero.local", "System Admin", adminPassword, resetPasswords, ["Admin", "Agent"]);
+        await CreateUserIfMissingAsync(userManager, "agent", "agent@helpdeskhero.local", "Support Agent", agentPassword, resetPasswords, ["Agent"]);
+        await CreateUserIfMissingAsync(userManager, "agent1", "agent1@helpdeskhero.local", "Support Agent 1", agentPassword, resetPasswords, ["Agent"]);
+        await CreateUserIfMissingAsync(userManager, "agent2", "agent2@helpdeskhero.local", "Support Agent 2", agentPassword, resetPasswords, ["Agent"]);
+        await CreateUserIfMissingAsync(userManager, "user", "user@helpdeskhero.local", "Demo User", userPassword, resetPasswords, ["User"]);
 
         await SeedSlaPoliciesAsync(db, ct);
+    }
+
+    private static bool IsSeedPasswordResetEnabled(IConfiguration configuration)
+    {
+        return bool.TryParse(configuration["SeedUsers:ResetPasswords"], out var resetPasswords)
+            && resetPasswords;
     }
 
     private static string GetRequiredSeedPassword(
@@ -79,6 +86,7 @@ public static class DbSeeder
         string email,
         string displayName,
         string password,
+        bool resetPassword,
         string[] roles)
     {
         var user = await userManager.FindByNameAsync(userName)
@@ -87,6 +95,13 @@ public static class DbSeeder
         if (user is not null)
         {
             await AddMissingRolesAsync(userManager, user, roles);
+
+            if (resetPassword &&
+                string.Equals(user.UserName, userName, StringComparison.OrdinalIgnoreCase))
+            {
+                await ResetSeedUserPasswordAsync(userManager, user, password);
+            }
+
             return;
         }
 
@@ -111,6 +126,21 @@ public static class DbSeeder
         {
             var errors = string.Join("; ", roleResult.Errors.Select(x => $"{x.Code}: {x.Description}"));
             throw new InvalidOperationException($"Cannot assign roles to seed user '{userName}'. {errors}");
+        }
+    }
+
+    private static async Task ResetSeedUserPasswordAsync(
+        UserManager<ApplicationUser> userManager,
+        ApplicationUser user,
+        string password)
+    {
+        var token = await userManager.GeneratePasswordResetTokenAsync(user);
+        var resetResult = await userManager.ResetPasswordAsync(user, token, password);
+
+        if (!resetResult.Succeeded)
+        {
+            var errors = string.Join("; ", resetResult.Errors.Select(x => $"{x.Code}: {x.Description}"));
+            throw new InvalidOperationException($"Cannot reset password for seed user '{user.UserName}'. {errors}");
         }
     }
 
