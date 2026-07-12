@@ -1,0 +1,27 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+COPY HelpDeskHero.slnx ./
+
+COPY src/HelpDeskHero.Shared/HelpDeskHero.Shared.csproj src/HelpDeskHero.Shared/
+COPY src/HelpDeskHero.Api/HelpDeskHero.Api.csproj src/HelpDeskHero.Api/
+
+RUN dotnet restore src/HelpDeskHero.Api/HelpDeskHero.Api.csproj
+
+COPY . .
+
+RUN dotnet publish src/HelpDeskHero.Api/HelpDeskHero.Api.csproj \
+    -c Release \
+    -o /app/publish \
+    /p:UseAppHost=false
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+RUN mkdir -p /app/App_Data/attachments
+
+EXPOSE 8080
+
+ENTRYPOINT ["dotnet", "HelpDeskHero.Api.dll"]

@@ -1,0 +1,53 @@
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: helpdeskhero-db
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+      MSSQL_PID: "Developer"
+    ports:
+      - "14333:1433"
+    volumes:
+      - sql_data:/var/opt/mssql
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: helpdeskhero-api
+    depends_on:
+      - db
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ASPNETCORE_URLS: "http://+:8080"
+
+      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=HelpDeskHero;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+
+      Jwt__Issuer: "HelpDeskHero"
+      Jwt__Audience: "HelpDeskHero"
+      Jwt__Key: "${JWT_KEY}"
+      Jwt__AccessTokenMinutes: "60"
+
+      FileStorage__RootPath: "/app/App_Data/attachments"
+    volumes:
+      - api_attachments:/app/App_Data/attachments
+    ports:
+      - "5001:8080"
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    container_name: helpdeskhero-ui
+    depends_on:
+      - api
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  sql_data:
+  api_attachments:
