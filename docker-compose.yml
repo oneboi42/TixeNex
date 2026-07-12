@@ -23,12 +23,21 @@ services:
       ASPNETCORE_ENVIRONMENT: "Production"
       ASPNETCORE_URLS: "http://+:8080"
 
+      Logging__LogLevel__Default: "Information"
+      Logging__LogLevel__Microsoft: "Warning"
+      Logging__LogLevel__Microsoft.Hosting.Lifetime: "Information"
+      Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: "Warning"
+
       ConnectionStrings__DefaultConnection: "Server=db,1433;Database=HelpDeskHero;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
 
       Jwt__Issuer: "HelpDeskHero"
       Jwt__Audience: "HelpDeskHero"
       Jwt__Key: "${JWT_KEY}"
       Jwt__AccessTokenMinutes: "60"
+
+      SeedUsers__Admin__Password: "${SEED_ADMIN_PASSWORD}"
+      SeedUsers__Agent__Password: "${SEED_AGENT_PASSWORD}"
+      SeedUsers__User__Password: "${SEED_USER_PASSWORD}"
 
       FileStorage__RootPath: "/app/App_Data/attachments"
     volumes:

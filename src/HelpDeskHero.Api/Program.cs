@@ -177,6 +177,9 @@ builder.Services.AddAuthorization(options =>
 
 var app = builder.Build();
 
+// Apply EF Core migrations and seed database on startup.
+await DbSeeder.SeedAsync(app.Services);
+
 // Global exception handling middleware
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
@@ -205,9 +208,6 @@ recurringJobManager.AddOrUpdate<INotificationJob>(
 
 app.MapControllers();
 app.MapHub<TicketsHub>("/hubs/tickets");
-
-// Apply migrations automatically and seed database on startup
-await DbSeeder.SeedAsync(app.Services);
 
 // Redirect root URL to Swagger UI
 app.MapGet("/", async context =>
