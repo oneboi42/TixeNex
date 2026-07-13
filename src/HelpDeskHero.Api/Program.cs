@@ -21,6 +21,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+var isTesting = builder.Environment.IsEnvironment("Testing");
 
 const string CorsPolicyName = "BlazorUi";
 
@@ -75,20 +76,23 @@ builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddHangfire(config =>
+if (!isTesting)
 {
-    config.UseSimpleAssemblyNameTypeSerializer()
-          .UseRecommendedSerializerSettings()
-          .UseSqlServerStorage(
-              builder.Configuration.GetConnectionString("DefaultConnection"),
-              new SqlServerStorageOptions
-              {
-                  PrepareSchemaIfNecessary = true
-              });
-});
+    builder.Services.AddHangfire(config =>
+    {
+        config.UseSimpleAssemblyNameTypeSerializer()
+              .UseRecommendedSerializerSettings()
+              .UseSqlServerStorage(
+                  builder.Configuration.GetConnectionString("DefaultConnection"),
+                  new SqlServerStorageOptions
+                  {
+                      PrepareSchemaIfNecessary = true
+                  });
+    });
 
-builder.Services.AddHangfireServer();
-builder.Services.AddScoped<INotificationJob, NotificationJob>();
+    builder.Services.AddHangfireServer();
+    builder.Services.AddScoped<INotificationJob, NotificationJob>();
+}
 
 // Identity configuration
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
@@ -119,12 +123,15 @@ builder.Services.AddHostedService<OutboxProcessorService>();
 builder.Services.AddHostedService<SlaWatchdogService>();
 
 // JWT authentication
-var jwt = builder.Configuration.GetSection("Jwt").Get<JwtOptions>()
-          ?? throw new InvalidOperationException("Missing Jwt settings.");
-
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
+    .AddJwtBearer();
+
+builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+    .Configure<IConfiguration>((options, configuration) =>
     {
+        var jwt = configuration.GetSection("Jwt").Get<JwtOptions>()
+                  ?? throw new InvalidOperationException("Missing Jwt settings.");
+
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -200,11 +207,14 @@ if (app.Environment.IsDevelopment())
     app.UseHangfireDashboard("/hangfire");
 }
 
-var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
-recurringJobManager.AddOrUpdate<INotificationJob>(
-    "daily-summary",
-    job => job.SendDailySummaryAsync(default),
-    "0 7 * * *");
+if (!app.Environment.IsEnvironment("Testing"))
+{
+    var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
+    recurringJobManager.AddOrUpdate<INotificationJob>(
+        "daily-summary",
+        job => job.SendDailySummaryAsync(default),
+        "0 7 * * *");
+}
 
 app.MapControllers();
 app.MapHub<TicketsHub>("/hubs/tickets");
@@ -217,3 +227,5 @@ app.MapGet("/", async context =>
 });
 
 app.Run();
+
+public partial class Program;
