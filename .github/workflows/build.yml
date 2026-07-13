@@ -27,3 +27,6 @@ jobs:
 
       - name: Test UI
         run: dotnet test .\tests\HelpDeskHero.UI.Tests\HelpDeskHero.UI.Tests.csproj --configuration Release --no-build
+
+      - name: Test API Integration
+        run: dotnet test .\tests\HelpDeskHero.Api.IntegrationTests\HelpDeskHero.Api.IntegrationTests.csproj --configuration Release --no-build
