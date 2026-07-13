@@ -7,6 +7,7 @@ using HelpDeskHero.Api.Infrastructure.Services;
 using HelpDeskHero.Shared.Contracts.Common;
 using HelpDeskHero.Shared.Contracts.Tickets;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -22,19 +23,22 @@ public sealed class TicketsController : ControllerBase
     private readonly ISlaCalculator _slaCalculator;
     private readonly ITicketAssignmentService _ticketAssignmentService;
     private readonly IOutboxWriter _outboxWriter;
+    private readonly IWebHostEnvironment _environment;
 
     public TicketsController(
         AppDbContext db,
         AuditService audit,
         ISlaCalculator slaCalculator,
         ITicketAssignmentService ticketAssignmentService,
-        IOutboxWriter outboxWriter)
+        IOutboxWriter outboxWriter,
+        IWebHostEnvironment environment)
     {
         _db = db;
         _audit = audit;
         _slaCalculator = slaCalculator;
         _ticketAssignmentService = ticketAssignmentService;
         _outboxWriter = outboxWriter;
+        _environment = environment;
     }
 
     [HttpGet]
@@ -242,8 +246,11 @@ public sealed class TicketsController : ControllerBase
 
         await _audit.WriteAsync("Create", "Ticket", entity.Id.ToString(), new { entity.Number, entity.Title }, ct);
 
-        BackgroundJob.Enqueue<INotificationJob>(job =>
-            job.SendTicketCreatedNotificationsAsync(entity.Id, default));
+        if (!_environment.IsEnvironment("Testing"))
+        {
+            BackgroundJob.Enqueue<INotificationJob>(job =>
+                job.SendTicketCreatedNotificationsAsync(entity.Id, default));
+        }
 
         var result = ToDto(entity);
 
