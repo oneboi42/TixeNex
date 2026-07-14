@@ -1,16 +1,21 @@
 using HelpDeskHero.Api.Domain;
+using HelpDeskHero.Api.Hubs;
 using HelpDeskHero.Api.Infrastructure.Persistence;
+using HelpDeskHero.Shared.Contracts.Notifications;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
 
 namespace HelpDeskHero.Api.Infrastructure.Notifications;
 
 public sealed class InAppNotificationSender : INotificationSender
 {
     private readonly AppDbContext _db;
+    private readonly IHubContext<TicketsHub> _hubContext;
 
-    public InAppNotificationSender(AppDbContext db)
+    public InAppNotificationSender(AppDbContext db, IHubContext<TicketsHub> hubContext)
     {
         _db = db;
+        _hubContext = hubContext;
     }
 
     public NotificationChannel Channel => NotificationChannel.InApp;
@@ -38,5 +43,15 @@ public sealed class InAppNotificationSender : INotificationSender
 
         _db.UserNotifications.Add(entity);
         await _db.SaveChangesAsync(ct);
+
+        await _hubContext.Clients.Group(TicketsHub.UserGroup(message.UserId))
+            .SendAsync("NotificationCreated", new UserNotificationDto
+            {
+                Id = entity.Id,
+                Subject = entity.Subject,
+                Body = entity.Body,
+                IsRead = entity.IsRead,
+                CreatedAtUtc = entity.CreatedAtUtc
+            }, ct);
     }
 }

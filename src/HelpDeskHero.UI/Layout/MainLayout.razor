@@ -1,6 +1,12 @@
 ﻿@inherits LayoutComponentBase
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
+@using HelpDeskHero.Shared.Contracts.Notifications
+@using HelpDeskHero.UI.Services.Realtime
+@implements IDisposable
+
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NotificationRealtimeCoordinator NotificationRealtime
 
 <div class="app-shell">
     <aside class="app-sidebar">
@@ -47,6 +53,14 @@
     </div>
 </div>
 
+<AppToast @bind-Visible="_toastVisible"
+          Type="info"
+          Title="New message received"
+          Message="@_toastMessage"
+          AutoHide="true"
+          AutoHideDelayMilliseconds="5000"
+          ToastVersion="_toastVersion" />
+
 @code {
     private static string GetDisplayName(ClaimsPrincipal user)
     {
@@ -73,5 +87,49 @@
             ?? user.FindFirst("role")?.Value
             ?? user.FindFirst("roles")?.Value
             ?? "Brak roli";
+    }
+
+    private bool _toastVisible;
+    private string? _toastMessage;
+    private long _toastVersion;
+
+    protected override async Task OnInitializedAsync()
+    {
+        NotificationRealtime.NotificationReceived += ShowNotificationToastAsync;
+        AuthenticationStateProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
+
+        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        if (authenticationState.User.Identity?.IsAuthenticated == true)
+        {
+            await NotificationRealtime.StartAsync();
+        }
+    }
+
+    private void OnAuthenticationStateChanged(Task<AuthenticationState> authenticationStateTask)
+    {
+        _ = StartRealtimeForAuthenticatedUserAsync(authenticationStateTask);
+    }
+
+    private async Task StartRealtimeForAuthenticatedUserAsync(Task<AuthenticationState> authenticationStateTask)
+    {
+        var authenticationState = await authenticationStateTask;
+        if (authenticationState.User.Identity?.IsAuthenticated == true)
+        {
+            await NotificationRealtime.StartAsync();
+        }
+    }
+
+    private async Task ShowNotificationToastAsync(UserNotificationDto notification)
+    {
+        _toastMessage = notification.Subject;
+        _toastVisible = true;
+        _toastVersion++;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        NotificationRealtime.NotificationReceived -= ShowNotificationToastAsync;
+        AuthenticationStateProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
     }
 }

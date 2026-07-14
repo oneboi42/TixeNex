@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using HelpDeskHero.Api.Domain;
+using HelpDeskHero.Api.BackgroundJobs.Contracts;
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using HelpDeskHero.Shared.Contracts.Tickets;
 using Microsoft.AspNetCore.Authorization;
@@ -14,10 +15,12 @@ namespace HelpDeskHero.Api.Controllers;
 public sealed class TicketCommentsController : ControllerBase
 {
     private readonly AppDbContext _db;
+    private readonly INotificationJob _notificationJob;
 
-    public TicketCommentsController(AppDbContext db)
+    public TicketCommentsController(AppDbContext db, INotificationJob notificationJob)
     {
         _db = db;
+        _notificationJob = notificationJob;
     }
 
     [HttpGet]
@@ -73,6 +76,8 @@ public sealed class TicketCommentsController : ControllerBase
 
         _db.TicketComments.Add(entity);
         await _db.SaveChangesAsync(ct);
+
+        await _notificationJob.SendTicketCommentNotificationsAsync(ticketId, userId, ct);
 
         var result = ToDto(entity);
 

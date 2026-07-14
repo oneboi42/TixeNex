@@ -16,6 +16,7 @@ using HelpDeskHero.Api.Hubs;
 using HelpDeskHero.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -40,6 +41,7 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
+builder.Services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
@@ -91,8 +93,9 @@ if (!isTesting)
     });
 
     builder.Services.AddHangfireServer();
-    builder.Services.AddScoped<INotificationJob, NotificationJob>();
 }
+
+builder.Services.AddScoped<INotificationJob, NotificationJob>();
 
 // Identity configuration
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
