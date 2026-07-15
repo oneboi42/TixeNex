@@ -93,9 +93,8 @@ if (!isTesting)
     });
 
     builder.Services.AddHangfireServer();
+    builder.Services.AddScoped<INotificationJob, NotificationJob>();
 }
-
-builder.Services.AddScoped<INotificationJob, NotificationJob>();
 
 // Identity configuration
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
