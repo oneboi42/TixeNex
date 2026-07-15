@@ -1,3 +1,5 @@
+@implements IDisposable
+
 @if (Visible)
 {
     <div class="app-toast app-toast-@Type">
@@ -32,11 +34,67 @@
     public string? Message { get; set; }
 
     [Parameter]
+    public bool AutoHide { get; set; }
+
+    [Parameter]
+    public int AutoHideDelayMilliseconds { get; set; } = 5000;
+
+    [Parameter]
+    public long ToastVersion { get; set; }
+
+    [Parameter]
     public EventCallback<bool> VisibleChanged { get; set; }
+
+    private CancellationTokenSource? _autoHideCancellation;
+    private long? _scheduledToastVersion;
+
+    protected override void OnParametersSet()
+    {
+        if (!Visible || !AutoHide)
+        {
+            CancelAutoHide();
+            return;
+        }
+
+        if (_scheduledToastVersion == ToastVersion)
+            return;
+
+        CancelAutoHide();
+        _scheduledToastVersion = ToastVersion;
+        _autoHideCancellation = new CancellationTokenSource();
+        _ = HideAfterDelayAsync(_autoHideCancellation.Token);
+    }
+
+    private async Task HideAfterDelayAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(Math.Max(1, AutoHideDelayMilliseconds), cancellationToken);
+            if (!cancellationToken.IsCancellationRequested)
+                await InvokeAsync(Hide);
+        }
+        catch (OperationCanceledException)
+        {
+            // A subsequent toast replaced this one, or the component was disposed.
+        }
+    }
 
     private async Task Hide()
     {
         Visible = false;
         await VisibleChanged.InvokeAsync(false);
+    }
+
+    private void CancelAutoHide()
+    {
+        _autoHideCancellation?.Cancel();
+        _autoHideCancellation?.Dispose();
+        _autoHideCancellation = null;
+        _scheduledToastVersion = null;
+    }
+
+    public void Dispose()
+    {
+        CancelAutoHide();
     }
 }

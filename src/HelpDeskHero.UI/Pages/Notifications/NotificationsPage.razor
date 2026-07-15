@@ -3,22 +3,18 @@
 
 @using HelpDeskHero.Shared.Contracts.Notifications
 @using HelpDeskHero.UI.Services.Api
+@using HelpDeskHero.UI.Services.Realtime
 @using Microsoft.AspNetCore.Authorization
 
 @inject NotificationApiClient NotificationApi
+@inject NotificationRealtimeCoordinator NotificationRealtime
+@implements IDisposable
 
 <PageTitle>Notifications</PageTitle>
 
 <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
     <h3 class="mb-0">Notifications</h3>
     <div class="d-flex gap-2">
-        <button class="btn btn-outline-secondary"
-                type="button"
-                disabled="@(_loading || _markingAllRead)"
-                @onclick="LoadNotificationsAsync">
-            @(_loading ? "Refreshing..." : "Refresh")
-        </button>
-
         <button class="btn btn-outline-primary"
                 type="button"
                 disabled="@(_loading || _markingAllRead || !_notifications.Any(x => !x.IsRead))"
@@ -84,7 +80,8 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadNotificationsAsync();
+        NotificationRealtime.NotificationsChanged += HandleNotificationsChangedAsync;
+        _notifications = (await NotificationRealtime.RefreshAsync()).ToList();
     }
 
     private async Task LoadNotificationsAsync()
@@ -137,6 +134,14 @@ else
         }
     }
 
+    private async Task HandleNotificationsChangedAsync(IReadOnlyList<UserNotificationDto> notifications)
+    {
+        _notifications = notifications.ToList();
+        _loading = false;
+        _error = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
     private async Task MarkAllAsReadAsync()
     {
         _error = null;
@@ -165,5 +170,10 @@ else
         {
             _markingAllRead = false;
         }
+    }
+
+    public void Dispose()
+    {
+        NotificationRealtime.NotificationsChanged -= HandleNotificationsChangedAsync;
     }
 }

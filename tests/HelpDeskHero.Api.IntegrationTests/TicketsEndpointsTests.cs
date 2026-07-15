@@ -8,7 +8,8 @@ using HelpDeskHero.Shared.Contracts.Tickets;
 
 namespace HelpDeskHero.Api.IntegrationTests;
 
-public sealed class TicketsEndpointsTests : IClassFixture<CustomWebApplicationFactory>
+[Collection("ApiIntegration")]
+public sealed class TicketsEndpointsTests
 {
     private readonly HttpClient _client;
 

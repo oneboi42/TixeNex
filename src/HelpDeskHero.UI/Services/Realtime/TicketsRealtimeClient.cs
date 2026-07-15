@@ -1,10 +1,11 @@
 using HelpDeskHero.Shared.Contracts.Tickets;
+using HelpDeskHero.Shared.Contracts.Notifications;
 using HelpDeskHero.UI.Services.Auth;
 using Microsoft.AspNetCore.SignalR.Client;
 
 namespace HelpDeskHero.UI.Services.Realtime;
 
-public sealed class TicketsRealtimeClient : ITicketsRealtimeClient, IAsyncDisposable
+public sealed class TicketsRealtimeClient : ITicketsRealtimeClient, INotificationRealtimeClient, IAsyncDisposable
 {
     private readonly IConfiguration _configuration;
     private readonly TokenStore _tokenStore;
@@ -17,6 +18,7 @@ public sealed class TicketsRealtimeClient : ITicketsRealtimeClient, IAsyncDispos
     }
 
     public event Func<TicketLiveUpdateDto, Task>? OnTicketChanged;
+    public event Func<UserNotificationDto, Task>? OnNotificationCreated;
 
     public async Task StartAsync(CancellationToken ct = default)
     {
@@ -55,6 +57,14 @@ public sealed class TicketsRealtimeClient : ITicketsRealtimeClient, IAsyncDispos
             if (OnTicketChanged is not null)
             {
                 await OnTicketChanged(update);
+            }
+        });
+
+        connection.On<UserNotificationDto>("NotificationCreated", async notification =>
+        {
+            if (OnNotificationCreated is not null)
+            {
+                await OnNotificationCreated(notification);
             }
         });
 
