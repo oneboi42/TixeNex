@@ -25,7 +25,7 @@ public sealed class NotificationJob : INotificationJob
         if (ticket is null)
             return;
 
-        var recipientUserIds = await GetUserIdsInRolesAsync(["Admin", "Agent"], ct);
+        var recipientUserIds = await GetUserIdsInRolesAsync(["Admin", "Agent", "User"], ct);
 
         foreach (var userId in recipientUserIds)
         {
