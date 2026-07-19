@@ -19,6 +19,7 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<TicketSlaPolicy> TicketSlaPolicies => Set<TicketSlaPolicy>();
     public DbSet<TicketEscalation> TicketEscalations => Set<TicketEscalation>();
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<ExportJob> ExportJobs => Set<ExportJob>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
