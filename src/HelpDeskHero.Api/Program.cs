@@ -120,7 +120,7 @@ builder.Services.AddScoped<ISlaCalculator, SlaCalculator>();
 builder.Services.AddScoped<ITicketAssignmentService, TicketAssignmentService>();
 builder.Services.AddScoped<ISlaMonitorService, SlaMonitorService>();
 builder.Services.AddScoped<IOutboxWriter, OutboxWriter>();
-builder.Services.AddScoped<IMessagePublisher, FakeMessagePublisher>();
+builder.Services.AddScoped<IMessagePublisher, RabbitMqPublisher>();
 builder.Services.AddScoped<ITicketLiveNotifier, SignalRTicketLiveNotifier>();
 builder.Services.AddHostedService<OutboxProcessorService>();
 builder.Services.AddHostedService<SlaWatchdogService>();
