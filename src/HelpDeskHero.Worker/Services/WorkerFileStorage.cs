@@ -1,58 +1,85 @@
-using HelpDeskHero.Api.Infrastructure.Storage;
-using Microsoft.AspNetCore.Http;
+using HelpDeskHero.Worker.Models;
 
 namespace HelpDeskHero.Worker.Services;
 
-public class WorkerFileStorage : IFileStorage
+public sealed class WorkerFileStorage : IExportFileStorage
 {
     private readonly string _exportsPath;
 
     public WorkerFileStorage()
     {
-        // Создаём папку exports в корне запуска воркера
-        _exportsPath = Path.Combine(Directory.GetCurrentDirectory(), "exports");
+        _exportsPath = Path.Combine(
+            Directory.GetCurrentDirectory(),
+            "exports");
+
         Directory.CreateDirectory(_exportsPath);
     }
 
-    public async Task<StoredFileResult> SaveAsync(IFormFile file, CancellationToken ct = default)
-{
-    var filePath = Path.Combine(_exportsPath, file.FileName);
-
-    using (var stream = new FileStream(filePath, FileMode.Create))
+    public async Task<StoredExportFile> SaveAsync(
+        Stream content,
+        string objectName,
+        string contentType,
+        CancellationToken cancellationToken = default)
     {
-        await file.CopyToAsync(stream, ct);
-    }
-
-    return new StoredFileResult
-    {
-        OriginalFileName = file.FileName,
-        StoredFileName = file.FileName,
-        RelativePath = Path.Combine("exports", file.FileName),
-        ContentType = file.ContentType ?? "text/csv",
-        SizeBytes = file.Length
-    };
-}
-
-    public Task<Stream> OpenReadAsync(string relativePath, CancellationToken ct = default)
-    {
-        var filePath = Path.Combine(_exportsPath, relativePath);
-        if (!File.Exists(filePath))
+        if (content is null)
         {
-            throw new FileNotFoundException($"File not found: {relativePath}");
+            throw new ArgumentNullException(nameof(content));
         }
 
-        Stream stream = File.OpenRead(filePath);
-        return Task.FromResult(stream);
-    }
-
-    public Task DeleteAsync(string relativePath, CancellationToken ct = default)
-    {
-        var filePath = Path.Combine(_exportsPath, relativePath);
-        if (File.Exists(filePath))
+        if (string.IsNullOrWhiteSpace(objectName))
         {
-            File.Delete(filePath);
+            throw new ArgumentException(
+                "Object name cannot be empty.",
+                nameof(objectName));
         }
 
-        return Task.CompletedTask;
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            throw new ArgumentException(
+                "Content type cannot be empty.",
+                nameof(contentType));
+        }
+
+        var safeObjectName = objectName
+            .Replace('/', Path.DirectorySeparatorChar)
+            .Replace('\\', Path.DirectorySeparatorChar);
+
+        var filePath = Path.Combine(_exportsPath, safeObjectName);
+
+        var directoryPath = Path.GetDirectoryName(filePath);
+
+        if (!string.IsNullOrWhiteSpace(directoryPath))
+        {
+            Directory.CreateDirectory(directoryPath);
+        }
+
+        if (content.CanSeek)
+        {
+            content.Position = 0;
+        }
+
+        await using var fileStream = new FileStream(
+            path: filePath,
+            mode: FileMode.Create,
+            access: FileAccess.Write,
+            share: FileShare.None,
+            bufferSize: 81920,
+            useAsync: true);
+
+        await content.CopyToAsync(
+            fileStream,
+            cancellationToken);
+
+        await fileStream.FlushAsync(cancellationToken);
+
+        var fileName = Path.GetFileName(safeObjectName);
+
+        return new StoredExportFile
+        {
+            ObjectName = objectName,
+            FileName = fileName,
+            ContentType = contentType,
+            SizeBytes = fileStream.Length
+        };
     }
 }
