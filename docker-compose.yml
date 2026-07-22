@@ -2,23 +2,67 @@ services:
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: helpdeskhero-db
+
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
       MSSQL_PID: "Developer"
+
     ports:
       - "14333:1433"
+
     volumes:
       - sql_data:/var/opt/mssql
+
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: helpdeskhero-rabbitmq
+
+    environment:
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD}"
+
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+    restart: unless-stopped
+
+  minio:
+    image: quay.io/minio/minio:latest
+    container_name: helpdeskhero-minio
+
+    command: server /data --console-address ":9001"
+
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD}"
+
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+    volumes:
+      - minio_data:/data
+
     restart: unless-stopped
 
   api:
     build:
       context: .
-      dockerfile: Dockerfile.api
+      dockerfile: ./docker/Dockerfile.api
+
     container_name: helpdeskhero-api
+
     depends_on:
       - db
+      - rabbitmq
+
     environment:
       ASPNETCORE_ENVIRONMENT: "Production"
       ASPNETCORE_URLS: "http://+:8080"
@@ -39,24 +83,70 @@ services:
       SeedUsers__Agent__Password: "${SEED_AGENT_PASSWORD}"
       SeedUsers__User__Password: "${SEED_USER_PASSWORD}"
 
+      RabbitMQ__Host: "rabbitmq"
+      RabbitMQ__UserName: "${RABBITMQ_USER}"
+      RabbitMQ__Password: "${RABBITMQ_PASSWORD}"
+
       FileStorage__RootPath: "/app/App_Data/attachments"
+
     volumes:
       - api_attachments:/app/App_Data/attachments
+
     ports:
       - "5001:8080"
+
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: ./docker/Dockerfile.worker
+
+    container_name: helpdeskhero-worker
+
+    depends_on:
+      - db
+      - rabbitmq
+      - minio
+
+    environment:
+      DOTNET_ENVIRONMENT: "Production"
+
+      Logging__LogLevel__Default: "Information"
+      Logging__LogLevel__Microsoft: "Warning"
+      Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: "Warning"
+
+      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=HelpDeskHero;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+
+      RabbitMQ__Host: "rabbitmq"
+      RabbitMQ__UserName: "${RABBITMQ_USER}"
+      RabbitMQ__Password: "${RABBITMQ_PASSWORD}"
+
+      Minio__Endpoint: "minio:9000"
+      Minio__AccessKey: "${MINIO_ROOT_USER}"
+      Minio__SecretKey: "${MINIO_ROOT_PASSWORD}"
+      Minio__BucketName: "exports"
+      Minio__UseSsl: "false"
+
     restart: unless-stopped
 
   ui:
     build:
       context: .
-      dockerfile: Dockerfile.ui
+      dockerfile: ./docker/Dockerfile.ui
+
     container_name: helpdeskhero-ui
+
     depends_on:
       - api
+
     ports:
       - "8080:80"
+
     restart: unless-stopped
 
 volumes:
   sql_data:
   api_attachments:
+  rabbitmq_data:
+  minio_data:

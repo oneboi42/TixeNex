@@ -19,6 +19,6 @@ WORKDIR /usr/share/nginx/html
 
 COPY --from=build /app/publish/wwwroot .
 COPY --from=build /src/src/HelpDeskHero.UI/wwwroot/appsettings.Docker.json ./appsettings.json
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80

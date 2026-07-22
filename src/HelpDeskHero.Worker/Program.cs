@@ -22,4 +22,5 @@ builder.Services.AddScoped<IExportService, ExportService>();
 builder.Services.AddHostedService<RabbitMqConsumer>();
 
 var host = builder.Build();
+
 await host.RunAsync();

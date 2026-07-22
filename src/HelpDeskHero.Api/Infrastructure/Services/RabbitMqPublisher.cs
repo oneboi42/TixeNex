@@ -22,7 +22,15 @@ public class RabbitMqPublisher : IMessagePublisher
     {
         var factory = new ConnectionFactory
         {
-            HostName = _configuration["RabbitMQ:Host"] ?? "localhost"
+            HostName = _configuration["RabbitMQ:Host"] ?? "localhost",
+
+            UserName =
+                _configuration["RabbitMQ:UserName"]
+                ?? "guest",
+
+            Password =
+                _configuration["RabbitMQ:Password"]
+                ?? "guest"
         };
 
         using var connection = await factory.CreateConnectionAsync();
