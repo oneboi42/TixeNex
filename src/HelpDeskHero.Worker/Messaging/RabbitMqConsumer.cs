@@ -30,7 +30,13 @@ public class RabbitMqConsumer : BackgroundService
     {
         var factory = new ConnectionFactory
         {
-            HostName = _configuration["RabbitMQ:Host"] ?? "localhost",
+            HostName = 
+                _configuration["RabbitMQ:Host"]
+                 ?? "localhost",
+
+            Port =
+                _configuration.GetValue<int?>("RabbitMQ:Port")
+                ?? 5672,
 
             UserName =
                 _configuration["RabbitMQ:UserName"]
@@ -38,7 +44,10 @@ public class RabbitMqConsumer : BackgroundService
 
             Password =
                 _configuration["RabbitMQ:Password"]
-                ?? "guest"
+                ?? "guest",
+
+            AutomaticRecoveryEnabled = true,
+            NetworkRecoveryInterval = TimeSpan.FromSeconds(5)
         };
 
         using var connection = await factory.CreateConnectionAsync(stoppingToken);
