@@ -62,6 +62,7 @@ services:
     depends_on:
       - db
       - rabbitmq
+      - minio
 
     environment:
       ASPNETCORE_ENVIRONMENT: "Production"
@@ -86,6 +87,12 @@ services:
       RabbitMQ__Host: "rabbitmq"
       RabbitMQ__UserName: "${RABBITMQ_USER}"
       RabbitMQ__Password: "${RABBITMQ_PASSWORD}"
+
+      Minio__Endpoint: "minio:9000"
+      Minio__AccessKey: "${MINIO_ROOT_USER}"
+      Minio__SecretKey: "${MINIO_ROOT_PASSWORD}"
+      Minio__BucketName: "exports"
+      Minio__UseSsl: "false"
 
       FileStorage__RootPath: "/app/App_Data/attachments"
 

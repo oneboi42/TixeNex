@@ -37,7 +37,7 @@ public sealed class ExportService : IExportService
     {
         var job = await _db.ExportJobs
             .FirstOrDefaultAsync(
-                x => x.Id == jobId,
+                exportJob => exportJob.Id == jobId,
                 cancellationToken);
 
         if (job is null)
@@ -53,6 +53,8 @@ public sealed class ExportService : IExportService
         {
             job.Status = ExportStatus.Running;
             job.CompletedAt = null;
+            job.FileName = null;
+            job.StorageObjectName = null;
 
             await _db.SaveChangesAsync(cancellationToken);
 
@@ -73,9 +75,13 @@ public sealed class ExportService : IExportService
                     CreatedAt = ticket.CreatedAtUtc
                 })
                 .ToList();
-
             var fileName =
-                $"tickets_{DateTime.UtcNow:yyyyMMdd_HHmmss}_{job.Id:N}.csv";
+                $"tickets_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
+
+            var safeUserId = Uri.EscapeDataString(job.UserId);
+
+            var objectName =
+                $"tickets/{safeUserId}/{job.Id:N}.csv";
 
             await using var memoryStream = new MemoryStream();
 
@@ -88,27 +94,30 @@ public sealed class ExportService : IExportService
 
             var storedFile = await _fileStorage.SaveAsync(
                 content: memoryStream,
-                objectName: fileName,
+                objectName: objectName,
                 contentType: "text/csv",
                 cancellationToken: cancellationToken);
 
+
             job.Status = ExportStatus.Completed;
             job.CompletedAt = DateTime.UtcNow;
-            job.FileName = storedFile.FileName;
+            job.FileName = fileName;
+            job.StorageObjectName = storedFile.ObjectName;
 
             await _db.SaveChangesAsync(cancellationToken);
 
             _logger.LogInformation(
-                "Export job {JobId} completed. File: {FileName}, size: {SizeBytes} bytes.",
+                "Export job {JobId} completed. FileName: {FileName}, ObjectName: {ObjectName}, Size: {SizeBytes} bytes.",
                 jobId,
-                storedFile.FileName,
+                fileName,
+                storedFile.ObjectName,
                 storedFile.SizeBytes);
         }
         catch (OperationCanceledException)
             when (cancellationToken.IsCancellationRequested)
         {
             _logger.LogInformation(
-                "Export job {JobId} was cancelled because the worker is stopping.",
+                "Export job {JobId} was cancelled because the Worker is stopping.",
                 jobId);
 
             throw;
@@ -123,6 +132,7 @@ public sealed class ExportService : IExportService
             job.Status = ExportStatus.Failed;
             job.CompletedAt = null;
             job.FileName = null;
+            job.StorageObjectName = null;
 
             try
             {
@@ -145,7 +155,8 @@ public sealed class ExportService : IExportService
     {
         using var writer = new StreamWriter(
             stream: targetStream,
-            encoding: new UTF8Encoding(encoderShouldEmitUTF8Identifier: true),
+            encoding: new UTF8Encoding(
+                encoderShouldEmitUTF8Identifier: true),
             bufferSize: 1024,
             leaveOpen: true);
 

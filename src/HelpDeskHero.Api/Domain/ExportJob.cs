@@ -8,4 +8,5 @@ public class ExportJob
     public DateTime CreatedAt { get; set; }
     public DateTime? CompletedAt { get; set; }
     public string? FileName { get; set; }
+    public string? StorageObjectName { get; set; }
 }

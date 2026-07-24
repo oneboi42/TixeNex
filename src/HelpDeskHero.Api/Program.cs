@@ -21,6 +21,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
+using Microsoft.Extensions.Options;
+using Minio;
+
 var builder = WebApplication.CreateBuilder(args);
 var isTesting = builder.Environment.IsEnvironment("Testing");
 
@@ -184,6 +187,47 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanManageTickets", policy => policy.RequireRole("User", "Agent", "Admin"));
     options.AddPolicy("CanViewAudit", policy => policy.RequireRole("Admin"));
 });
+
+// Minio configuration
+builder.Services
+    .AddOptions<MinioOptions>()
+    .Bind(
+        builder.Configuration.GetSection(
+            MinioOptions.SectionName))
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.Endpoint),
+        "Minio:Endpoint is required.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.AccessKey),
+        "Minio:AccessKey is required.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.SecretKey),
+        "Minio:SecretKey is required.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.BucketName),
+        "Minio:BucketName is required.")
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<IMinioClient>(
+    serviceProvider =>
+    {
+        var options = serviceProvider
+            .GetRequiredService<IOptions<MinioOptions>>()
+            .Value;
+
+        return new MinioClient()
+            .WithEndpoint(options.Endpoint)
+            .WithCredentials(
+                options.AccessKey,
+                options.SecretKey)
+            .WithSSL(options.UseSsl)
+            .Build();
+    });
+
+builder.Services.AddScoped<
+    IExportObjectStorage,
+    MinioExportObjectStorage>();
+
 
 var app = builder.Build();
 

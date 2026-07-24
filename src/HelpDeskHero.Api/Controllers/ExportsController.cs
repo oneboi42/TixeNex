@@ -11,22 +11,29 @@ namespace HelpDeskHero.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize] 
+[Authorize]
 public class ExportsController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IMessagePublisher _publisher;
+    private readonly IExportObjectStorage _exportObjectStorage;
 
-    public ExportsController(AppDbContext db, IMessagePublisher publisher)
+    public ExportsController(
+        AppDbContext db,
+        IMessagePublisher publisher,
+        IExportObjectStorage exportObjectStorage)
     {
         _db = db;
         _publisher = publisher;
+        _exportObjectStorage = exportObjectStorage;
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateExport()
+    public async Task<IActionResult> CreateExport(
+        CancellationToken cancellationToken)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         if (userId is null)
         {
             return Unauthorized();
@@ -41,18 +48,27 @@ public class ExportsController : ControllerBase
         };
 
         _db.ExportJobs.Add(job);
-        await _db.SaveChangesAsync();
 
-        await _publisher.PublishAsync(new ExportRequested(job.Id, job.UserId));
+        await _db.SaveChangesAsync(cancellationToken);
 
-        return Accepted($"/api/exports/{job.Id}", new { job.Id, job.Status });
+        await _publisher.PublishAsync(
+            new ExportRequested(job.Id, job.UserId));
+
+        return Accepted(
+            $"/api/exports/{job.Id}",
+            new
+            {
+                job.Id,
+                job.Status
+            });
     }
 
-
     [HttpGet]
-    public async Task<IActionResult> GetMyExports()
+    public async Task<IActionResult> GetMyExports(
+        CancellationToken cancellationToken)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
         if (userId is null)
         {
             return Unauthorized();
@@ -60,18 +76,70 @@ public class ExportsController : ControllerBase
 
         var exports = await _db.ExportJobs
             .AsNoTracking()
-            .Where(x => x.UserId == userId)
-            .OrderByDescending(x => x.CreatedAt)
-            .Select(x => new
+            .Where(exportJob => exportJob.UserId == userId)
+            .OrderByDescending(exportJob => exportJob.CreatedAt)
+            .Select(exportJob => new
             {
-                id = x.Id,
-                status = x.Status.ToString(),
-                fileName = x.FileName,
-                createdAt = x.CreatedAt,
-                completedAt = x.CompletedAt
+                id = exportJob.Id,
+                status = exportJob.Status.ToString(),
+                fileName = exportJob.FileName,
+                createdAt = exportJob.CreatedAt,
+                completedAt = exportJob.CompletedAt
             })
-            .ToListAsync();
+            .ToListAsync(cancellationToken);
 
         return Ok(exports);
+    }
+
+    [HttpGet("{id:guid}/download")]
+    public async Task<IActionResult> DownloadExport(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
+        var job = await _db.ExportJobs
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                exportJob =>
+                    exportJob.Id == id &&
+                    exportJob.UserId == userId,
+                cancellationToken);
+
+        if (job is null)
+        {
+            return NotFound();
+        }
+
+        if (job.Status != ExportStatus.Completed)
+        {
+            return Conflict(new
+            {
+                message = "The export has not been completed yet."
+            });
+        }
+
+        if (string.IsNullOrWhiteSpace(job.StorageObjectName) ||
+            string.IsNullOrWhiteSpace(job.FileName))
+        {
+            return Conflict(new
+            {
+                message = "The export file is not available in object storage."
+            });
+        }
+
+        var content = await _exportObjectStorage.DownloadAsync(
+            job.StorageObjectName,
+            cancellationToken);
+
+        return File(
+            fileContents: content,
+            contentType: "text/csv; charset=utf-8",
+            fileDownloadName: job.FileName);
     }
 }
