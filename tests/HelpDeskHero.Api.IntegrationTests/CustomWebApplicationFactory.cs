@@ -29,7 +29,12 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["SeedUsers:Admin:Password"] = "Admin1234",
                 ["SeedUsers:Agent:Password"] = "Agent123!",
                 ["SeedUsers:User:Password"] = "User123!",
-                ["SeedUsers:ResetPasswords"] = "false"
+                ["SeedUsers:ResetPasswords"] = "false",
+                ["Minio:Endpoint"] = "localhost:9000",
+                ["Minio:AccessKey"] = "test-access-key",
+                ["Minio:SecretKey"] = "test-secret-key",
+                ["Minio:BucketName"] = "test-exports",
+                ["Minio:UseSsl"] = "false"
             };
 
             config.AddInMemoryCollection(testSettings);
@@ -38,7 +43,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
         builder.ConfigureServices(services =>
         {
             // AddDbContext registers both the context and its options. Remove all
-            // production registrations before adding the InMemory-only test context.
+            //production registrations before adding the InMemory-only test context.
             services.RemoveAll<DbContextOptions<AppDbContext>>();
             services.RemoveAll<AppDbContext>();
             services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();
