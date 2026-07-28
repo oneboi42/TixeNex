@@ -272,6 +272,7 @@ public sealed class TicketsController : ControllerBase
             return TicketNotFound(id);
 
         var originalPriority = entity.Priority;
+        var originalStatus = entity.Status;
 
         var originalRowVersion = Convert.FromBase64String(dto.RowVersionBase64);
         _db.Entry(entity).Property(x => x.RowVersion).OriginalValue = originalRowVersion;
@@ -282,9 +283,13 @@ public sealed class TicketsController : ControllerBase
         entity.Priority = dto.Priority;
         entity.UpdatedAtUtc = DateTime.UtcNow;
 
-        if (entity.Status == "Closed" && entity.ResolvedAtUtc is null)
+        if (entity.Status == "Resolved" && entity.ResolvedAtUtc is null)
         {
             entity.ResolvedAtUtc = DateTime.UtcNow;
+        }
+        else if (originalStatus == "Resolved" && entity.Status == "InProgress")
+        {
+            entity.ResolvedAtUtc = null;
         }
 
         if (originalPriority != entity.Priority)
@@ -292,7 +297,10 @@ public sealed class TicketsController : ControllerBase
             await _slaCalculator.ApplySlaAsync(entity, ct);
         }
 
-        await _outboxWriter.AddAsync("TicketChanged", ToLiveUpdateDto(entity, "Updated"), ct);
+        await _outboxWriter.AddAsync(
+            "TicketChanged",
+            ToLiveUpdateDto(entity, GetUpdateEventType(originalStatus, entity.Status)),
+            ct);
 
         try
         {
@@ -494,4 +502,13 @@ public sealed class TicketsController : ControllerBase
         EscalationLevel = entity.EscalationLevel,
         ChangedAtUtc = DateTime.UtcNow
     };
+
+    private static string GetUpdateEventType(string originalStatus, string newStatus) =>
+        (originalStatus, newStatus) switch
+        {
+            (_, "Resolved") when originalStatus != "Resolved" => "Resolved",
+            (_, "Closed") when originalStatus != "Closed" => "Closed",
+            ("Resolved", "InProgress") => "Reopened",
+            _ => "Updated"
+        };
 }

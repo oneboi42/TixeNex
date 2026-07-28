@@ -35,7 +35,8 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(
                 "https://localhost:7045",
-                "http://localhost:5045")
+                "http://localhost:5045",
+                "http://localhost:8080")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -243,7 +244,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (builder.Configuration.GetValue("UseHttpsRedirection", true))
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseCors(CorsPolicyName);
 
 app.UseAuthentication();

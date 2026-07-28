@@ -17,6 +17,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\HelpDeskHero.Api\HelpDeskHero.Api.csproj" />
+    <ProjectReference
+      Include="..\HelpDeskHero.Api\HelpDeskHero.Api.csproj"
+      AdditionalProperties="ExcludeAppSettingsFromPublish=true" />
   </ItemGroup>
+
 </Project>

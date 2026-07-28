@@ -14,10 +14,12 @@
     <PackageReference Include="Hangfire.SqlServer" Version="1.8.23" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.9" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
+
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
+
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.9" />
     <PackageReference Include="Minio" Version="7.0.0" />
     <PackageReference Include="RabbitMQ.Client" Version="7.2.1" />
@@ -26,6 +28,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\HelpDeskHero.Shared\HelpDeskHero.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(ExcludeAppSettingsFromPublish)' == 'true'">
+    <Content
+      Update="appsettings*.json"
+      CopyToPublishDirectory="Never" />
   </ItemGroup>
 
 </Project>

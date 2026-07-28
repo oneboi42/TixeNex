@@ -2,6 +2,7 @@
 @attribute [Authorize]
 
 @using HelpDeskHero.Shared.Contracts.Tickets
+@using HelpDeskHero.UI.Services.Api
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 
@@ -46,7 +47,17 @@ else if (_ticket is not null)
             <div class="d-flex gap-2 mt-3">
                 <AuthorizeView Roles="Admin,Agent">
                     <Authorized>
+                        @foreach (var action in GetLifecycleActions(_ticket.Status))
+                        {
+                            <button class="btn btn-success"
+                                    disabled="@_lifecycleBusy"
+                                    @onclick="() => ChangeStatusAsync(action.TargetStatus)">
+                                @(_lifecycleBusy ? "Saving..." : action.Label)
+                            </button>
+                        }
+
                         <button class="btn btn-primary"
+                                disabled="@_lifecycleBusy"
                                 @onclick='() => Nav.NavigateTo($"/tickets/edit/{Id}")'>
                             Edit
                         </button>
@@ -58,6 +69,13 @@ else if (_ticket is not null)
                     Back
                 </button>
             </div>
+
+            <AppToast @bind-Visible="_toastVisible"
+                      Type="success"
+                      Title="Ticket updated"
+                      Message="@_toastMessage"
+                      AutoHide="true"
+                      ToastVersion="@_toastVersion" />
         </div>
     </div>
 
@@ -73,8 +91,71 @@ else if (_ticket is not null)
     private TicketDto? _ticket;
     private string? _error;
     private bool _loading;
+    private bool _lifecycleBusy;
+    private bool _toastVisible;
+    private string? _toastMessage;
+    private long _toastVersion;
 
-    protected override async Task OnParametersSetAsync()
+    protected override Task OnParametersSetAsync() => LoadTicketAsync();
+
+    private async Task ChangeStatusAsync(string targetStatus)
+    {
+        if (_ticket is null || _lifecycleBusy)
+            return;
+
+        _lifecycleBusy = true;
+        _error = null;
+
+        try
+        {
+            var response = await TicketApi.UpdateAsync(Id, new UpdateTicketDto
+            {
+                Title = _ticket.Title,
+                Description = _ticket.Description,
+                Priority = _ticket.Priority,
+                Status = targetStatus,
+                RowVersionBase64 = _ticket.RowVersionBase64
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadTicketAsync();
+                _toastMessage = $"Ticket status changed to {targetStatus}.";
+                _toastVersion++;
+                _toastVisible = true;
+                return;
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                await LoadTicketAsync();
+                _error = "This ticket was modified by another user. The latest version has been loaded.";
+                return;
+            }
+
+            _error = await ApiErrorMapper.ToMessageAsync(response, "Could not update the ticket status.");
+        }
+        catch
+        {
+            _error = "Could not update the ticket status.";
+        }
+        finally
+        {
+            _lifecycleBusy = false;
+        }
+    }
+
+    private static IReadOnlyList<LifecycleAction> GetLifecycleActions(string status) => status switch
+    {
+        "New" => [new("Start work", "InProgress")],
+        "InProgress" => [new("Resolve", "Resolved")],
+        "Resolved" => [new("Close", "Closed"), new("Reopen", "InProgress")],
+        _ => []
+    };
+
+    private sealed record LifecycleAction(string Label, string TargetStatus);
+
+    private async Task LoadTicketAsync()
     {
         _loading = true;
         _error = null;
@@ -84,9 +165,7 @@ else if (_ticket is not null)
             _ticket = await TicketApi.GetByIdAsync(Id);
 
             if (_ticket is null)
-            {
                 _error = "Ticket was not found.";
-            }
         }
         catch
         {
