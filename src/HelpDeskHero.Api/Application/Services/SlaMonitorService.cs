@@ -24,7 +24,7 @@ public sealed class SlaMonitorService : ISlaMonitorService
 
         var breachedTickets = await _db.Tickets
             .Where(x => !x.IsDeleted)
-            .Where(x => x.Status != "Closed")
+            .Where(x => x.Status == "New" || x.Status == "InProgress")
             .Where(x => x.DueResolveAtUtc != null && x.DueResolveAtUtc < now)
             .Where(x => x.LastNotifiedAtUtc == null || x.LastNotifiedAtUtc < notificationThreshold)
             .ToListAsync(ct);

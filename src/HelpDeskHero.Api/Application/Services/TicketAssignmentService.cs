@@ -28,7 +28,8 @@ public sealed class TicketAssignmentService : ITicketAssignmentService
         foreach (var agent in agents)
         {
             var activeTicketCount = await _db.Tickets.CountAsync(
-                x => x.AssignedToUserId == agent.Id && x.Status != "Closed",
+                x => x.AssignedToUserId == agent.Id &&
+                     (x.Status == "New" || x.Status == "InProgress"),
                 ct);
 
             agentLoads.Add((agent.Id, activeTicketCount));

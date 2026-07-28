@@ -21,6 +21,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
+using Microsoft.Extensions.Options;
+using Minio;
+
 var builder = WebApplication.CreateBuilder(args);
 var isTesting = builder.Environment.IsEnvironment("Testing");
 
@@ -32,7 +35,8 @@ builder.Services.AddCors(options =>
     {
         policy.WithOrigins(
                 "https://localhost:7045",
-                "http://localhost:5045")
+                "http://localhost:5045",
+                "http://localhost:8080")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -120,6 +124,7 @@ builder.Services.AddScoped<ISlaCalculator, SlaCalculator>();
 builder.Services.AddScoped<ITicketAssignmentService, TicketAssignmentService>();
 builder.Services.AddScoped<ISlaMonitorService, SlaMonitorService>();
 builder.Services.AddScoped<IOutboxWriter, OutboxWriter>();
+builder.Services.AddScoped<IMessagePublisher, RabbitMqPublisher>();
 builder.Services.AddScoped<ITicketLiveNotifier, SignalRTicketLiveNotifier>();
 builder.Services.AddHostedService<OutboxProcessorService>();
 builder.Services.AddHostedService<SlaWatchdogService>();
@@ -184,6 +189,47 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("CanViewAudit", policy => policy.RequireRole("Admin"));
 });
 
+// Minio configuration
+builder.Services
+    .AddOptions<MinioOptions>()
+    .Bind(
+        builder.Configuration.GetSection(
+            MinioOptions.SectionName))
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.Endpoint),
+        "Minio:Endpoint is required.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.AccessKey),
+        "Minio:AccessKey is required.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.SecretKey),
+        "Minio:SecretKey is required.")
+    .Validate(
+        options => !string.IsNullOrWhiteSpace(options.BucketName),
+        "Minio:BucketName is required.")
+    .ValidateOnStart();
+
+builder.Services.AddSingleton<IMinioClient>(
+    serviceProvider =>
+    {
+        var options = serviceProvider
+            .GetRequiredService<IOptions<MinioOptions>>()
+            .Value;
+
+        return new MinioClient()
+            .WithEndpoint(options.Endpoint)
+            .WithCredentials(
+                options.AccessKey,
+                options.SecretKey)
+            .WithSSL(options.UseSsl)
+            .Build();
+    });
+
+builder.Services.AddScoped<
+    IExportObjectStorage,
+    MinioExportObjectStorage>();
+
+
 var app = builder.Build();
 
 // Apply EF Core migrations and seed database on startup.
@@ -198,7 +244,11 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+if (builder.Configuration.GetValue("UseHttpsRedirection", true))
+{
+    app.UseHttpsRedirection();
+}
+
 app.UseCors(CorsPolicyName);
 
 app.UseAuthentication();

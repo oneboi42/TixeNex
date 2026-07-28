@@ -24,10 +24,13 @@ public sealed class DashboardController : ControllerBase
         var dto = new DashboardSummaryDto
         {
             TotalTickets = await _db.Tickets.IgnoreQueryFilters().CountAsync(ct),
-            OpenTickets = await _db.Tickets.CountAsync(x => x.Status != "Closed", ct),
+            OpenTickets = await _db.Tickets.CountAsync(
+                x => x.Status == "New" || x.Status == "InProgress", ct),
             ClosedTickets = await _db.Tickets.CountAsync(x => x.Status == "Closed", ct),
             DeletedTickets = await _db.Tickets.IgnoreQueryFilters().CountAsync(x => x.IsDeleted, ct),
-            HighPriorityOpenTickets = await _db.Tickets.CountAsync(x => x.Priority == "High" && x.Status != "Closed", ct),
+            HighPriorityOpenTickets = await _db.Tickets.CountAsync(
+                x => x.Priority == "High" &&
+                     (x.Status == "New" || x.Status == "InProgress"), ct),
             TotalComments = await _db.TicketComments.CountAsync(ct),
             TotalAttachments = await _db.TicketAttachments.CountAsync(ct),
             UnreadNotifications = await _db.UserNotifications.CountAsync(x => !x.IsRead, ct),

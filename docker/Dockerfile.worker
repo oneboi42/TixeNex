@@ -1,0 +1,29 @@
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+
+WORKDIR /src
+
+COPY HelpDeskHero.slnx ./
+
+COPY src/HelpDeskHero.Shared/HelpDeskHero.Shared.csproj src/HelpDeskHero.Shared/
+COPY src/HelpDeskHero.Api/HelpDeskHero.Api.csproj src/HelpDeskHero.Api/
+COPY src/HelpDeskHero.Worker/HelpDeskHero.Worker.csproj src/HelpDeskHero.Worker/
+
+RUN dotnet restore src/HelpDeskHero.Worker/HelpDeskHero.Worker.csproj
+
+COPY . .
+
+RUN dotnet publish src/HelpDeskHero.Worker/HelpDeskHero.Worker.csproj \
+    -c Release \
+    -o /app/publish \
+    --no-restore \
+    /p:UseAppHost=false \
+    /p:BuildInParallel=false \
+    -m:1
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
+
+WORKDIR /app
+
+COPY --from=build /app/publish .
+
+ENTRYPOINT ["dotnet", "HelpDeskHero.Worker.dll"]

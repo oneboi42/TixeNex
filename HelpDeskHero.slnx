@@ -3,6 +3,7 @@
     <Project Path="src/HelpDeskHero.Api/HelpDeskHero.Api.csproj" />
     <Project Path="src/HelpDeskHero.Shared/HelpDeskHero.Shared.csproj" />
     <Project Path="src/HelpDeskHero.UI/HelpDeskHero.UI.csproj" />
+    <Project Path="src/HelpDeskHero.Worker/HelpDeskHero.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/HelpDeskHero.Api.IntegrationTests/HelpDeskHero.Api.IntegrationTests.csproj" />

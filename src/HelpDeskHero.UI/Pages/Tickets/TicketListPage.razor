@@ -140,7 +140,7 @@ else
                             </td>
 
                             <td class="text-end">
-                                <div class="btn-group btn-group-sm">
+                                <div class="d-inline-flex gap-1">
                                     <button class="btn btn-outline-secondary"
                                             @onclick='() => Navigation.NavigateTo($"/tickets/{item.Id}")'>
                                         Szczegóły
@@ -149,21 +149,33 @@ else
                                     <AuthorizeView Roles="Admin,Agent">
                                         <Authorized>
                                             <button class="btn btn-outline-primary"
+                                                    disabled="@IsLifecycleBusy(item.Id)"
                                                     @onclick='() => Navigation.NavigateTo($"/tickets/edit/{item.Id}")'>
                                                 Edytuj
                                             </button>
-                                        </Authorized>
-                                    </AuthorizeView>
 
-                                    <AuthorizeView Roles="Admin">
-                                        <Authorized>
-                                            <button class="btn btn-outline-danger"
-                                                    @onclick="() => AskDelete(item)">
-                                                Usuń
-                                            </button>
+                                            @foreach (var action in GetLifecycleActions(item.Status))
+                                            {
+                                                <button class="btn btn-outline-success"
+                                                        disabled="@IsLifecycleBusy(item.Id)"
+                                                        @onclick="() => ChangeStatusAsync(item, action.TargetStatus)">
+                                                    @(IsLifecycleBusy(item.Id) ? "Saving..." : action.Label)
+                                                </button>
+                                            }
                                         </Authorized>
                                     </AuthorizeView>
                                 </div>
+
+                                <AuthorizeView Roles="Admin">
+                                    <Authorized>
+                                        <span class="ms-2">
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    @onclick="() => AskDelete(item)">
+                                                Usuń
+                                            </button>
+                                        </span>
+                                    </Authorized>
+                                </AuthorizeView>
                             </td>
                         </tr>
                     }
@@ -192,7 +204,9 @@ else
 <AppToast @bind-Visible="_toastVisible"
           Type="@_toastType"
           Title="@_toastTitle"
-          Message="@_toastMessage" />
+          Message="@_toastMessage"
+          AutoHide="true"
+          ToastVersion="@_toastVersion" />
 
 <ConfirmDeleteDialog Visible="@_showDeleteDialog"
                      Busy="@_deleteBusy"
@@ -214,9 +228,11 @@ else
     private string _toastType = "success";
     private string _toastTitle = "";
     private string? _toastMessage;
+    private long _toastVersion;
     
 
     private int? _ticketIdToDelete;
+    private readonly HashSet<int> _lifecycleBusyTicketIds = [];
     private string? _error;
     private string _deleteMessage = "Czy na pewno chcesz usunąć to zgłoszenie?";
 
@@ -232,6 +248,7 @@ else
         _toastType = type;
         _toastTitle = title;
         _toastMessage = message;
+        _toastVersion++;
         _toastVisible = true;
     }
     private async Task ReloadAsync()
@@ -336,6 +353,62 @@ else
             _deleteBusy = false;
         }
     }
+
+    private bool IsLifecycleBusy(int ticketId) => _lifecycleBusyTicketIds.Contains(ticketId);
+
+    private async Task ChangeStatusAsync(TicketDto ticket, string targetStatus)
+    {
+        if (!_lifecycleBusyTicketIds.Add(ticket.Id))
+            return;
+
+        _error = null;
+
+        try
+        {
+            var response = await TicketApi.UpdateAsync(ticket.Id, new UpdateTicketDto
+            {
+                Title = ticket.Title,
+                Description = ticket.Description,
+                Priority = ticket.Priority,
+                Status = targetStatus,
+                RowVersionBase64 = ticket.RowVersionBase64
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                ShowToast("success", "Ticket updated", $"Ticket status changed to {targetStatus}.");
+                await ReloadAsync();
+                return;
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                await ReloadAsync();
+                _error = "This ticket was modified by another user. The latest version has been loaded.";
+                return;
+            }
+
+            _error = await ApiErrorMapper.ToMessageAsync(response, "Could not update the ticket status.");
+        }
+        catch
+        {
+            _error = "Could not update the ticket status.";
+        }
+        finally
+        {
+            _lifecycleBusyTicketIds.Remove(ticket.Id);
+        }
+    }
+
+    private static IReadOnlyList<LifecycleAction> GetLifecycleActions(string status) => status switch
+    {
+        "New" => [new("Start work", "InProgress")],
+        "InProgress" => [new("Resolve", "Resolved")],
+        "Resolved" => [new("Close", "Closed"), new("Reopen", "InProgress")],
+        _ => []
+    };
+
+    private sealed record LifecycleAction(string Label, string TargetStatus);
 
 
     private async Task ExportCsv()
