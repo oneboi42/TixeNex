@@ -1,9 +1,9 @@
 using System.Security.Claims;
-using HelpDeskHero.Shared.Contracts.Exports;
 using HelpDeskHero.Api.Application.Interfaces;
 using HelpDeskHero.Api.Application.Services.Exports;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
+using HelpDeskHero.Shared.Contracts.Exports;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -31,7 +31,7 @@ public class ExportsController : ControllerBase
 
     [HttpPost]
     public async Task<ActionResult<CreateExportResponseDto>> CreateExport(
-    CancellationToken cancellationToken)
+        CancellationToken cancellationToken)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
