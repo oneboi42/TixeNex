@@ -6,6 +6,7 @@
 @using HelpDeskHero.UI.Services.Api
 
 @inject ExportApiClient ExportApiClient
+@inject IJSRuntime JS
 
 <PageTitle>Export History</PageTitle>
 
@@ -65,6 +66,20 @@
     </div>
 }
 
+@if (!string.IsNullOrWhiteSpace(_downloadError))
+{
+    <div class="alert alert-danger alert-dismissible fade show"
+         role="alert">
+        @_downloadError
+
+        <button type="button"
+                class="btn-close"
+                aria-label="Close"
+                @onclick="ClearDownloadError">
+        </button>
+    </div>
+}
+
 @if (_isLoading)
 {
     <div class="d-flex justify-content-center py-5">
@@ -111,6 +126,7 @@ else
                     <th>Status</th>
                     <th>Created at</th>
                     <th>Completed at</th>
+                    <th class="text-end">Download</th>
                 </tr>
             </thead>
 
@@ -182,6 +198,32 @@ else
                                 <span class="text-muted">—</span>
                             }
                         </td>
+
+                        <td class="text-end">
+                            @if (export.Status == "Completed")
+                            {
+                                <button class="btn btn-sm btn-outline-primary"
+                                        disabled="@(_downloadingExportId == export.Id)"
+                                        @onclick="() => DownloadExportAsync(export)">
+                                    @if (_downloadingExportId == export.Id)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"
+                                              role="status"
+                                              aria-hidden="true">
+                                        </span>
+                                        <span>Downloading...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Download</span>
+                                    }
+                                </button>
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
                     </tr>
                 }
             </tbody>
@@ -197,6 +239,7 @@ else
 
     private List<ExportJobDto> _exports = [];
     private Task? _pollingTask;
+    private Guid? _downloadingExportId;
 
     private bool _isLoading = true;
     private bool _isCreating;
@@ -204,6 +247,7 @@ else
 
     private string? _loadError;
     private string? _createError;
+    private string? _downloadError;
     private string? _successMessage;
 
     protected override async Task OnInitializedAsync()
@@ -297,6 +341,53 @@ else
         }
     }
 
+    private async Task DownloadExportAsync(ExportJobDto export)
+    {
+        if (_downloadingExportId.HasValue)
+        {
+            return;
+        }
+
+        _downloadingExportId = export.Id;
+        _downloadError = null;
+
+        try
+        {
+            var result = await ExportApiClient.DownloadExportAsync(
+                export.Id,
+                _pageCancellationTokenSource.Token);
+
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBytes",
+                result.FileName,
+                result.ContentType,
+                result.Bytes);
+        }
+        catch (OperationCanceledException)
+            when (_pageCancellationTokenSource.IsCancellationRequested)
+        {
+        }
+        catch (HttpRequestException)
+        {
+            _downloadError =
+                "The export file could not be downloaded. Please try again.";
+        }
+        catch (JSException)
+        {
+            _downloadError =
+                "The browser could not save the export file.";
+        }
+        catch (Exception)
+        {
+            _downloadError =
+                "An unexpected error occurred while downloading the export.";
+        }
+        finally
+        {
+            _downloadingExportId = null;
+        }
+    }
+
     private bool HasActiveExports()
     {
         return _exports.Any(export =>
@@ -365,6 +456,11 @@ else
     private void ClearCreateError()
     {
         _createError = null;
+    }
+
+    private void ClearDownloadError()
+    {
+        _downloadError = null;
     }
 
     public async ValueTask DisposeAsync()
