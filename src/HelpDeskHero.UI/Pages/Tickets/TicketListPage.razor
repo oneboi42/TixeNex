@@ -13,7 +13,6 @@
 @inject NavigationManager Navigation
 @inject ITicketsRealtimeClient Realtime
 
-@inject IJSRuntime JS
 
 <PageTitle>Zgłoszenia</PageTitle>
 
@@ -28,9 +27,9 @@
                 <NavLink class="btn btn-outline-secondary" href="tickets/create">
                     Nowe zgłoszenie
                 </NavLink>
-                <button class="btn btn-outline-secondary" @onclick="ExportCsv">
-                    Export CSV
-                </button>
+                <NavLink class="btn btn-outline-secondary" href="exports">
+                    Export history
+                </NavLink>
             </div>
         </Authorized>
     </AuthorizeView>
@@ -410,36 +409,6 @@ else
 
     private sealed record LifecycleAction(string Label, string TargetStatus);
 
-
-    private async Task ExportCsv()
-    {
-        _error = null;
-
-        try
-        {
-            var response = await TicketApi.ExportCsvAsync(_query);
-            if (!response.IsSuccessStatusCode)
-            {
-                _error = await ApiErrorMapper.ToMessageAsync(
-                    response,
-                    "Nie udaĹ‚o siÄ™ wyeksportowaÄ‡ pliku CSV.");
-                return;
-            }
-
-            var bytes = await response.Content.ReadAsByteArrayAsync();
-            var contentType = response.Content.Headers.ContentType?.ToString() ?? "text/csv";
-
-            await JS.InvokeVoidAsync(
-                "downloadFileFromBytes",
-                "tickets.csv",
-                contentType,
-                bytes);
-        }
-        catch
-        {
-            _error = "Nie udaĹ‚o siÄ™ wyeksportowaÄ‡ pliku CSV.";
-        }
-    }
 
     public ValueTask DisposeAsync()
     {

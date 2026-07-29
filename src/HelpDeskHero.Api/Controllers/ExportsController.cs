@@ -3,6 +3,7 @@ using HelpDeskHero.Api.Application.Interfaces;
 using HelpDeskHero.Api.Application.Services.Exports;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
+using HelpDeskHero.Shared.Contracts.Exports;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -29,7 +30,7 @@ public class ExportsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> CreateExport(
+    public async Task<ActionResult<CreateExportResponseDto>> CreateExport(
         CancellationToken cancellationToken)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -54,17 +55,19 @@ public class ExportsController : ControllerBase
         await _publisher.PublishAsync(
             new ExportRequested(job.Id, job.UserId));
 
+        var response = new CreateExportResponseDto
+        {
+            Id = job.Id,
+            Status = job.Status.ToString()
+        };
+
         return Accepted(
             $"/api/exports/{job.Id}",
-            new
-            {
-                job.Id,
-                job.Status
-            });
+            response);
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetMyExports(
+    public async Task<ActionResult<List<ExportJobDto>>> GetMyExports(
         CancellationToken cancellationToken)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -78,13 +81,13 @@ public class ExportsController : ControllerBase
             .AsNoTracking()
             .Where(exportJob => exportJob.UserId == userId)
             .OrderByDescending(exportJob => exportJob.CreatedAt)
-            .Select(exportJob => new
+            .Select(exportJob => new ExportJobDto
             {
-                id = exportJob.Id,
-                status = exportJob.Status.ToString(),
-                fileName = exportJob.FileName,
-                createdAt = exportJob.CreatedAt,
-                completedAt = exportJob.CompletedAt
+                Id = exportJob.Id,
+                Status = exportJob.Status.ToString(),
+                FileName = exportJob.FileName,
+                CreatedAt = exportJob.CreatedAt,
+                CompletedAt = exportJob.CompletedAt
             })
             .ToListAsync(cancellationToken);
 

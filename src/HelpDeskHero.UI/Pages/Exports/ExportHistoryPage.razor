@@ -1,0 +1,490 @@
+@page "/exports"
+@attribute [Authorize]
+@implements IAsyncDisposable
+
+@using HelpDeskHero.Shared.Contracts.Exports
+@using HelpDeskHero.UI.Services.Api
+
+@inject ExportApiClient ExportApiClient
+@inject IJSRuntime JS
+
+<PageTitle>Export History</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h1 class="mb-1">Export History</h1>
+        <p class="text-muted mb-0">
+            Create and download ticket exports.
+        </p>
+    </div>
+
+    <button class="btn btn-primary"
+            disabled="@_isCreating"
+            @onclick="CreateExportAsync">
+
+        @if (_isCreating)
+        {
+            <span class="spinner-border spinner-border-sm me-2"
+                  role="status"
+                  aria-hidden="true">
+            </span>
+
+            <span>Creating...</span>
+        }
+        else
+        {
+            <span>Create export</span>
+        }
+    </button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(_successMessage))
+{
+    <div class="alert alert-success alert-dismissible fade show"
+         role="alert">
+        @_successMessage
+
+        <button type="button"
+                class="btn-close"
+                aria-label="Close"
+                @onclick="ClearSuccessMessage">
+        </button>
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(_createError))
+{
+    <div class="alert alert-danger alert-dismissible fade show"
+         role="alert">
+        @_createError
+
+        <button type="button"
+                class="btn-close"
+                aria-label="Close"
+                @onclick="ClearCreateError">
+        </button>
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(_downloadError))
+{
+    <div class="alert alert-danger alert-dismissible fade show"
+         role="alert">
+        @_downloadError
+
+        <button type="button"
+                class="btn-close"
+                aria-label="Close"
+                @onclick="ClearDownloadError">
+        </button>
+    </div>
+}
+
+@if (_isLoading)
+{
+    <div class="d-flex justify-content-center py-5">
+        <div class="spinner-border"
+             role="status">
+            <span class="visually-hidden">Loading exports...</span>
+        </div>
+    </div>
+}
+else if (!string.IsNullOrWhiteSpace(_loadError))
+{
+    <div class="alert alert-danger"
+         role="alert">
+
+        <h5 class="alert-heading">Could not load exports</h5>
+
+        <p class="mb-3">
+            @_loadError
+        </p>
+
+        <button class="btn btn-outline-danger"
+                @onclick="ReloadAsync">
+            Try again
+        </button>
+    </div>
+}
+else if (_exports.Count == 0)
+{
+    <div class="border rounded p-5 text-center bg-light">
+        <h4>No exports yet</h4>
+
+        <p class="text-muted mb-0">
+            Create your first ticket export using the button above.
+        </p>
+    </div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead>
+                <tr>
+                    <th>File name</th>
+                    <th>Status</th>
+                    <th>Created at</th>
+                    <th>Completed at</th>
+                    <th class="text-end">Download</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @foreach (var export in _exports)
+                {
+                    <tr @key="export.Id">
+                        <td>
+                            @if (string.IsNullOrWhiteSpace(export.FileName))
+                            {
+                                <span class="text-muted">Not available yet</span>
+                            }
+                            else
+                            {
+                                @export.FileName
+                            }
+                        </td>
+
+                        <td>
+                            @switch (export.Status)
+                            {
+                                case "Pending":
+                                    <span class="badge bg-secondary">
+                                        Waiting
+                                    </span>
+                                    break;
+
+                                case "Running":
+                                    <span class="badge bg-primary">
+                                        <span class="spinner-border spinner-border-sm me-1"
+                                              role="status"
+                                              aria-hidden="true">
+                                        </span>
+                                        Processing
+                                    </span>
+                                    break;
+
+                                case "Completed":
+                                    <span class="badge bg-success">
+                                        Completed
+                                    </span>
+                                    break;
+
+                                case "Failed":
+                                    <span class="badge bg-danger">
+                                        Failed
+                                    </span>
+                                    break;
+
+                                default:
+                                    <span class="badge bg-dark">
+                                        @export.Status
+                                    </span>
+                                    break;
+                            }
+                        </td>
+
+                        <td>
+                            @FormatDate(export.CreatedAt)
+                        </td>
+
+                        <td>
+                            @if (export.CompletedAt.HasValue)
+                            {
+                                @FormatDate(export.CompletedAt.Value)
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
+
+                        <td class="text-end">
+                            @if (export.Status == "Completed")
+                            {
+                                <button class="btn btn-sm btn-outline-primary"
+                                        disabled="@(_downloadingExportId == export.Id)"
+                                        @onclick="() => DownloadExportAsync(export)">
+                                    @if (_downloadingExportId == export.Id)
+                                    {
+                                        <span class="spinner-border spinner-border-sm me-1"
+                                              role="status"
+                                              aria-hidden="true">
+                                        </span>
+                                        <span>Downloading...</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Download</span>
+                                    }
+                                </button>
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private static readonly TimeSpan PollingInterval =
+        TimeSpan.FromSeconds(4);
+
+    private readonly CancellationTokenSource _pageCancellationTokenSource = new();
+
+    private List<ExportJobDto> _exports = [];
+    private Task? _pollingTask;
+    private Guid? _downloadingExportId;
+
+    private bool _isLoading = true;
+    private bool _isCreating;
+    private bool _disposed;
+
+    private string? _loadError;
+    private string? _createError;
+    private string? _downloadError;
+    private string? _successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadExportsAsync(_pageCancellationTokenSource.Token);
+
+        StartPollingIfNeeded();
+    }
+
+    private async Task LoadExportsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        _loadError = null;
+
+        try
+        {
+            _exports = await ExportApiClient.GetExportsAsync(
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (HttpRequestException)
+        {
+            _loadError =
+                "The export history could not be loaded. Please try again.";
+        }
+        catch (Exception)
+        {
+            _loadError =
+                "An unexpected error occurred while loading exports.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        _isLoading = true;
+
+        await LoadExportsAsync(
+            _pageCancellationTokenSource.Token);
+
+        StartPollingIfNeeded();
+    }
+
+    private async Task CreateExportAsync()
+    {
+        if (_isCreating)
+        {
+            return;
+        }
+
+        _isCreating = true;
+        _createError = null;
+        _successMessage = null;
+
+        try
+        {
+            var result = await ExportApiClient.CreateExportAsync(
+                _pageCancellationTokenSource.Token);
+
+            _successMessage =
+                $"Export task {result.Id} was created successfully.";
+
+            await LoadExportsAsync(
+                _pageCancellationTokenSource.Token);
+
+            StartPollingIfNeeded();
+        }
+        catch (OperationCanceledException)
+            when (_pageCancellationTokenSource.IsCancellationRequested)
+        {
+        }
+        catch (HttpRequestException)
+        {
+            _createError =
+                "The export task could not be created. Please try again.";
+        }
+        catch (Exception)
+        {
+            _createError =
+                "An unexpected error occurred while creating the export.";
+        }
+        finally
+        {
+            _isCreating = false;
+        }
+    }
+
+    private async Task DownloadExportAsync(ExportJobDto export)
+    {
+        if (_downloadingExportId.HasValue)
+        {
+            return;
+        }
+
+        _downloadingExportId = export.Id;
+        _downloadError = null;
+
+        try
+        {
+            var result = await ExportApiClient.DownloadExportAsync(
+                export.Id,
+                _pageCancellationTokenSource.Token);
+
+            await JS.InvokeVoidAsync(
+                "downloadFileFromBytes",
+                result.FileName,
+                result.ContentType,
+                result.Bytes);
+        }
+        catch (OperationCanceledException)
+            when (_pageCancellationTokenSource.IsCancellationRequested)
+        {
+        }
+        catch (HttpRequestException)
+        {
+            _downloadError =
+                "The export file could not be downloaded. Please try again.";
+        }
+        catch (JSException)
+        {
+            _downloadError =
+                "The browser could not save the export file.";
+        }
+        catch (Exception)
+        {
+            _downloadError =
+                "An unexpected error occurred while downloading the export.";
+        }
+        finally
+        {
+            _downloadingExportId = null;
+        }
+    }
+
+    private bool HasActiveExports()
+    {
+        return _exports.Any(export =>
+            export.Status is "Pending" or "Running");
+    }
+
+    private void StartPollingIfNeeded()
+    {
+        if (_disposed ||
+            _pageCancellationTokenSource.IsCancellationRequested ||
+            !HasActiveExports())
+        {
+            return;
+        }
+
+        if (_pollingTask is { IsCompleted: false })
+        {
+            return;
+        }
+
+        _pollingTask = PollExportsAsync(
+            _pageCancellationTokenSource.Token);
+    }
+
+    private async Task PollExportsAsync(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested &&
+                   HasActiveExports())
+            {
+                await Task.Delay(
+                    PollingInterval,
+                    cancellationToken);
+
+                await InvokeAsync(async () =>
+                {
+                    await LoadExportsAsync(cancellationToken);
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            _pollingTask = null;
+        }
+    }
+
+    private static string FormatDate(DateTime value)
+    {
+        return value
+            .ToLocalTime()
+            .ToString("yyyy-MM-dd HH:mm:ss");
+    }
+
+    private void ClearSuccessMessage()
+    {
+        _successMessage = null;
+    }
+
+    private void ClearCreateError()
+    {
+        _createError = null;
+    }
+
+    private void ClearDownloadError()
+    {
+        _downloadError = null;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+
+        await _pageCancellationTokenSource.CancelAsync();
+
+        if (_pollingTask is not null)
+        {
+            try
+            {
+                await _pollingTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+
+        _pageCancellationTokenSource.Dispose();
+    }
+}

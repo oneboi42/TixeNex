@@ -106,47 +106,6 @@ public sealed class TicketsController : ControllerBase
         });
     }
 
-    [HttpGet("export")]
-    [Authorize(Policy = "CanManageTickets")]
-    public async Task<IActionResult> ExportCsv(
-        [FromQuery] string? status,
-        [FromQuery] string? priority,
-        CancellationToken ct)
-    {
-        var query = _db.Tickets.AsQueryable();
-
-        if (!string.IsNullOrWhiteSpace(status))
-            query = query.Where(x => x.Status == status);
-
-        if (!string.IsNullOrWhiteSpace(priority))
-            query = query.Where(x => x.Priority == priority);
-
-        var rows = await query
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .Select(x => new
-            {
-                x.Id,
-                x.Number,
-                x.Title,
-                x.Status,
-                x.Priority,
-                x.CreatedAtUtc
-            })
-            .ToListAsync(ct);
-
-        var sb = new System.Text.StringBuilder();
-        sb.AppendLine("Id,Number,Title,Status,Priority,CreatedAtUtc");
-
-        foreach (var row in rows)
-        {
-            var title = row.Title.Replace("\"", "\"\"");
-            sb.AppendLine($"{row.Id},{row.Number},\"{title}\",{row.Status},{row.Priority},{row.CreatedAtUtc:O}");
-        }
-
-        var bytes = System.Text.Encoding.UTF8.GetBytes(sb.ToString());
-        return File(bytes, "text/csv", $"tickets-{DateTime.UtcNow:yyyyMMddHHmmss}.csv");
-    }
-
     [HttpGet("deleted")]
     [Authorize(Policy = "CanManageTickets")]
     public async Task<ActionResult<List<TicketDto>>> GetDeleted(CancellationToken ct)
