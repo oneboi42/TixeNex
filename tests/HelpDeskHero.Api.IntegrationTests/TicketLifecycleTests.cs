@@ -1,6 +1,7 @@
 using FluentAssertions;
 using HelpDeskHero.Api.Application.Interfaces;
 using HelpDeskHero.Api.Application.Services;
+using HelpDeskHero.Api.Application.TicketVisibility;
 using HelpDeskHero.Api.Controllers;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
@@ -93,6 +94,7 @@ public sealed class TicketLifecycleTests
             new AuditService(db, new HttpContextAccessor { HttpContext = httpContext }),
             new SlaCalculator(db),
             new NoopTicketAssignmentService(),
+            new TicketVisibilityContextResolver(),
             new OutboxWriter(db),
             new TestWebHostEnvironment())
         {

@@ -5,6 +5,10 @@ using FluentAssertions;
 using HelpDeskHero.Shared.Contracts.Auth;
 using HelpDeskHero.Shared.Contracts.Common;
 using HelpDeskHero.Shared.Contracts.Tickets;
+using HelpDeskHero.Api.Domain;
+using HelpDeskHero.Api.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace HelpDeskHero.Api.IntegrationTests;
 
@@ -12,9 +16,11 @@ namespace HelpDeskHero.Api.IntegrationTests;
 public sealed class TicketsEndpointsTests
 {
     private readonly HttpClient _client;
+    private readonly CustomWebApplicationFactory _factory;
 
     public TicketsEndpointsTests(CustomWebApplicationFactory factory)
     {
+        _factory = factory;
         _client = factory.CreateClient();
     }
 
@@ -63,12 +69,58 @@ public sealed class TicketsEndpointsTests
         created.Status.Should().Be("New");
     }
 
+    [Fact]
+    public async Task CreateTicket_AsUser_ShouldSaveRequesterAndAutomaticAssignment()
+    {
+        var userId = await LoginAsync("user", "User123!");
+        var title = $"User ownership {Guid.NewGuid():N}";
+
+        var response = await CreateTicketAsync(title);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var ticket = await FindTicketByTitleAsync(title);
+        ticket.RequesterUserId.Should().Be(userId);
+        ticket.AssignedToUserId.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task CreateTicket_AsAgent_ShouldKeepRequesterAndAssignmentIndependent()
+    {
+        var agentId = await LoginAsync("agent", "Agent123!");
+        var title = $"Agent ownership {Guid.NewGuid():N}";
+
+        var response = await CreateTicketAsync(title);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var ticket = await FindTicketByTitleAsync(title);
+        ticket.RequesterUserId.Should().Be(agentId);
+        ticket.AssignedToUserId.Should().NotBeNullOrWhiteSpace();
+    }
+
+    [Fact]
+    public async Task CreateTicket_AsAdmin_ShouldSaveAdminAsRequester()
+    {
+        var adminId = await LoginAsync("admin", "Admin1234");
+        var title = $"Admin ownership {Guid.NewGuid():N}";
+
+        var response = await CreateTicketAsync(title);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var ticket = await FindTicketByTitleAsync(title);
+        ticket.RequesterUserId.Should().Be(adminId);
+    }
+
     private async Task LoginAsAdminAsync()
+    {
+        await LoginAsync("admin", "Admin1234");
+    }
+
+    private async Task<string> LoginAsync(string userName, string password)
     {
         var login = new LoginRequestDto
         {
-            UserName = "admin",
-            Password = "Admin1234",
+            UserName = userName,
+            Password = password,
             DeviceName = "IntegrationTests"
         };
 
@@ -82,5 +134,29 @@ public sealed class TicketsEndpointsTests
 
         _client.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", token.AccessToken);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await db.Users
+            .Where(x => x.UserName == userName)
+            .Select(x => x.Id)
+            .SingleAsync();
+    }
+
+    private async Task<HttpResponseMessage> CreateTicketAsync(string title)
+    {
+        return await _client.PostAsJsonAsync("/api/tickets", new CreateTicketDto
+        {
+            Title = title,
+            Description = "Created by ownership integration test",
+            Priority = "Medium"
+        });
+    }
+
+    private async Task<Ticket> FindTicketByTitleAsync(string title)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await db.Tickets.AsNoTracking().SingleAsync(x => x.Title == title);
     }
 }

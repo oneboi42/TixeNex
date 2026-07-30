@@ -49,9 +49,18 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
             b.Property(x => x.DueResolveAtUtc);
             b.Property(x => x.FirstRespondedAtUtc);
             b.Property(x => x.ResolvedAtUtc);
+            b.Property(x => x.RequesterUserId).HasMaxLength(450);
             b.Property(x => x.AssignedToUserId).HasMaxLength(450);
             b.Property(x => x.EscalationLevel).IsRequired();
             b.Property(x => x.LastNotifiedAtUtc);
+
+            b.HasOne(x => x.RequesterUser)
+                .WithMany()
+                .HasForeignKey(x => x.RequesterUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            b.HasIndex(x => x.RequesterUserId);
+            b.HasIndex(x => x.AssignedToUserId);
 
             b.Property(x => x.RowVersion).IsRowVersion();
 

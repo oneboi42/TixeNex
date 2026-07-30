@@ -1,5 +1,7 @@
 using Hangfire;
+using System.Security.Claims;
 using HelpDeskHero.Api.Application.Interfaces;
+using HelpDeskHero.Api.Application.TicketVisibility;
 using HelpDeskHero.Api.BackgroundJobs.Contracts;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
@@ -22,6 +24,7 @@ public sealed class TicketsController : ControllerBase
     private readonly AuditService _audit;
     private readonly ISlaCalculator _slaCalculator;
     private readonly ITicketAssignmentService _ticketAssignmentService;
+    private readonly ITicketVisibilityContextResolver _ticketVisibilityContextResolver;
     private readonly IOutboxWriter _outboxWriter;
     private readonly IWebHostEnvironment _environment;
 
@@ -30,6 +33,7 @@ public sealed class TicketsController : ControllerBase
         AuditService audit,
         ISlaCalculator slaCalculator,
         ITicketAssignmentService ticketAssignmentService,
+        ITicketVisibilityContextResolver ticketVisibilityContextResolver,
         IOutboxWriter outboxWriter,
         IWebHostEnvironment environment)
     {
@@ -37,6 +41,7 @@ public sealed class TicketsController : ControllerBase
         _audit = audit;
         _slaCalculator = slaCalculator;
         _ticketAssignmentService = ticketAssignmentService;
+        _ticketVisibilityContextResolver = ticketVisibilityContextResolver;
         _outboxWriter = outboxWriter;
         _environment = environment;
     }
@@ -44,11 +49,16 @@ public sealed class TicketsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<PagedResultDto<TicketDto>>> GetAll([FromQuery] TicketQueryDto query, CancellationToken ct)
     {
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+
+        if (accessError is not null)
+            return accessError;
+
         var pageNumber = query.PageNumber < 1 ? 1 : query.PageNumber;
         var pageSize = query.PageSize < 1 ? 10 : query.PageSize;
         pageSize = pageSize > 100 ? 100 : pageSize;
 
-        var q = _db.Tickets.AsQueryable();
+        var q = _db.Tickets.ApplyVisibility(visibilityContext);
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
@@ -165,7 +175,14 @@ public sealed class TicketsController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<TicketDto>> GetById(int id, CancellationToken ct)
     {
-        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+
+        if (accessError is not null)
+            return accessError;
+
+        var entity = await _db.Tickets
+            .ApplyVisibility(visibilityContext)
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         if (entity is null)
             return TicketNotFound(id);
@@ -182,6 +199,11 @@ public sealed class TicketsController : ControllerBase
         if (errors.Count > 0)
             return ValidationError(errors);
 
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(currentUserId))
+            return Unauthorized();
+
         var nextNumber = $"HDH-{DateTime.UtcNow:yyyyMMddHHmmss}";
 
         var entity = new Ticket
@@ -191,7 +213,8 @@ public sealed class TicketsController : ControllerBase
             Description = dto.Description.Trim(),
             Priority = dto.Priority,
             Status = "New",
-            CreatedAtUtc = DateTime.UtcNow
+            CreatedAtUtc = DateTime.UtcNow,
+            RequesterUserId = currentUserId
         };
 
         await _slaCalculator.ApplySlaAsync(entity, ct);
@@ -305,6 +328,26 @@ public sealed class TicketsController : ControllerBase
         "High",
         "Critical"
     ];
+
+    private ActionResult? ResolveTicketVisibility(out TicketVisibilityContext context)
+    {
+        var resolution = _ticketVisibilityContextResolver.Resolve(User);
+
+        if (resolution.Status == TicketVisibilityResolutionStatus.Unauthorized)
+        {
+            context = null!;
+            return Unauthorized();
+        }
+
+        if (resolution.Status == TicketVisibilityResolutionStatus.Forbidden)
+        {
+            context = null!;
+            return Forbid();
+        }
+
+        context = resolution.Context!;
+        return null;
+    }
 
     private static readonly string[] AllowedStatuses =
     [
