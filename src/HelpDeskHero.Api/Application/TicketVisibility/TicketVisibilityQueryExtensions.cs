@@ -13,7 +13,9 @@ public static class TicketVisibilityQueryExtensions
             TicketVisibilityScope.Own =>
                 query.Where(ticket => ticket.RequesterUserId == context.UserId),
             TicketVisibilityScope.Assigned =>
-                query.Where(ticket => ticket.AssignedToUserId == context.UserId),
+                query.Where(ticket =>
+                    ticket.AssignedToUserId == context.UserId ||
+                    ticket.RequesterUserId == context.UserId),
             TicketVisibilityScope.All => query,
             _ => throw new ArgumentOutOfRangeException(nameof(context))
         };

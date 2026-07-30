@@ -51,7 +51,7 @@ public sealed class TicketVisibilityTests
     }
 
     [Fact]
-    public async Task GetTickets_AsAgent_ReturnsOnlyAssignedTickets()
+    public async Task GetTickets_AsAgent_ReturnsAssignedAndRequestedTickets()
     {
         var agentAId = await GetUserIdAsync("agent");
         var agentBId = await GetUserIdAsync("agent1");
@@ -60,13 +60,15 @@ public sealed class TicketVisibilityTests
         var tickets = await SeedTicketsAsync(
             new TicketSeed($"{marker}-assigned-a", null, agentAId),
             new TicketSeed($"{marker}-assigned-b", requesterId, agentBId),
-            new TicketSeed($"{marker}-unassigned", agentAId, null));
+            new TicketSeed($"{marker}-requested-a", agentAId, null),
+            new TicketSeed($"{marker}-unrelated", requesterId, null));
         await LoginAsync("agent", "Agent123!");
 
         var result = await GetPageAsync(marker);
 
-        result.TotalCount.Should().Be(1);
-        result.Items.Select(x => x.Id).Should().Equal(tickets[0].Id);
+        result.TotalCount.Should().Be(2);
+        result.Items.Select(x => x.Id).Should()
+            .BeEquivalentTo([tickets[0].Id, tickets[2].Id]);
     }
 
     [Fact]
@@ -110,7 +112,7 @@ public sealed class TicketVisibilityTests
     }
 
     [Fact]
-    public async Task GetTicketById_AsAgent_HidesOtherAndUnassignedTickets()
+    public async Task GetTicketById_AsAgent_ReturnsAssignedAndRequestedTickets()
     {
         var agentAId = await GetUserIdAsync("agent");
         var agentBId = await GetUserIdAsync("agent1");
@@ -118,14 +120,17 @@ public sealed class TicketVisibilityTests
         var tickets = await SeedTicketsAsync(
             new TicketSeed($"{marker}-assigned-a", null, agentAId),
             new TicketSeed($"{marker}-assigned-b", agentAId, agentBId),
-            new TicketSeed($"{marker}-unassigned", agentAId, null));
+            new TicketSeed($"{marker}-requested-a", agentAId, null),
+            new TicketSeed($"{marker}-unrelated", null, null));
         await LoginAsync("agent", "Agent123!");
 
         (await _client.GetAsync($"/api/tickets/{tickets[0].Id}"))
             .StatusCode.Should().Be(HttpStatusCode.OK);
         (await _client.GetAsync($"/api/tickets/{tickets[1].Id}"))
-            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+            .StatusCode.Should().Be(HttpStatusCode.OK);
         (await _client.GetAsync($"/api/tickets/{tickets[2].Id}"))
+            .StatusCode.Should().Be(HttpStatusCode.OK);
+        (await _client.GetAsync($"/api/tickets/{tickets[3].Id}"))
             .StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
@@ -146,6 +151,47 @@ public sealed class TicketVisibilityTests
             (await _client.GetAsync($"/api/tickets/{ticket.Id}"))
                 .StatusCode.Should().Be(HttpStatusCode.OK);
         }
+    }
+
+    [Fact]
+    public async Task TicketResponses_IncludeAssignedAgentAndPreserveCapabilities()
+    {
+        var agentId = await GetUserIdAsync("agent");
+        var agentDisplayName = await GetDisplayNameAsync("agent");
+        var marker = $"assignment-{Guid.NewGuid():N}";
+        var tickets = await SeedTicketsAsync(
+            new TicketSeed($"{marker}-assigned", null, agentId),
+            new TicketSeed($"{marker}-unassigned", null, null));
+        await LoginAsync("admin", "Admin1234");
+
+        var list = await GetPageAsync(marker);
+        var assignedListItem = list.Items.Single(x => x.Id == tickets[0].Id);
+        var unassignedListItem = list.Items.Single(x => x.Id == tickets[1].Id);
+        var assignedDetails = await _client.GetFromJsonAsync<TicketDto>(
+            $"/api/tickets/{tickets[0].Id}");
+        var unassignedDetails = await _client.GetFromJsonAsync<TicketDto>(
+            $"/api/tickets/{tickets[1].Id}");
+
+        assignedListItem.AssignedToUserId.Should().Be(agentId);
+        assignedListItem.AssignedToDisplayName.Should().Be(agentDisplayName);
+        assignedDetails.Should().NotBeNull();
+        assignedDetails!.AssignedToUserId.Should().Be(agentId);
+        assignedDetails.AssignedToDisplayName.Should().Be(agentDisplayName);
+
+        unassignedListItem.AssignedToUserId.Should().BeNull();
+        unassignedListItem.AssignedToDisplayName.Should().BeNull();
+        unassignedDetails.Should().NotBeNull();
+        unassignedDetails!.AssignedToUserId.Should().BeNull();
+        unassignedDetails.AssignedToDisplayName.Should().BeNull();
+
+        assignedListItem.CanEdit.Should().BeTrue();
+        assignedListItem.CanStart.Should().BeTrue();
+        assignedListItem.CanResolve.Should().BeFalse();
+        assignedDetails.CanEdit.Should().Be(assignedListItem.CanEdit);
+        assignedDetails.CanStart.Should().Be(assignedListItem.CanStart);
+        assignedDetails.CanResolve.Should().Be(assignedListItem.CanResolve);
+        assignedDetails.CanClose.Should().Be(assignedListItem.CanClose);
+        assignedDetails.CanReopen.Should().Be(assignedListItem.CanReopen);
     }
 
     [Fact]
@@ -245,6 +291,16 @@ public sealed class TicketVisibilityTests
         return await db.Users
             .Where(x => x.UserName == userName)
             .Select(x => x.Id)
+            .SingleAsync();
+    }
+
+    private async Task<string> GetDisplayNameAsync(string userName)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        return await db.Users
+            .Where(x => x.UserName == userName)
+            .Select(x => x.DisplayName)
             .SingleAsync();
     }
 

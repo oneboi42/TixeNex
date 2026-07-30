@@ -1,4 +1,5 @@
 using FluentAssertions;
+using System.Security.Claims;
 using HelpDeskHero.Api.Application.Interfaces;
 using HelpDeskHero.Api.Application.Services;
 using HelpDeskHero.Api.Application.TicketVisibility;
@@ -24,10 +25,12 @@ public sealed class TicketLifecycleTests
         await using var db = CreateContext();
         var ticket = await AddTicketAsync(db, "New");
 
-        var result = await UpdateStatusAsync(db, ticket, "InProgress");
+        var result = await ChangeStatusAsync(db, ticket, "start");
 
         result.Should().BeOfType<NoContentResult>();
-        (await db.Tickets.SingleAsync()).Status.Should().Be("InProgress");
+        var updated = await db.Tickets.SingleAsync();
+        updated.Status.Should().Be("InProgress");
+        updated.FirstRespondedAtUtc.Should().NotBeNull();
     }
 
     [Fact]
@@ -36,7 +39,7 @@ public sealed class TicketLifecycleTests
         await using var db = CreateContext();
         var ticket = await AddTicketAsync(db, "InProgress");
 
-        await UpdateStatusAsync(db, ticket, "Resolved");
+        await ChangeStatusAsync(db, ticket, "resolve");
 
         var updated = await db.Tickets.SingleAsync();
         updated.Status.Should().Be("Resolved");
@@ -50,7 +53,7 @@ public sealed class TicketLifecycleTests
         var resolvedAtUtc = DateTime.UtcNow.AddMinutes(-5);
         var ticket = await AddTicketAsync(db, "Resolved", resolvedAtUtc);
 
-        await UpdateStatusAsync(db, ticket, "Closed");
+        await ChangeStatusAsync(db, ticket, "close");
 
         var updated = await db.Tickets.SingleAsync();
         updated.Status.Should().Be("Closed");
@@ -63,7 +66,7 @@ public sealed class TicketLifecycleTests
         await using var db = CreateContext();
         var ticket = await AddTicketAsync(db, "Resolved", DateTime.UtcNow.AddMinutes(-5));
 
-        await UpdateStatusAsync(db, ticket, "InProgress");
+        await ChangeStatusAsync(db, ticket, "reopen");
 
         var updated = await db.Tickets.SingleAsync();
         updated.Status.Should().Be("InProgress");
@@ -86,9 +89,17 @@ public sealed class TicketLifecycleTests
         (await db.OutboxMessages.CountAsync()).Should().Be(1);
     }
 
-    private static async Task<IActionResult> UpdateStatusAsync(AppDbContext db, Ticket ticket, string status)
+    private static async Task<IActionResult> ChangeStatusAsync(AppDbContext db, Ticket ticket, string action)
     {
-        var httpContext = new DefaultHttpContext();
+        var httpContext = new DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(
+                [
+                    new Claim(ClaimTypes.NameIdentifier, "admin"),
+                    new Claim(ClaimTypes.Role, "Admin")
+                ],
+                "TestAuth"))
+        };
         var controller = new TicketsController(
             db,
             new AuditService(db, new HttpContextAccessor { HttpContext = httpContext }),
@@ -101,14 +112,19 @@ public sealed class TicketLifecycleTests
             ControllerContext = new ControllerContext { HttpContext = httpContext }
         };
 
-        return await controller.Update(ticket.Id, new UpdateTicketDto
+        var dto = new TicketLifecycleRequestDto
         {
-            Title = ticket.Title,
-            Description = ticket.Description,
-            Priority = ticket.Priority,
-            Status = status,
             RowVersionBase64 = Convert.ToBase64String(ticket.RowVersion)
-        }, default);
+        };
+
+        return action switch
+        {
+            "start" => await controller.Start(ticket.Id, dto, default),
+            "resolve" => await controller.Resolve(ticket.Id, dto, default),
+            "close" => await controller.Close(ticket.Id, dto, default),
+            "reopen" => await controller.Reopen(ticket.Id, dto, default),
+            _ => throw new ArgumentOutOfRangeException(nameof(action))
+        };
     }
 
     private static async Task<Ticket> AddTicketAsync(

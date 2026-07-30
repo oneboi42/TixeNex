@@ -39,17 +39,6 @@ else if (_model is not null)
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Status</label>
-                    <InputSelect class="form-select" @bind-Value="_model.Status">
-                        <option value="New">New</option>
-                        <option value="InProgress">InProgress</option>
-                        <option value="Resolved">Resolved</option>
-                        <option value="Closed">Closed</option>
-                    </InputSelect>
-                    <ValidationMessage For="@(() => _model.Status)" />
-                </div>
-
-                <div class="mb-3">
                     <label class="form-label">Priorytet</label>
                     <InputSelect class="form-select" @bind-Value="_model.Priority">
                         <option value="Low">Low</option>
@@ -115,6 +104,13 @@ else if (_model is not null)
             {
                 _model = null;
                 _error = "Nie znaleziono zgłoszenia.";
+                return;
+            }
+
+            if (!dto.CanEdit)
+            {
+                _model = null;
+                _error = "Brak uprawnień do edycji zgłoszenia.";
                 return;
             }
 

@@ -42,6 +42,30 @@ public sealed class TicketApiClient : ITicketApiClient
         CancellationToken ct = default) =>
         await _http.PutAsJsonAsync($"api/tickets/{id}", dto, ct);
 
+    public Task<HttpResponseMessage> StartAsync(
+        int id,
+        TicketLifecycleRequestDto dto,
+        CancellationToken ct = default) =>
+        PostLifecycleAsync(id, "start", dto, ct);
+
+    public Task<HttpResponseMessage> ResolveAsync(
+        int id,
+        TicketLifecycleRequestDto dto,
+        CancellationToken ct = default) =>
+        PostLifecycleAsync(id, "resolve", dto, ct);
+
+    public Task<HttpResponseMessage> CloseAsync(
+        int id,
+        TicketLifecycleRequestDto dto,
+        CancellationToken ct = default) =>
+        PostLifecycleAsync(id, "close", dto, ct);
+
+    public Task<HttpResponseMessage> ReopenAsync(
+        int id,
+        TicketLifecycleRequestDto dto,
+        CancellationToken ct = default) =>
+        PostLifecycleAsync(id, "reopen", dto, ct);
+
     public async Task<HttpResponseMessage> DeleteAsync(
         int id,
         CancellationToken ct = default) =>
@@ -79,5 +103,14 @@ public sealed class TicketApiClient : ITicketApiClient
             : "";
 
         return await _http.GetAsync($"api/tickets/export{queryString}", ct);
+    }
+
+    private async Task<HttpResponseMessage> PostLifecycleAsync(
+        int id,
+        string action,
+        TicketLifecycleRequestDto dto,
+        CancellationToken ct)
+    {
+        return await _http.PostAsJsonAsync($"api/tickets/{id}/{action}", dto, ct);
     }
 }

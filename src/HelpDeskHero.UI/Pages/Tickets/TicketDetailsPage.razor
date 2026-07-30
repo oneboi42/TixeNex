@@ -40,29 +40,31 @@ else if (_ticket is not null)
                     <PriorityBadge Priority="@_ticket.Priority" />
                 </dd>
 
+                <dt class="col-sm-3">Assigned to</dt>
+                <dd class="col-sm-9">@(_ticket.AssignedToDisplayName ?? "Unassigned")</dd>
+
                 <dt class="col-sm-3">Description</dt>
                 <dd class="col-sm-9">@_ticket.Description</dd>
             </dl>
 
             <div class="d-flex gap-2 mt-3">
-                <AuthorizeView Roles="Admin,Agent">
-                    <Authorized>
-                        @foreach (var action in GetLifecycleActions(_ticket.Status))
-                        {
-                            <button class="btn btn-success"
-                                    disabled="@_lifecycleBusy"
-                                    @onclick="() => ChangeStatusAsync(action.TargetStatus)">
-                                @(_lifecycleBusy ? "Saving..." : action.Label)
-                            </button>
-                        }
+                @foreach (var action in GetLifecycleActions(_ticket))
+                {
+                    <button class="btn btn-success"
+                            disabled="@_lifecycleBusy"
+                            @onclick="() => ChangeStatusAsync(action)">
+                        @(_lifecycleBusy ? "Saving..." : action.Label)
+                    </button>
+                }
 
+                @if (_ticket.CanEdit)
+                {
                         <button class="btn btn-primary"
                                 disabled="@_lifecycleBusy"
                                 @onclick='() => Nav.NavigateTo($"/tickets/edit/{Id}")'>
                             Edit
                         </button>
-                    </Authorized>
-                </AuthorizeView>
+                }
 
                 <button class="btn btn-secondary"
                         @onclick='() => Nav.NavigateTo("/tickets")'>
@@ -98,7 +100,7 @@ else if (_ticket is not null)
 
     protected override Task OnParametersSetAsync() => LoadTicketAsync();
 
-    private async Task ChangeStatusAsync(string targetStatus)
+    private async Task ChangeStatusAsync(LifecycleAction action)
     {
         if (_ticket is null || _lifecycleBusy)
             return;
@@ -108,19 +110,23 @@ else if (_ticket is not null)
 
         try
         {
-            var response = await TicketApi.UpdateAsync(Id, new UpdateTicketDto
+            var request = new TicketLifecycleRequestDto
             {
-                Title = _ticket.Title,
-                Description = _ticket.Description,
-                Priority = _ticket.Priority,
-                Status = targetStatus,
                 RowVersionBase64 = _ticket.RowVersionBase64
-            });
+            };
+            var response = action.Action switch
+            {
+                "start" => await TicketApi.StartAsync(Id, request),
+                "resolve" => await TicketApi.ResolveAsync(Id, request),
+                "close" => await TicketApi.CloseAsync(Id, request),
+                "reopen" => await TicketApi.ReopenAsync(Id, request),
+                _ => throw new InvalidOperationException("Unknown lifecycle action.")
+            };
 
             if (response.IsSuccessStatusCode)
             {
                 await LoadTicketAsync();
-                _toastMessage = $"Ticket status changed to {targetStatus}.";
+                _toastMessage = $"Ticket status changed to {action.TargetStatus}.";
                 _toastVersion++;
                 _toastVisible = true;
                 return;
@@ -145,15 +151,23 @@ else if (_ticket is not null)
         }
     }
 
-    private static IReadOnlyList<LifecycleAction> GetLifecycleActions(string status) => status switch
+    private static IReadOnlyList<LifecycleAction> GetLifecycleActions(TicketDto ticket)
     {
-        "New" => [new("Start work", "InProgress")],
-        "InProgress" => [new("Resolve", "Resolved")],
-        "Resolved" => [new("Close", "Closed"), new("Reopen", "InProgress")],
-        _ => []
-    };
+        var actions = new List<LifecycleAction>();
 
-    private sealed record LifecycleAction(string Label, string TargetStatus);
+        if (ticket.CanStart)
+            actions.Add(new("Start work", "start", "InProgress"));
+        if (ticket.CanResolve)
+            actions.Add(new("Resolve", "resolve", "Resolved"));
+        if (ticket.CanClose)
+            actions.Add(new("Close", "close", "Closed"));
+        if (ticket.CanReopen)
+            actions.Add(new("Reopen", "reopen", "InProgress"));
+
+        return actions;
+    }
+
+    private sealed record LifecycleAction(string Label, string Action, string TargetStatus);
 
     private async Task LoadTicketAsync()
     {
