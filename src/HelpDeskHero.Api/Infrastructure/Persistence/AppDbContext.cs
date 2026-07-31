@@ -34,6 +34,18 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
             b.Property(x => x.CreatedAtUtc).IsRequired();
         });
 
+        modelBuilder.Entity<ExportJob>(b =>
+        {
+            b.Property(x => x.ResourceType)
+                .HasDefaultValue(ExportResourceType.Tickets);
+            b.Property(x => x.Format)
+                .HasDefaultValue(ExportFormat.Csv);
+            b.Property(x => x.Scope)
+                .HasDefaultValue(ExportScope.All);
+            b.Property(x => x.ErrorMessage)
+                .HasMaxLength(2000);
+        });
+
         modelBuilder.Entity<Ticket>(b =>
         {
             b.ToTable("Tickets");
