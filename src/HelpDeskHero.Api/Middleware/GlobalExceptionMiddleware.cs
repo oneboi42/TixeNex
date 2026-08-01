@@ -26,7 +26,7 @@ public sealed class GlobalExceptionMiddleware
                 context,
                 HttpStatusCode.Conflict,
                 "Konflikt danych",
-                "Dane zostały zmienione przez innego użytkownika. Odśwież widok i spróbuj ponownie.",
+                "The data was changed by another user. Refresh the page and try again.",
                 "concurrency_conflict");
         }
         catch (Exception)
@@ -34,8 +34,8 @@ public sealed class GlobalExceptionMiddleware
             await WriteProblemAsync(
                 context,
                 HttpStatusCode.InternalServerError,
-                "Błąd serwera",
-                "Wystąpił nieoczekiwany błąd serwera.",
+                "Server error",
+                "An unexpected server error occurred.",
                 "server_error");
         }
     }

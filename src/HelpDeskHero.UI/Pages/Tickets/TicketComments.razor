@@ -83,7 +83,7 @@
         }
         catch
         {
-            _error = "Nie udalo sie pobrac komentarzy.";
+            _error = "Failed to load comments.";
         }
         finally
         {
@@ -96,13 +96,13 @@
         var body = _newComment.Body.Trim();
         if (string.IsNullOrWhiteSpace(body))
         {
-            _error = "Komentarz nie moze byc pusty.";
+            _error = "The comment cannot be empty.";
             return;
         }
 
         if (body.Length > 4000)
         {
-            _error = "Komentarz nie moze przekraczac 4000 znakow.";
+            _error = "The comment cannot exceed 4,000 characters.";
             return;
         }
 
@@ -119,7 +119,7 @@
 
             if (!response.IsSuccessStatusCode)
             {
-                _error = "Nie udalo sie dodac komentarza.";
+                _error = "Failed to add the comment.";
                 return;
             }
 
@@ -134,7 +134,7 @@
         }
         catch
         {
-            _error = "Nie udalo sie dodac komentarza.";
+            _error = "Failed to add the comment.";
         }
         finally
         {

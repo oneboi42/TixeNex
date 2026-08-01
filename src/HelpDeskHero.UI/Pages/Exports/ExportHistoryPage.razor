@@ -44,7 +44,7 @@
         <div class="card-body">
             <div class="row g-3 align-items-end">
                 <div class="col-md-4">
-                    <label class="form-label">Zasób</label>
+                    <label class="form-label">Resource</label>
                     <div class="form-control-plaintext">
                         @GetResourceTypeLabel(_selectedResourceType)
                     </div>
@@ -58,7 +58,7 @@
                 </div>
 
                 <div class="col-md-4">
-                    <label class="form-label">Zakres</label>
+                    <label class="form-label">Scope</label>
                     @if (_options.AllowedScopes.Count > 1)
                     {
                         <select class="form-select"
@@ -175,9 +175,9 @@ else
             <thead>
                 <tr>
                     <th>File name</th>
-                    <th>Zasób</th>
+                    <th>Resource</th>
                     <th>Format</th>
-                    <th>Zakres</th>
+                    <th>Scope</th>
                     <th>Status</th>
                     <th>Created at</th>
                     <th>Completed at</th>
@@ -370,13 +370,13 @@ else
         {
             _options = null;
             _optionsError =
-                "Nie udało się pobrać dostępnych opcji eksportu.";
+                "Failed to load the available export options.";
         }
         catch (Exception)
         {
             _options = null;
             _optionsError =
-                "Wystąpił nieoczekiwany błąd podczas ładowania opcji eksportu.";
+                "An unexpected error occurred while loading export options.";
         }
         finally
         {
@@ -594,7 +594,7 @@ else
     private static string GetResourceTypeLabel(string resourceType) =>
         resourceType switch
         {
-            "Tickets" => "Zgłoszenia",
+            "Tickets" => "Tickets",
             _ => resourceType
         };
 
@@ -608,9 +608,9 @@ else
     private static string GetScopeLabel(string scope) =>
         scope switch
         {
-            "Own" => "Własne zgłoszenia",
-            "Assigned" => "Przypisane zgłoszenia",
-            "All" => "Wszystkie zgłoszenia",
+            "Own" => "Own tickets",
+            "Assigned" => "Assigned tickets",
+            "All" => "All tickets",
             _ => scope
         };
 

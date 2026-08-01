@@ -28,13 +28,13 @@
     </div>
 
     <div class="mb-3">
-        <label class="form-label">Hasło</label>
+        <label class="form-label">Password</label>
         <InputText class="form-control" type="password" @bind-Value="_model.Password" />
         <ValidationMessage For="@(() => _model.Password)" />
     </div>
 
     <button class="btn btn-primary" type="submit" disabled="@_busy">
-        @(_busy ? "Logowanie..." : "Zaloguj")
+        @(_busy ? "Signing in..." : "Sign in")
     </button>
 </EditForm>
 
@@ -61,7 +61,7 @@
 
             if (!ok)
             {
-                _error = "Nieprawidłowy login lub hasło.";
+                _error = "Invalid username or password.";
                 return;
             }
 
@@ -69,7 +69,7 @@
         }
         catch (Exception ex)
         {
-            _error = $"Błąd logowania: {ex.Message}";
+            _error = $"Sign-in error: {ex.Message}";
         }
         finally
         {

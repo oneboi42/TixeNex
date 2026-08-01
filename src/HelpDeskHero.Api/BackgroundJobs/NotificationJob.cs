@@ -32,8 +32,8 @@ public sealed class NotificationJob : INotificationJob
             await _dispatcher.DispatchAsync(new NotificationMessage
             {
                 Channel = NotificationChannel.InApp,
-                Subject = $"Nowe zgloszenie: {ticket.Number}",
-                Body = $"Utworzono zgloszenie {ticket.Number} - {ticket.Title}",
+                Subject = $"New ticket: {ticket.Number}",
+                Body = $"Ticket {ticket.Number} was created - {ticket.Title}",
                 UserId = userId
             }, ct);
         }
@@ -52,8 +52,8 @@ public sealed class NotificationJob : INotificationJob
             await _dispatcher.DispatchAsync(new NotificationMessage
             {
                 Channel = NotificationChannel.InApp,
-                Subject = "HelpDeskHero - podsumowanie dzienne",
-                Body = $"Otwarte zgloszenia: {openCount}",
+                Subject = "HelpDeskHero - daily summary",
+                Body = $"Open tickets: {openCount}",
                 UserId = userId
             }, ct);
         }
@@ -122,8 +122,8 @@ public sealed class NotificationJob : INotificationJob
             await _dispatcher.DispatchAsync(new NotificationMessage
             {
                 Channel = NotificationChannel.InApp,
-                Subject = $"Nowa odpowiedz w zgloszeniu {ticket.Number}",
-                Body = $"Otrzymano nowa odpowiedz w zgloszeniu {ticket.Number} - {ticket.Title}",
+                Subject = $"New reply on ticket {ticket.Number}",
+                Body = $"A new reply was added to ticket {ticket.Number} - {ticket.Title}",
                 UserId = userId
             }, ct);
         }

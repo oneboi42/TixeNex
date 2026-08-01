@@ -7,7 +7,7 @@ public static class ApiErrorMapper
 {
     public static async Task<string> ToMessageAsync(
         HttpResponseMessage response,
-        string fallbackMessage = "Wystąpił błąd podczas komunikacji z API.")
+        string fallbackMessage = "An error occurred while communicating with the API.")
     {
         var apiMessage = await TryReadProblemDetailsAsync(response);
 
@@ -16,12 +16,12 @@ public static class ApiErrorMapper
 
         return response.StatusCode switch
         {
-            HttpStatusCode.BadRequest => "Nieprawidłowe dane. Sprawdź formularz i spróbuj ponownie.",
-            HttpStatusCode.Unauthorized => "Sesja wygasła. Zaloguj się ponownie.",
-            HttpStatusCode.Forbidden => "Brak uprawnień do wykonania tej operacji.",
-            HttpStatusCode.NotFound => "Nie znaleziono wymaganego zasobu.",
-            HttpStatusCode.Conflict => "Dane zostały zmienione przez innego użytkownika. Odśwież widok i spróbuj ponownie.",
-            HttpStatusCode.InternalServerError => "Wystąpił błąd serwera. Spróbuj ponownie później.",
+            HttpStatusCode.BadRequest => "Invalid data. Check the form and try again.",
+            HttpStatusCode.Unauthorized => "Your session has expired. Please sign in again.",
+            HttpStatusCode.Forbidden => "You do not have permission to perform this action.",
+            HttpStatusCode.NotFound => "The requested resource was not found.",
+            HttpStatusCode.Conflict => "The data was changed by another user. Refresh the page and try again.",
+            HttpStatusCode.InternalServerError => "A server error occurred. Please try again later.",
             _ => fallbackMessage
         };
     }

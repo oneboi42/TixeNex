@@ -11,11 +11,10 @@
     <h1>Ustawienia konta</h1>
 
     <section class="security-card">
-        <h2>Bezpieczeństwo</h2>
+        <h2>Security</h2>
 
         <p class="security-description">
-            Ta opcja wyloguje użytkownika ze wszystkich urządzeń poprzez unieważnienie
-            wszystkich aktywnych tokenów odświeżania.
+            This option signs you out on every device by revoking all active refresh tokens.
         </p>
 
         @if (!string.IsNullOrWhiteSpace(_error))
@@ -28,7 +27,7 @@
         <button class="btn btn-danger"
                 disabled="@_isLoading"
                 @onclick="ShowConfirm">
-            Wyloguj wszystkie urządzenia
+            Sign out on all devices
         </button>
     </section>
 </div>
@@ -40,21 +39,21 @@
             <h3>Potwierdzenie</h3>
 
             <p>
-                Czy na pewno chcesz wylogować wszystkie urządzenia?
-                Po wykonaniu tej operacji zostaniesz przekierowany na stronę logowania.
+                Are you sure you want to sign out on all devices?
+                You will be redirected to the sign-in page.
             </p>
 
             <div class="confirm-actions">
                 <button class="btn btn-secondary"
                         disabled="@_isLoading"
                         @onclick="HideConfirm">
-                    Anuluj
+                    Cancel
                 </button>
 
                 <button class="btn btn-danger"
                         disabled="@_isLoading"
                         @onclick="RevokeAllSessions">
-                    Tak, wyloguj
+                    Yes, sign out
                 </button>
             </div>
         </div>
@@ -91,7 +90,7 @@
         }
         catch
         {
-            _error = "Nie udało się wylogować wszystkich urządzeń.";
+            _error = "Failed to sign out on all devices.";
             _showConfirm = false;
         }
         finally

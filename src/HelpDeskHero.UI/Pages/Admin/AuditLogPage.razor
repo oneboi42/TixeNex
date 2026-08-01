@@ -12,25 +12,25 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
         <h3 class="mb-0">Audit Log</h3>
-        <div class="text-muted">Ostatnie operacje wykonane w systemie</div>
+        <div class="text-muted">Recent operations performed in the system</div>
     </div>
 
     <div class="d-flex gap-2">
         <button class="btn btn-outline-primary"
                 disabled="@_loading"
                 @onclick="LoadAsync">
-            Odśwież
+            Refresh
         </button>
 
         <NavLink class="btn btn-outline-secondary" href="tickets/deleted">
-            Przejdź do kosza
+            Go to recycle bin
         </NavLink>
     </div>
 </div>
 
 <div class="card mb-3">
     <div class="card-body">
-        <h5 class="card-title mb-3">Filtry</h5>
+        <h5 class="card-title mb-3">Filters</h5>
 
         <div class="row g-3">
             <div class="col-md-2">
@@ -38,7 +38,7 @@
                 <input id="actionFilter"
                        class="form-control"
                        @bind="_action"
-                       placeholder="np. Create" />
+                       placeholder="e.g. Create" />
             </div>
 
             <div class="col-md-2">
@@ -46,7 +46,7 @@
                 <input id="entityNameFilter"
                        class="form-control"
                        @bind="_entityName"
-                       placeholder="np. Ticket" />
+                       placeholder="e.g. Ticket" />
             </div>
 
             <div class="col-md-3">
@@ -54,7 +54,7 @@
                 <input id="performedByFilter"
                        class="form-control"
                        @bind="_performedBy"
-                       placeholder="nazwa użytkownika" />
+                       placeholder="username" />
             </div>
 
             <div class="col-md-2">
@@ -77,7 +77,7 @@
                 <button class="btn btn-primary w-100"
                         disabled="@_loading"
                         @onclick="LoadAsync">
-                    Szukaj
+                    Search
                 </button>
             </div>
         </div>
@@ -86,7 +86,7 @@
             <button class="btn btn-outline-secondary"
                     disabled="@_loading"
                     @onclick="ClearFiltersAsync">
-                Wyczyść filtry
+                Clear filters
             </button>
         </div>
     </div>
@@ -96,12 +96,12 @@
 
 @if (_loading)
 {
-    <LoadingSpinner Text="Ładowanie wpisów audytu..." />
+    <LoadingSpinner Text="Loading audit entries..." />
 }
 else if (_items.Count == 0)
 {
-    <EmptyState Title="Brak wpisów audytu"
-                Message="Nie znaleziono operacji pasujących do aktualnych filtrów." />
+    <EmptyState Title="No audit entries"
+                Message="No operations match the current filters." />
 }
 else
 {
@@ -109,13 +109,13 @@ else
         <table class="table table-striped align-middle">
             <thead>
                 <tr>
-                    <th>Data</th>
-                    <th>Akcja</th>
-                    <th>Encja</th>
-                    <th>ID encji</th>
-                    <th>Użytkownik</th>
+                    <th>Date</th>
+                    <th>Action</th>
+                    <th>Entity</th>
+                    <th>Entity ID</th>
+                    <th>User</th>
                     <th>IP</th>
-                    <th>Szczegóły</th>
+                    <th>Details</th>
                 </tr>
             </thead>
 
@@ -180,7 +180,7 @@ else
         }
         catch
         {
-            _error = "Nie udało się pobrać wpisów audytu.";
+            _error = "Failed to load audit entries.";
         }
         finally
         {

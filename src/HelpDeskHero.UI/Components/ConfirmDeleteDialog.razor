@@ -25,14 +25,14 @@
                             type="button"
                             disabled="@Busy"
                             @onclick="CancelAsync">
-                        Anuluj
+                        Cancel
                     </button>
 
                     <button class="btn btn-danger"
                             type="button"
                             disabled="@Busy"
                             @onclick="ConfirmAsync">
-                        @(Busy ? "Usuwanie..." : "Usuń")
+                        @(Busy ? "Deleting..." : "Delete")
                     </button>
                 </div>
 
@@ -49,10 +49,10 @@
     public bool Busy { get; set; }
 
     [Parameter]
-    public string Title { get; set; } = "Potwierdzenie usunięcia";
+    public string Title { get; set; } = "Confirm deletion";
 
     [Parameter]
-    public string Message { get; set; } = "Czy na pewno chcesz usunąć ten element?";
+    public string Message { get; set; } = "Are you sure you want to delete this item?";
 
     [Parameter]
     public EventCallback OnConfirm { get; set; }

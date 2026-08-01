@@ -2,7 +2,7 @@
 {
     <div class="text-center my-4">
         <div class="spinner-border" role="status">
-            <span class="visually-hidden">Ładowanie...</span>
+            <span class="visually-hidden">Loading...</span>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(Text))
@@ -17,5 +17,5 @@
     public bool Visible { get; set; } = true;
 
     [Parameter]
-    public string Text { get; set; } = "Ładowanie...";
+    public string Text { get; set; } = "Loading...";
 }

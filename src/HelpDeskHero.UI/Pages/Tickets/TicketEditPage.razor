@@ -8,15 +8,15 @@
 @inject HelpDeskHero.UI.Services.Api.ITicketApiClient TicketApi
 @inject NavigationManager Nav
 
-<PageTitle>Edycja zgłoszenia</PageTitle>
+<PageTitle>Edit ticket</PageTitle>
 
-<h3>Edycja zgłoszenia</h3>
+<h3>Edit ticket</h3>
 
 <ErrorBanner Message="@_error" />
 
 @if (_loading)
 {
-    <LoadingSpinner Text="Ładowanie zgłoszenia..." />
+    <LoadingSpinner Text="Loading ticket..." />
 }
 else if (_model is not null)
 {
@@ -27,19 +27,19 @@ else if (_model is not null)
         <div class="card">
             <div class="card-body">
                 <div class="mb-3">
-                    <label class="form-label">Tytuł</label>
+                    <label class="form-label">Title</label>
                     <InputText class="form-control" @bind-Value="_model.Title" />
                     <ValidationMessage For="@(() => _model.Title)" />
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Opis</label>
+                    <label class="form-label">Description</label>
                     <InputTextArea class="form-control" rows="5" @bind-Value="_model.Description" />
                     <ValidationMessage For="@(() => _model.Description)" />
                 </div>
 
                 <div class="mb-3">
-                    <label class="form-label">Priorytet</label>
+                    <label class="form-label">Priority</label>
                     <InputSelect class="form-select" @bind-Value="_model.Priority">
                         <option value="Low">Low</option>
                         <option value="Medium">Medium</option>
@@ -53,21 +53,21 @@ else if (_model is not null)
                     <button class="btn btn-primary"
                             type="submit"
                             disabled="@_saving">
-                        @(_saving ? "Zapisywanie..." : "Zapisz")
+                        @(_saving ? "Saving..." : "Save")
                     </button>
 
                     <button class="btn btn-outline-secondary"
                             type="button"
                             disabled="@_saving"
                             @onclick="ReloadAsync">
-                        Odśwież
+                        Refresh
                     </button>
 
                     <button class="btn btn-secondary"
                             type="button"
                             disabled="@_saving"
                             @onclick='() => Nav.NavigateTo($"/tickets/{Id}")'>
-                        Anuluj
+                        Cancel
                     </button>
                 </div>
             </div>
@@ -103,14 +103,14 @@ else if (_model is not null)
             if (dto is null)
             {
                 _model = null;
-                _error = "Nie znaleziono zgłoszenia.";
+                _error = "Ticket not found.";
                 return;
             }
 
             if (!dto.CanEdit)
             {
                 _model = null;
-                _error = "Brak uprawnień do edycji zgłoszenia.";
+                _error = "You do not have permission to edit this ticket.";
                 return;
             }
 
@@ -125,21 +125,21 @@ else if (_model is not null)
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            _error = "Sesja wygasła. Zaloguj się ponownie.";
+            _error = "Your session has expired. Please sign in again.";
             Nav.NavigateTo("/login");
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
         {
-            _error = "Brak uprawnień do edycji zgłoszenia.";
+            _error = "You do not have permission to edit this ticket.";
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             _model = null;
-            _error = "Nie znaleziono zgłoszenia.";
+            _error = "Ticket not found.";
         }
         catch
         {
-            _error = "Nie udało się pobrać zgłoszenia.";
+            _error = "Failed to load the ticket.";
         }
         finally
         {
@@ -167,11 +167,11 @@ else if (_model is not null)
 
             _error = await ApiErrorMapper.ToMessageAsync(
                 response,
-                "Nie udało się zapisać zmian.");
+                "Failed to save the changes.");
         }
         catch
         {
-            _error = "Wystąpił błąd podczas zapisu.";
+            _error = "An error occurred while saving.";
         }
         finally
         {

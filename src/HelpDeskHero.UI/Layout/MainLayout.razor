@@ -17,7 +17,7 @@
         <header class="app-topbar">
             <div>
                 <div class="app-title">HelpDeskHero</div>
-                <div class="app-subtitle">Panel obsługi zgłoszeń</div>
+                <div class="app-subtitle">Ticket support dashboard</div>
             </div>
 
             <AuthorizeView Context="topbarAuth">
@@ -34,14 +34,14 @@
                         </div>
 
                         <NavLink class="btn btn-outline-danger btn-sm" href="logout">
-                            Wyloguj
+                            Sign out
                         </NavLink>
                     </div>
                 </Authorized>
 
                 <NotAuthorized>
                     <NavLink class="btn btn-outline-primary btn-sm" href="login">
-                        Zaloguj
+                        Sign in
                     </NavLink>
                 </NotAuthorized>
             </AuthorizeView>
@@ -69,7 +69,7 @@
             ?? user.FindFirst(ClaimTypes.Name)?.Value
             ?? user.FindFirst("unique_name")?.Value
             ?? user.FindFirst("sub")?.Value
-            ?? "Użytkownik";
+            ?? "User";
     }
 
     private static string GetRole(ClaimsPrincipal user)
@@ -86,7 +86,7 @@
         return user.FindFirst(ClaimTypes.Role)?.Value
             ?? user.FindFirst("role")?.Value
             ?? user.FindFirst("roles")?.Value
-            ?? "Brak roli";
+            ?? "No role";
     }
 
     private bool _toastVisible;

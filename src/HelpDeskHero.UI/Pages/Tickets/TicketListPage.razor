@@ -14,18 +14,18 @@
 @inject ITicketsRealtimeClient Realtime
 
 
-<PageTitle>Zgłoszenia</PageTitle>
+<PageTitle>Tickets</PageTitle>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <h3 class="mb-0">Zgłoszenia</h3>
-        <div class="text-muted">Lista zgłoszeń w systemie HelpDeskHero</div>
+        <h3 class="mb-0">Tickets</h3>
+        <div class="text-muted">Tickets in HelpDeskHero</div>
     </div>
     <AuthorizeView Roles="User,Agent,Admin">
         <Authorized>
             <div class="d-flex gap-2 flex-wrap justify-content-end">
                 <NavLink class="btn btn-outline-secondary" href="tickets/create">
-                    Nowe zgłoszenie
+                    New ticket
                 </NavLink>
                 <NavLink class="btn btn-outline-secondary" href="exports">
                     Export history
@@ -44,12 +44,12 @@
             <div class="col-md-4">
                 <InputText class="form-control"
                            @bind-Value="_query.Search"
-                           placeholder="Szukaj..." />
+                           placeholder="Search..." />
             </div>
 
             <div class="col-md-2">
                 <InputSelect class="form-select" @bind-Value="_query.Status">
-                    <option value="">Wszystkie statusy</option>
+                    <option value="">All statuses</option>
                     <option value="New">New</option>
                     <option value="InProgress">InProgress</option>
                     <option value="Resolved">Resolved</option>
@@ -59,7 +59,7 @@
 
             <div class="col-md-2">
                 <InputSelect class="form-select" @bind-Value="_query.Priority">
-                    <option value="">Wszystkie priorytety</option>
+                    <option value="">All priorities</option>
                     <option value="Low">Low</option>
                     <option value="Medium">Medium</option>
                     <option value="High">High</option>
@@ -71,7 +71,7 @@
                 <button class="btn btn-primary w-100"
                         disabled="@_loading"
                         @onclick="ReloadAsync">
-                    Filtruj
+                    Filter
                 </button>
             </div>
 
@@ -81,23 +81,23 @@
 
 @if (_loading)
 {
-    <LoadingSpinner Text="Ładowanie zgłoszeń..." />
+    <LoadingSpinner Text="Loading tickets..." />
 }
 else if (_result is null)
 {
-    <EmptyState Title="Brak danych"
-        Message="Nie udało się wyświetlić listy zgłoszeń." />
+    <EmptyState Title="No data"
+        Message="The ticket list could not be displayed." />
 }
 else
 {
     <div class="mb-2 text-muted">
-        Łącznie: @_result.TotalCount
+        Total: @_result.TotalCount
     </div>
 
     @if (!_result.Items.Any())
     {
-        <EmptyState Title="Nie znaleziono zgłoszeń"
-            Message="Zmień filtry albo utwórz nowe zgłoszenie." />
+        <EmptyState Title="No tickets found"
+            Message="Adjust the filters or create a new ticket." />
     }
     else
     {
@@ -106,12 +106,12 @@ else
                 <thead>
                     <tr>
                         <th>Nr</th>
-                        <th>Tytuł</th>
+                        <th>Title</th>
                         <th>Status</th>
-                        <th>Priorytet</th>
+                        <th>Priority</th>
                         <th>Assigned to</th>
-                        <th>Utworzono</th>
-                        <th class="text-end">Akcje</th>
+                        <th>Created</th>
+                        <th class="text-end">Actions</th>
                     </tr>
                 </thead>
 
@@ -147,7 +147,7 @@ else
                                 <div class="d-inline-flex gap-1">
                                     <button class="btn btn-outline-secondary"
                                             @onclick='() => Navigation.NavigateTo($"/tickets/{item.Id}")'>
-                                        Szczegóły
+                                        Details
                                     </button>
 
                                     @if (item.CanEdit)
@@ -155,7 +155,7 @@ else
                                         <button class="btn btn-outline-primary"
                                                 disabled="@IsLifecycleBusy(item.Id)"
                                                 @onclick='() => Navigation.NavigateTo($"/tickets/edit/{item.Id}")'>
-                                            Edytuj
+                                            Edit
                                         </button>
                                     }
 
@@ -174,7 +174,7 @@ else
                                         <span class="ms-2">
                                             <button class="btn btn-sm btn-outline-danger"
                                                     @onclick="() => AskDelete(item)">
-                                                Usuń
+                                                Delete
                                             </button>
                                         </span>
                                     </Authorized>
@@ -191,15 +191,15 @@ else
         <button class="btn btn-outline-secondary"
                 disabled="@(_query.PageNumber <= 1 || _loading)"
                 @onclick="PrevAsync">
-            Poprzednia
+            Previous
         </button>
 
-        <span>Strona @_query.PageNumber</span>
+        <span>Page @_query.PageNumber</span>
 
         <button class="btn btn-outline-secondary"
                 disabled="@((_query.PageNumber * _query.PageSize) >= _result.TotalCount || _loading)"
                 @onclick="NextAsync">
-            Następna
+            Next
         </button>
     </div>
 }
@@ -213,7 +213,7 @@ else
 
 <ConfirmDeleteDialog Visible="@_showDeleteDialog"
                      Busy="@_deleteBusy"
-                     Title="Usuwanie zgłoszenia"
+                     Title="Delete ticket"
                      Message="@_deleteMessage"
                      OnConfirm="DeleteAsync"
                      OnCancel="CancelDelete" />
@@ -237,7 +237,7 @@ else
     private int? _ticketIdToDelete;
     private readonly HashSet<int> _lifecycleBusyTicketIds = [];
     private string? _error;
-    private string _deleteMessage = "Czy na pewno chcesz usunąć to zgłoszenie?";
+    private string _deleteMessage = "Are you sure you want to delete this ticket?";
 
     protected override async Task OnInitializedAsync()
     {
@@ -265,7 +265,7 @@ else
         }
         catch
         {
-            _error = "Nie udało się pobrać listy zgłoszeń.";
+            _error = "Failed to load the ticket list.";
         }
         finally
         {
@@ -281,7 +281,7 @@ else
         }
         catch
         {
-            _error ??= "Nie udało się połączyć z aktualizacjami na żywo.";
+            _error ??= "Failed to connect to live updates.";
         }
     }
 
@@ -312,7 +312,7 @@ else
     private void AskDelete(TicketDto ticket)
     {
         _ticketIdToDelete = ticket.Id;
-        _deleteMessage = $"Czy na pewno chcesz usunąć zgłoszenie {ticket.Number}?";
+        _deleteMessage = $"Are you sure you want to delete ticket {ticket.Number}?";
         _showDeleteDialog = true;
     }
 
@@ -336,20 +336,20 @@ else
 
             if (!response.IsSuccessStatusCode)
             {
-                _error = "Nie udało się usunąć zgłoszenia.";
+                _error = "Failed to delete the ticket.";
                 return;
             }
 
             _showDeleteDialog = false;
             _ticketIdToDelete = null;
 
-            ShowToast("success", "Usunięto zgłoszenie", "Zgłoszenie zostało przeniesione do kosza.");
+            ShowToast("success", "Ticket deleted", "The ticket was moved to the recycle bin.");
 
             await ReloadAsync();
         }
         catch
         {
-            _error = "Wystąpił błąd podczas usuwania zgłoszenia.";
+            _error = "An error occurred while deleting the ticket.";
         }
         finally
         {

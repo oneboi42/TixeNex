@@ -70,8 +70,8 @@ public sealed class NotificationsController : ControllerBase
         var problem = new ProblemDetails
         {
             Status = StatusCodes.Status401Unauthorized,
-            Title = "Brak identyfikatora uzytkownika",
-            Detail = "Token nie zawiera identyfikatora zalogowanego uzytkownika.",
+            Title = "Missing user ID",
+            Detail = "The token does not contain the signed-in user's ID.",
             Type = "https://httpstatuses.com/401",
             Instance = HttpContext.Request.Path
         };
@@ -86,8 +86,8 @@ public sealed class NotificationsController : ControllerBase
         var problem = new ProblemDetails
         {
             Status = StatusCodes.Status404NotFound,
-            Title = "Nie znaleziono powiadomienia",
-            Detail = $"Powiadomienie o ID {id} nie istnieje albo nie nalezy do zalogowanego uzytkownika.",
+            Title = "Notification not found",
+            Detail = $"The notification with ID {id} does not exist or does not belong to the signed-in user.",
             Type = "https://httpstatuses.com/404",
             Instance = HttpContext.Request.Path
         };

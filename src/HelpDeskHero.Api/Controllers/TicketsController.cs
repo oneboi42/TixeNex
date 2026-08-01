@@ -182,8 +182,8 @@ public sealed class TicketsController : ControllerBase
         {
             return BusinessProblem(
                 StatusCodes.Status400BadRequest,
-                "Ticket nie znajduje się w koszu",
-                "Nie można przywrócić zgłoszenia, które nie zostało usunięte.");
+                "Ticket is not in the recycle bin",
+                "A ticket that has not been deleted cannot be restored.");
         }
 
         ticket.IsDeleted = false;
@@ -309,7 +309,7 @@ public sealed class TicketsController : ControllerBase
             return BusinessProblem(
                 StatusCodes.Status409Conflict,
                 "Zmiana statusu wymaga dedykowanej akcji",
-                "Uzyj dedykowanego endpointu cyklu zycia zgłoszenia.",
+                "Use the dedicated ticket lifecycle endpoint.",
                 "status_change_requires_lifecycle_endpoint");
         }
 
@@ -454,7 +454,7 @@ public sealed class TicketsController : ControllerBase
             return BusinessProblem(
                 StatusCodes.Status409Conflict,
                 "Nieprawidlowa zmiana statusu",
-                $"Status {entity.Status} nie pozwala wykonac akcji {action}.",
+                $"Status {entity.Status} does not allow the {action} action.",
                 "invalid_status_transition");
         }
 
@@ -502,8 +502,8 @@ public sealed class TicketsController : ControllerBase
     {
         var details = new ValidationProblemDetails(errors)
         {
-            Title = "Nieprawidłowe dane zgłoszenia",
-            Detail = "Popraw błędy walidacji i spróbuj ponownie.",
+            Title = "Invalid ticket data",
+            Detail = "Correct the validation errors and try again.",
             Status = StatusCodes.Status400BadRequest,
             Type = "https://httpstatuses.com/400"
         };
@@ -517,8 +517,8 @@ public sealed class TicketsController : ControllerBase
     {
         return BusinessProblem(
             StatusCodes.Status404NotFound,
-            "Nie znaleziono zgłoszenia",
-            $"Zgłoszenie o ID {id} nie istnieje albo zostało usunięte.",
+            "Ticket not found",
+            $"The ticket with ID {id} does not exist or has been deleted.",
             "ticket_not_found");
     }
 
@@ -527,7 +527,7 @@ public sealed class TicketsController : ControllerBase
         return BusinessProblem(
             StatusCodes.Status409Conflict,
             "Konflikt danych",
-            "Zgłoszenie zostało zmienione przez innego użytkownika. Odśwież widok i spróbuj ponownie.",
+            "The ticket was changed by another user. Refresh the page and try again.",
             "concurrency_conflict");
     }
 

@@ -128,8 +128,8 @@ public sealed class TicketAttachmentsController : ControllerBase
     {
         var details = new ValidationProblemDetails(errors)
         {
-            Title = "Nieprawidlowy plik",
-            Detail = "Popraw bledy walidacji pliku i sprobuj ponownie.",
+            Title = "Invalid file",
+            Detail = "Correct the file validation errors and try again.",
             Status = StatusCodes.Status400BadRequest,
             Type = "https://httpstatuses.com/400",
             Instance = HttpContext.Request.Path
@@ -145,8 +145,8 @@ public sealed class TicketAttachmentsController : ControllerBase
         var problem = new ProblemDetails
         {
             Status = StatusCodes.Status404NotFound,
-            Title = "Nie znaleziono zgloszenia",
-            Detail = $"Zgloszenie o ID {ticketId} nie istnieje albo zostalo usuniete.",
+            Title = "Ticket not found",
+            Detail = $"The ticket with ID {ticketId} does not exist or has been deleted.",
             Type = "https://httpstatuses.com/404",
             Instance = HttpContext.Request.Path
         };
@@ -161,8 +161,8 @@ public sealed class TicketAttachmentsController : ControllerBase
         var problem = new ProblemDetails
         {
             Status = StatusCodes.Status404NotFound,
-            Title = "Nie znaleziono zalacznika",
-            Detail = $"Zalacznik o ID {attachmentId} nie istnieje albo nie nalezy do tego zgloszenia.",
+            Title = "Attachment not found",
+            Detail = $"The attachment with ID {attachmentId} does not exist or does not belong to this ticket.",
             Type = "https://httpstatuses.com/404",
             Instance = HttpContext.Request.Path
         };
@@ -177,8 +177,8 @@ public sealed class TicketAttachmentsController : ControllerBase
         var problem = new ProblemDetails
         {
             Status = StatusCodes.Status401Unauthorized,
-            Title = "Brak identyfikatora uzytkownika",
-            Detail = "Token nie zawiera identyfikatora zalogowanego uzytkownika.",
+            Title = "Missing user ID",
+            Detail = "The token does not contain the signed-in user's ID.",
             Type = "https://httpstatuses.com/401",
             Instance = HttpContext.Request.Path
         };

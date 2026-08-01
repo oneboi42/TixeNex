@@ -8,16 +8,16 @@
 @inject ITicketApiClient TicketApi
 @inject NavigationManager Navigation
 
-<PageTitle>Usunięte zgłoszenia</PageTitle>
+<PageTitle>Deleted tickets</PageTitle>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <div>
-        <h3 class="mb-0">Usunięte zgłoszenia</h3>
-        <div class="text-muted">Lista zgłoszeń usuniętych przez soft delete</div>
+        <h3 class="mb-0">Deleted tickets</h3>
+        <div class="text-muted">Tickets in the recycle bin</div>
     </div>
 
     <NavLink class="btn btn-outline-secondary" href="tickets">
-        Powrót do listy
+        Back to ticket list
     </NavLink>
 </div>
 
@@ -25,12 +25,12 @@
 
 @if (_loading)
 {
-    <LoadingSpinner Text="Ładowanie usuniętych zgłoszeń..." />
+    <LoadingSpinner Text="Loading deleted tickets..." />
 }
 else if (!_items.Any())
 {
-    <EmptyState Title="Kosz jest pusty"
-                Message="Nie ma żadnych usuniętych zgłoszeń." />
+    <EmptyState Title="The recycle bin is empty"
+                Message="There are no deleted tickets." />
 }
 else
 {
@@ -38,12 +38,12 @@ else
         <table class="table table-striped align-middle">
             <thead>
                 <tr>
-                    <th>Nr</th>
-                    <th>Tytuł</th>
+                    <th>Number</th>
+                    <th>Title</th>
                     <th>Status</th>
-                    <th>Priorytet</th>
-                    <th>Utworzono</th>
-                    <th class="text-end">Akcje</th>
+                    <th>Priority</th>
+                    <th>Created</th>
+                    <th class="text-end">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -115,7 +115,7 @@ else
         }
         catch
         {
-            _error = "Nie udało się pobrać usuniętych zgłoszeń.";
+            _error = "Failed to load deleted tickets.";
         }
         finally
         {
@@ -134,17 +134,17 @@ else
 
             if (!response.IsSuccessStatusCode)
             {
-                _error = "Nie udało się przywrócić zgłoszenia.";
+                _error = "Failed to restore the ticket.";
                 return;
             }
 
-            ShowToast("success", "Przywrócono zgłoszenie", "Zgłoszenie wróciło na główną listę.");
+            ShowToast("success", "Ticket restored", "The ticket was returned to the main list.");
             
             await LoadAsync();
         }
         catch
         {
-            _error = "Wystąpił błąd podczas przywracania zgłoszenia.";
+            _error = "An error occurred while restoring the ticket.";
         }
         finally
         {

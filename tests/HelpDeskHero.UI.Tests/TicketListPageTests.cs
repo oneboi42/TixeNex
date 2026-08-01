@@ -35,7 +35,7 @@ public sealed class TicketListPageTests : BunitContext
 
         cut.WaitForAssertion(() =>
         {
-            cut.Find("a[href='tickets/create']").TextContent.Should().Contain("Nowe zgłoszenie");
+            cut.Find("a[href='tickets/create']").TextContent.Should().Contain("New ticket");
             cut.Find("a[href='exports']").TextContent.Should().Contain("Export history");
         });
     }
@@ -111,7 +111,7 @@ public sealed class TicketListPageTests : BunitContext
         var cut = RenderPage(api);
 
         cut.WaitForAssertion(() => cut.Markup.Should().Contain("Reopen"));
-        cut.Markup.Should().NotContain("Edytuj");
+        cut.Markup.Should().NotContain("Edit");
         cut.FindAll("button").Single(x => x.TextContent.Contains("Reopen")).Click();
         cut.WaitForAssertion(() => api.ReopenCalls.Should().Be(1));
     }
