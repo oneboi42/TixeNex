@@ -130,6 +130,41 @@ public sealed class ExportAuthorizationTests
         options.AllowedScopes.Should().Equal("All");
     }
 
+    [Theory]
+    [InlineData("All", typeof(AcceptedResult))]
+    [InlineData("Assigned", typeof(ForbidResult))]
+    public async Task CreateExport_AdminRoleTakesPrecedenceOverAgentRole(
+        string scope,
+        Type expectedResultType)
+    {
+        await using var db = CreateDbContext();
+        var controller = CreateController(
+            db,
+            new RecordingPublisher(),
+            "caller",
+            "Agent",
+            "Admin");
+
+        var result = await controller.CreateExport(
+            Request(scope),
+            CancellationToken.None);
+
+        result.Result.Should().BeOfType(expectedResultType);
+    }
+
+    [Fact]
+    public void CreateExportRequest_DoesNotExposeIdentityOrRoleFields()
+    {
+        var propertyNames = typeof(CreateExportRequestDto)
+            .GetProperties()
+            .Select(property => property.Name);
+
+        propertyNames.Should().BeEquivalentTo(
+            nameof(CreateExportRequestDto.ResourceType),
+            nameof(CreateExportRequestDto.Format),
+            nameof(CreateExportRequestDto.Scope));
+    }
+
     [Fact]
     public void GetOptions_WithoutNameIdentifier_ReturnsUnauthorized()
     {
@@ -149,20 +184,31 @@ public sealed class ExportAuthorizationTests
     }
 
     [Fact]
-    public async Task GetMyExports_ReturnsStoredMetadata()
+    public async Task GetMyExports_ReturnsStoredMetadataForCurrentOwnerOnly()
     {
         await using var db = CreateDbContext();
-        db.ExportJobs.Add(new ExportJob
-        {
-            Id = Guid.NewGuid(),
-            UserId = "caller",
-            Status = ExportStatus.Failed,
-            CreatedAt = DateTime.UtcNow,
-            ResourceType = ExportResourceType.Tickets,
-            Format = ExportFormat.Csv,
-            Scope = ExportScope.Assigned,
-            ErrorMessage = "Export failed"
-        });
+        db.ExportJobs.AddRange(
+            new ExportJob
+            {
+                Id = Guid.NewGuid(),
+                UserId = "caller",
+                Status = ExportStatus.Failed,
+                CreatedAt = DateTime.UtcNow,
+                ResourceType = ExportResourceType.Tickets,
+                Format = ExportFormat.Csv,
+                Scope = ExportScope.Assigned,
+                ErrorMessage = "Export failed"
+            },
+            new ExportJob
+            {
+                Id = Guid.NewGuid(),
+                UserId = "other-user",
+                Status = ExportStatus.Completed,
+                CreatedAt = DateTime.UtcNow,
+                ResourceType = ExportResourceType.Tickets,
+                Format = ExportFormat.Csv,
+                Scope = ExportScope.Own
+            });
         await db.SaveChangesAsync();
         var controller = CreateController(db, new RecordingPublisher(), "caller", "Agent");
 
@@ -175,6 +221,38 @@ public sealed class ExportAuthorizationTests
         jobs[0].Format.Should().Be("Csv");
         jobs[0].Scope.Should().Be("Assigned");
         jobs[0].ErrorMessage.Should().Be("Export failed");
+    }
+
+    [Fact]
+    public async Task DownloadExport_DoesNotAllowAnotherUsersJob()
+    {
+        await using var db = CreateDbContext();
+        var otherUsersJob = new ExportJob
+        {
+            Id = Guid.NewGuid(),
+            UserId = "other-user",
+            Status = ExportStatus.Completed,
+            CreatedAt = DateTime.UtcNow,
+            CompletedAt = DateTime.UtcNow,
+            FileName = "tickets.csv",
+            StorageObjectName = "tickets/other-user/export.csv",
+            ResourceType = ExportResourceType.Tickets,
+            Format = ExportFormat.Csv,
+            Scope = ExportScope.Own
+        };
+        db.ExportJobs.Add(otherUsersJob);
+        await db.SaveChangesAsync();
+        var controller = CreateController(
+            db,
+            new RecordingPublisher(),
+            "caller",
+            "User");
+
+        var result = await controller.DownloadExport(
+            otherUsersJob.Id,
+            CancellationToken.None);
+
+        result.Should().BeOfType<NotFoundResult>();
     }
 
     private static CreateExportRequestDto Request(string scope) => new()

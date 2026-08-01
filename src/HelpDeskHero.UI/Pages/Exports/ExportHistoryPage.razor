@@ -19,7 +19,7 @@
     </div>
 
     <button class="btn btn-primary"
-            disabled="@_isCreating"
+            disabled="@(!CanCreateExport)"
             @onclick="CreateExportAsync">
 
         @if (_isCreating)
@@ -37,6 +37,58 @@
         }
     </button>
 </div>
+
+@if (_options is not null)
+{
+    <div class="card mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">Zasób</label>
+                    <div class="form-control-plaintext">
+                        @GetResourceTypeLabel(_selectedResourceType)
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Format</label>
+                    <div class="form-control-plaintext">
+                        @GetFormatLabel(_selectedFormat)
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Zakres</label>
+                    @if (_options.AllowedScopes.Count > 1)
+                    {
+                        <select class="form-select"
+                                disabled="@_isCreating"
+                                @bind="_selectedScope">
+                            @foreach (var scope in _options.AllowedScopes)
+                            {
+                                <option value="@scope">@GetScopeLabel(scope)</option>
+                            }
+                        </select>
+                    }
+                    else
+                    {
+                        <div class="form-control-plaintext">
+                            @GetScopeLabel(_selectedScope)
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(_optionsError))
+{
+    <div class="alert alert-danger"
+         role="alert">
+        @_optionsError
+    </div>
+}
 
 @if (!string.IsNullOrWhiteSpace(_successMessage))
 {
@@ -123,6 +175,9 @@ else
             <thead>
                 <tr>
                     <th>File name</th>
+                    <th>Zasób</th>
+                    <th>Format</th>
+                    <th>Zakres</th>
                     <th>Status</th>
                     <th>Created at</th>
                     <th>Completed at</th>
@@ -144,6 +199,12 @@ else
                                 @export.FileName
                             }
                         </td>
+
+                        <td>@GetResourceTypeLabel(export.ResourceType)</td>
+
+                        <td>@GetFormatLabel(export.Format)</td>
+
+                        <td>@GetScopeLabel(export.Scope)</td>
 
                         <td>
                             @switch (export.Status)
@@ -181,6 +242,14 @@ else
                                         @export.Status
                                     </span>
                                     break;
+                            }
+
+                            @if (export.Status == "Failed" &&
+                                 !string.IsNullOrWhiteSpace(export.ErrorMessage))
+                            {
+                                <div class="small text-danger mt-1">
+                                    @export.ErrorMessage
+                                </div>
                             }
                         </td>
 
@@ -238,23 +307,81 @@ else
     private readonly CancellationTokenSource _pageCancellationTokenSource = new();
 
     private List<ExportJobDto> _exports = [];
+    private ExportOptionsDto? _options;
     private Task? _pollingTask;
     private Guid? _downloadingExportId;
 
     private bool _isLoading = true;
+    private bool _isOptionsLoading = true;
     private bool _isCreating;
     private bool _disposed;
 
     private string? _loadError;
+    private string? _optionsError;
     private string? _createError;
     private string? _downloadError;
     private string? _successMessage;
 
+    private string _selectedResourceType = string.Empty;
+    private string _selectedFormat = string.Empty;
+    private string _selectedScope = string.Empty;
+
+    private bool CanCreateExport =>
+        !_isOptionsLoading &&
+        !_isCreating &&
+        _options is not null &&
+        _options.AllowedResourceTypes.Contains(_selectedResourceType) &&
+        _options.AllowedFormats.Contains(_selectedFormat) &&
+        _options.AllowedScopes.Contains(_selectedScope);
+
     protected override async Task OnInitializedAsync()
     {
-        await LoadExportsAsync(_pageCancellationTokenSource.Token);
+        await Task.WhenAll(
+            LoadOptionsAsync(_pageCancellationTokenSource.Token),
+            LoadExportsAsync(_pageCancellationTokenSource.Token));
 
         StartPollingIfNeeded();
+    }
+
+    private async Task LoadOptionsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        _isOptionsLoading = true;
+        _optionsError = null;
+
+        try
+        {
+            _options = await ExportApiClient.GetOptionsAsync(cancellationToken);
+            _selectedResourceType = SelectAvailableOption(
+                _selectedResourceType,
+                _options.AllowedResourceTypes);
+            _selectedFormat = SelectAvailableOption(
+                _selectedFormat,
+                _options.AllowedFormats);
+            _selectedScope = SelectAvailableOption(
+                _selectedScope,
+                _options.AllowedScopes);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (HttpRequestException)
+        {
+            _options = null;
+            _optionsError =
+                "Nie udało się pobrać dostępnych opcji eksportu.";
+        }
+        catch (Exception)
+        {
+            _options = null;
+            _optionsError =
+                "Wystąpił nieoczekiwany błąd podczas ładowania opcji eksportu.";
+        }
+        finally
+        {
+            _isOptionsLoading = false;
+        }
     }
 
     private async Task LoadExportsAsync(
@@ -291,15 +418,16 @@ else
     {
         _isLoading = true;
 
-        await LoadExportsAsync(
-            _pageCancellationTokenSource.Token);
+        await Task.WhenAll(
+            LoadOptionsAsync(_pageCancellationTokenSource.Token),
+            LoadExportsAsync(_pageCancellationTokenSource.Token));
 
         StartPollingIfNeeded();
     }
 
     private async Task CreateExportAsync()
     {
-        if (_isCreating)
+        if (!CanCreateExport)
         {
             return;
         }
@@ -311,6 +439,12 @@ else
         try
         {
             var result = await ExportApiClient.CreateExportAsync(
+                new CreateExportRequestDto
+                {
+                    ResourceType = _selectedResourceType,
+                    Format = _selectedFormat,
+                    Scope = _selectedScope
+                },
                 _pageCancellationTokenSource.Token);
 
             _successMessage =
@@ -447,6 +581,38 @@ else
             .ToLocalTime()
             .ToString("yyyy-MM-dd HH:mm:ss");
     }
+
+    private static string SelectAvailableOption(
+        string currentValue,
+        IReadOnlyList<string> availableOptions)
+    {
+        return availableOptions.Contains(currentValue)
+            ? currentValue
+            : availableOptions.FirstOrDefault() ?? string.Empty;
+    }
+
+    private static string GetResourceTypeLabel(string resourceType) =>
+        resourceType switch
+        {
+            "Tickets" => "Zgłoszenia",
+            _ => resourceType
+        };
+
+    private static string GetFormatLabel(string format) =>
+        format switch
+        {
+            "Csv" => "CSV",
+            _ => format
+        };
+
+    private static string GetScopeLabel(string scope) =>
+        scope switch
+        {
+            "Own" => "Własne zgłoszenia",
+            "Assigned" => "Przypisane zgłoszenia",
+            "All" => "Wszystkie zgłoszenia",
+            _ => scope
+        };
 
     private void ClearSuccessMessage()
     {

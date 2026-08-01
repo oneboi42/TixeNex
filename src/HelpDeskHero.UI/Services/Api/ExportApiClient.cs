@@ -13,13 +13,14 @@ public sealed class ExportApiClient
     }
 
     public async Task<CreateExportResponseDto> CreateExportAsync(
+        CreateExportRequestDto request,
         CancellationToken cancellationToken = default)
     {
         var client = _httpClientFactory.CreateClient("AuthorizedApi");
 
-        using var response = await client.PostAsync(
+        using var response = await client.PostAsJsonAsync(
             requestUri: "api/exports",
-            content: null,
+            value: request,
             cancellationToken: cancellationToken);
 
         response.EnsureSuccessStatusCode();
@@ -35,6 +36,19 @@ public sealed class ExportApiClient
         }
 
         return result;
+    }
+
+    public async Task<ExportOptionsDto> GetOptionsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var client = _httpClientFactory.CreateClient("AuthorizedApi");
+
+        var options = await client.GetFromJsonAsync<ExportOptionsDto>(
+            requestUri: "api/exports/options",
+            cancellationToken: cancellationToken);
+
+        return options ?? throw new InvalidOperationException(
+            "The API returned an empty export options response.");
     }
 
     public async Task<List<ExportJobDto>> GetExportsAsync(
