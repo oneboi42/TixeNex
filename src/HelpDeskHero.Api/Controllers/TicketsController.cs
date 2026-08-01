@@ -1,5 +1,7 @@
 using Hangfire;
+using System.Security.Claims;
 using HelpDeskHero.Api.Application.Interfaces;
+using HelpDeskHero.Api.Application.TicketVisibility;
 using HelpDeskHero.Api.BackgroundJobs.Contracts;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
@@ -22,6 +24,7 @@ public sealed class TicketsController : ControllerBase
     private readonly AuditService _audit;
     private readonly ISlaCalculator _slaCalculator;
     private readonly ITicketAssignmentService _ticketAssignmentService;
+    private readonly ITicketVisibilityContextResolver _ticketVisibilityContextResolver;
     private readonly IOutboxWriter _outboxWriter;
     private readonly IWebHostEnvironment _environment;
 
@@ -30,6 +33,7 @@ public sealed class TicketsController : ControllerBase
         AuditService audit,
         ISlaCalculator slaCalculator,
         ITicketAssignmentService ticketAssignmentService,
+        ITicketVisibilityContextResolver ticketVisibilityContextResolver,
         IOutboxWriter outboxWriter,
         IWebHostEnvironment environment)
     {
@@ -37,6 +41,7 @@ public sealed class TicketsController : ControllerBase
         _audit = audit;
         _slaCalculator = slaCalculator;
         _ticketAssignmentService = ticketAssignmentService;
+        _ticketVisibilityContextResolver = ticketVisibilityContextResolver;
         _outboxWriter = outboxWriter;
         _environment = environment;
     }
@@ -44,11 +49,16 @@ public sealed class TicketsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<PagedResultDto<TicketDto>>> GetAll([FromQuery] TicketQueryDto query, CancellationToken ct)
     {
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+
+        if (accessError is not null)
+            return accessError;
+
         var pageNumber = query.PageNumber < 1 ? 1 : query.PageNumber;
         var pageSize = query.PageSize < 1 ? 10 : query.PageSize;
         pageSize = pageSize > 100 ? 100 : pageSize;
 
-        var q = _db.Tickets.AsQueryable();
+        var q = _db.Tickets.ApplyVisibility(visibilityContext);
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
@@ -80,10 +90,16 @@ public sealed class TicketsController : ControllerBase
 
         var totalCount = await q.CountAsync(ct);
 
-        var items = await q
+        var pagedTickets = q
             .Skip((pageNumber - 1) * pageSize)
-            .Take(pageSize)
-            .Select(x => new TicketDto
+            .Take(pageSize);
+
+        var items = await (
+            from x in pagedTickets
+            join assignedUser in _db.Users
+                on x.AssignedToUserId equals assignedUser.Id into assignedUsers
+            from assignedUser in assignedUsers.DefaultIfEmpty()
+            select new TicketDto
             {
                 Id = x.Id,
                 Number = x.Number,
@@ -93,9 +109,29 @@ public sealed class TicketsController : ControllerBase
                 Priority = x.Priority,
                 CreatedAtUtc = x.CreatedAtUtc,
                 UpdatedAtUtc = x.UpdatedAtUtc,
+                AssignedToUserId = x.AssignedToUserId,
+                AssignedToDisplayName = assignedUser == null
+                    ? null
+                    : assignedUser.DisplayName,
+                CanEdit = visibilityContext.Scope == TicketVisibilityScope.All ||
+                    visibilityContext.Scope == TicketVisibilityScope.Assigned &&
+                    x.AssignedToUserId == visibilityContext.UserId,
+                CanStart = x.Status == "New" &&
+                    (visibilityContext.Scope == TicketVisibilityScope.All ||
+                     visibilityContext.Scope == TicketVisibilityScope.Assigned &&
+                     x.AssignedToUserId == visibilityContext.UserId),
+                CanResolve = x.Status == "InProgress" &&
+                    (visibilityContext.Scope == TicketVisibilityScope.All ||
+                     visibilityContext.Scope == TicketVisibilityScope.Assigned &&
+                     x.AssignedToUserId == visibilityContext.UserId),
+                CanClose = x.Status == "Resolved" &&
+                    (visibilityContext.Scope == TicketVisibilityScope.All ||
+                     x.RequesterUserId == visibilityContext.UserId),
+                CanReopen = x.Status == "Resolved" &&
+                    (visibilityContext.Scope == TicketVisibilityScope.All ||
+                     x.RequesterUserId == visibilityContext.UserId),
                 RowVersionBase64 = Convert.ToBase64String(x.RowVersion)
-            })
-            .ToListAsync(ct);
+            }).ToListAsync(ct);
 
         return Ok(new PagedResultDto<TicketDto>
         {
@@ -165,12 +201,29 @@ public sealed class TicketsController : ControllerBase
     [HttpGet("{id:int}")]
     public async Task<ActionResult<TicketDto>> GetById(int id, CancellationToken ct)
     {
-        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
 
-        if (entity is null)
+        if (accessError is not null)
+            return accessError;
+
+        var result = await (
+            from ticket in _db.Tickets.ApplyVisibility(visibilityContext)
+            join assignedUser in _db.Users
+                on ticket.AssignedToUserId equals assignedUser.Id into assignedUsers
+            from assignedUser in assignedUsers.DefaultIfEmpty()
+            where ticket.Id == id
+            select new
+            {
+                Ticket = ticket,
+                AssignedToDisplayName = assignedUser == null
+                    ? null
+                    : assignedUser.DisplayName
+            }).FirstOrDefaultAsync(ct);
+
+        if (result is null)
             return TicketNotFound(id);
 
-        return Ok(ToDto(entity));
+        return Ok(ToDto(result.Ticket, visibilityContext, result.AssignedToDisplayName));
     }
 
     [HttpPost]
@@ -182,6 +235,11 @@ public sealed class TicketsController : ControllerBase
         if (errors.Count > 0)
             return ValidationError(errors);
 
+        var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(currentUserId))
+            return Unauthorized();
+
         var nextNumber = $"HDH-{DateTime.UtcNow:yyyyMMddHHmmss}";
 
         var entity = new Ticket
@@ -191,7 +249,8 @@ public sealed class TicketsController : ControllerBase
             Description = dto.Description.Trim(),
             Priority = dto.Priority,
             Status = "New",
-            CreatedAtUtc = DateTime.UtcNow
+            CreatedAtUtc = DateTime.UtcNow,
+            RequesterUserId = currentUserId
         };
 
         await _slaCalculator.ApplySlaAsync(entity, ct);
@@ -211,7 +270,14 @@ public sealed class TicketsController : ControllerBase
                 job.SendTicketCreatedNotificationsAsync(entity.Id, default));
         }
 
-        var result = ToDto(entity);
+        var visibilityContext = _ticketVisibilityContextResolver.Resolve(User).Context!;
+        var assignedToDisplayName = entity.AssignedToUserId is null
+            ? null
+            : await _db.Users
+                .Where(x => x.Id == entity.AssignedToUserId)
+                .Select(x => x.DisplayName)
+                .SingleOrDefaultAsync(ct);
+        var result = ToDto(entity, visibilityContext, assignedToDisplayName);
 
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, result);
     }
@@ -225,31 +291,37 @@ public sealed class TicketsController : ControllerBase
         if (errors.Count > 0)
             return ValidationError(errors);
 
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+
+        if (accessError is not null)
+            return accessError;
+
         var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
 
         if (entity is null)
             return TicketNotFound(id);
 
+        if (!TicketPermissions.CanEdit(entity, visibilityContext))
+            return Forbid();
+
+        if (dto.Status != entity.Status)
+        {
+            return BusinessProblem(
+                StatusCodes.Status409Conflict,
+                "Zmiana statusu wymaga dedykowanej akcji",
+                "Uzyj dedykowanego endpointu cyklu zycia zgłoszenia.",
+                "status_change_requires_lifecycle_endpoint");
+        }
+
         var originalPriority = entity.Priority;
-        var originalStatus = entity.Status;
 
         var originalRowVersion = Convert.FromBase64String(dto.RowVersionBase64);
         _db.Entry(entity).Property(x => x.RowVersion).OriginalValue = originalRowVersion;
 
         entity.Title = dto.Title.Trim();
         entity.Description = dto.Description.Trim();
-        entity.Status = dto.Status;
         entity.Priority = dto.Priority;
         entity.UpdatedAtUtc = DateTime.UtcNow;
-
-        if (entity.Status == "Resolved" && entity.ResolvedAtUtc is null)
-        {
-            entity.ResolvedAtUtc = DateTime.UtcNow;
-        }
-        else if (originalStatus == "Resolved" && entity.Status == "InProgress")
-        {
-            entity.ResolvedAtUtc = null;
-        }
 
         if (originalPriority != entity.Priority)
         {
@@ -258,7 +330,7 @@ public sealed class TicketsController : ControllerBase
 
         await _outboxWriter.AddAsync(
             "TicketChanged",
-            ToLiveUpdateDto(entity, GetUpdateEventType(originalStatus, entity.Status)),
+            ToLiveUpdateDto(entity, "Updated"),
             ct);
 
         try
@@ -274,6 +346,22 @@ public sealed class TicketsController : ControllerBase
 
         return NoContent();
     }
+
+    [HttpPost("{id:int}/start")]
+    public Task<IActionResult> Start(int id, TicketLifecycleRequestDto dto, CancellationToken ct) =>
+        TransitionAsync(id, dto, "New", "InProgress", "Started", TicketPermissions.CanWork, ct);
+
+    [HttpPost("{id:int}/resolve")]
+    public Task<IActionResult> Resolve(int id, TicketLifecycleRequestDto dto, CancellationToken ct) =>
+        TransitionAsync(id, dto, "InProgress", "Resolved", "Resolved", TicketPermissions.CanWork, ct);
+
+    [HttpPost("{id:int}/close")]
+    public Task<IActionResult> Close(int id, TicketLifecycleRequestDto dto, CancellationToken ct) =>
+        TransitionAsync(id, dto, "Resolved", "Closed", "Closed", TicketPermissions.CanManageAsRequester, ct);
+
+    [HttpPost("{id:int}/reopen")]
+    public Task<IActionResult> Reopen(int id, TicketLifecycleRequestDto dto, CancellationToken ct) =>
+        TransitionAsync(id, dto, "Resolved", "InProgress", "Reopened", TicketPermissions.CanManageAsRequester, ct);
 
     [HttpDelete("{id:int}")]
     [Authorize(Policy = "CanManageTickets")]
@@ -306,6 +394,26 @@ public sealed class TicketsController : ControllerBase
         "Critical"
     ];
 
+    private ActionResult? ResolveTicketVisibility(out TicketVisibilityContext context)
+    {
+        var resolution = _ticketVisibilityContextResolver.Resolve(User);
+
+        if (resolution.Status == TicketVisibilityResolutionStatus.Unauthorized)
+        {
+            context = null!;
+            return Unauthorized();
+        }
+
+        if (resolution.Status == TicketVisibilityResolutionStatus.Forbidden)
+        {
+            context = null!;
+            return Forbid();
+        }
+
+        context = resolution.Context!;
+        return null;
+    }
+
     private static readonly string[] AllowedStatuses =
     [
         "New",
@@ -313,6 +421,82 @@ public sealed class TicketsController : ControllerBase
         "Resolved",
         "Closed"
     ];
+
+    private async Task<IActionResult> TransitionAsync(
+        int id,
+        TicketLifecycleRequestDto dto,
+        string requiredStatus,
+        string targetStatus,
+        string action,
+        Func<Ticket, TicketVisibilityContext, bool> permission,
+        CancellationToken ct)
+    {
+        var errors = ValidateRowVersion(dto.RowVersionBase64);
+
+        if (errors.Count > 0)
+            return ValidationError(errors);
+
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+
+        if (accessError is not null)
+            return accessError;
+
+        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+
+        if (entity is null)
+            return TicketNotFound(id);
+
+        if (!permission(entity, visibilityContext))
+            return Forbid();
+
+        if (entity.Status != requiredStatus)
+        {
+            return BusinessProblem(
+                StatusCodes.Status409Conflict,
+                "Nieprawidlowa zmiana statusu",
+                $"Status {entity.Status} nie pozwala wykonac akcji {action}.",
+                "invalid_status_transition");
+        }
+
+        var originalRowVersion = Convert.FromBase64String(dto.RowVersionBase64);
+        _db.Entry(entity).Property(x => x.RowVersion).OriginalValue = originalRowVersion;
+
+        var now = DateTime.UtcNow;
+        entity.Status = targetStatus;
+        entity.UpdatedAtUtc = now;
+
+        if (action == "Started" && entity.FirstRespondedAtUtc is null)
+            entity.FirstRespondedAtUtc = now;
+
+        if (action == "Resolved")
+            entity.ResolvedAtUtc = now;
+
+        if (action == "Reopened")
+            entity.ResolvedAtUtc = null;
+
+        await _outboxWriter.AddAsync(
+            "TicketChanged",
+            ToLiveUpdateDto(entity, action),
+            ct);
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ConflictProblem();
+        }
+
+        await _audit.WriteAsync(
+            action,
+            "Ticket",
+            entity.Id.ToString(),
+            new { entity.Number, entity.Title },
+            ct);
+
+        return NoContent();
+    }
 
     private BadRequestObjectResult ValidationError(Dictionary<string, string[]> errors)
     {
@@ -419,7 +603,17 @@ public sealed class TicketsController : ControllerBase
             errors["Status"] = ["Status must be one of: New, InProgress, Resolved, Closed."];
         }
 
-        if (string.IsNullOrWhiteSpace(dto.RowVersionBase64))
+        foreach (var error in ValidateRowVersion(dto.RowVersionBase64))
+            errors[error.Key] = error.Value;
+
+        return errors;
+    }
+
+    private static Dictionary<string, string[]> ValidateRowVersion(string rowVersionBase64)
+    {
+        var errors = new Dictionary<string, string[]>();
+
+        if (string.IsNullOrWhiteSpace(rowVersionBase64))
         {
             errors["RowVersionBase64"] = ["RowVersion is required."];
         }
@@ -427,7 +621,7 @@ public sealed class TicketsController : ControllerBase
         {
             try
             {
-                Convert.FromBase64String(dto.RowVersionBase64);
+                Convert.FromBase64String(rowVersionBase64);
             }
             catch
             {
@@ -438,7 +632,10 @@ public sealed class TicketsController : ControllerBase
         return errors;
     }
 
-    private static TicketDto ToDto(Ticket entity) => new()
+    private static TicketDto ToDto(
+        Ticket entity,
+        TicketVisibilityContext context,
+        string? assignedToDisplayName = null) => new()
     {
         Id = entity.Id,
         Number = entity.Number,
@@ -448,6 +645,15 @@ public sealed class TicketsController : ControllerBase
         Priority = entity.Priority,
         CreatedAtUtc = entity.CreatedAtUtc,
         UpdatedAtUtc = entity.UpdatedAtUtc,
+        AssignedToUserId = entity.AssignedToUserId,
+        AssignedToDisplayName = entity.AssignedToUserId is null
+            ? null
+            : assignedToDisplayName,
+        CanEdit = TicketPermissions.CanEdit(entity, context),
+        CanStart = TicketPermissions.CanStart(entity, context),
+        CanResolve = TicketPermissions.CanResolve(entity, context),
+        CanClose = TicketPermissions.CanClose(entity, context),
+        CanReopen = TicketPermissions.CanReopen(entity, context),
         RowVersionBase64 = Convert.ToBase64String(entity.RowVersion)
     };
 
@@ -462,12 +668,4 @@ public sealed class TicketsController : ControllerBase
         ChangedAtUtc = DateTime.UtcNow
     };
 
-    private static string GetUpdateEventType(string originalStatus, string newStatus) =>
-        (originalStatus, newStatus) switch
-        {
-            (_, "Resolved") when originalStatus != "Resolved" => "Resolved",
-            (_, "Closed") when originalStatus != "Closed" => "Closed",
-            ("Resolved", "InProgress") => "Reopened",
-            _ => "Updated"
-        };
 }

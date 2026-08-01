@@ -49,12 +49,32 @@ public sealed class ExportService : IExportService
             return;
         }
 
+        var metadataError = ValidateMetadata(job);
+
+        if (metadataError is not null)
+        {
+            _logger.LogError(
+                "Export job {JobId} has unsupported metadata: {Reason}",
+                jobId,
+                metadataError);
+
+            job.Status = ExportStatus.Failed;
+            job.CompletedAt = null;
+            job.FileName = null;
+            job.StorageObjectName = null;
+            job.ErrorMessage = "Unsupported export configuration.";
+
+            await _db.SaveChangesAsync(cancellationToken);
+            return;
+        }
+
         try
         {
             job.Status = ExportStatus.Running;
             job.CompletedAt = null;
             job.FileName = null;
             job.StorageObjectName = null;
+            job.ErrorMessage = null;
 
             await _db.SaveChangesAsync(cancellationToken);
 
@@ -62,19 +82,30 @@ public sealed class ExportService : IExportService
                 "Export job {JobId} changed to Running.",
                 jobId);
 
-            var tickets = await _db.Tickets
+            var ticketQuery = _db.Tickets
                 .AsNoTracking()
-                .ToListAsync(cancellationToken);
+                .Where(ticket => !ticket.IsDeleted);
 
-            var rows = tickets
+            ticketQuery = job.Scope switch
+            {
+                ExportScope.Own => ticketQuery.Where(
+                    ticket => ticket.RequesterUserId == job.UserId),
+                ExportScope.Assigned => ticketQuery.Where(
+                    ticket => ticket.AssignedToUserId == job.UserId),
+                ExportScope.All => ticketQuery,
+                _ => throw new InvalidOperationException(
+                    "Export scope was validated before query construction.")
+            };
+
+            var rows = await ticketQuery
                 .Select(ticket => new TicketExportRow
                 {
                     Id = ticket.Id,
                     Title = ticket.Title,
-                    Status = ticket.Status.ToString(),
+                    Status = ticket.Status,
                     CreatedAt = ticket.CreatedAtUtc
                 })
-                .ToList();
+                .ToListAsync(cancellationToken);
             var fileName =
                 $"tickets_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
 
@@ -103,6 +134,7 @@ public sealed class ExportService : IExportService
             job.CompletedAt = DateTime.UtcNow;
             job.FileName = fileName;
             job.StorageObjectName = storedFile.ObjectName;
+            job.ErrorMessage = null;
 
             await _db.SaveChangesAsync(cancellationToken);
 
@@ -133,6 +165,7 @@ public sealed class ExportService : IExportService
             job.CompletedAt = null;
             job.FileName = null;
             job.StorageObjectName = null;
+            job.ErrorMessage = "The export could not be completed.";
 
             try
             {
@@ -146,6 +179,24 @@ public sealed class ExportService : IExportService
                     jobId);
             }
         }
+    }
+
+    private static string? ValidateMetadata(ExportJob job)
+    {
+        if (job.ResourceType != ExportResourceType.Tickets)
+            return $"ResourceType value {(int)job.ResourceType} is not supported.";
+
+        if (job.Format != ExportFormat.Csv)
+            return $"Format value {(int)job.Format} is not supported.";
+
+        if (job.Scope is not ExportScope.Own and
+            not ExportScope.Assigned and
+            not ExportScope.All)
+        {
+            return $"Scope value {(int)job.Scope} is not supported.";
+        }
+
+        return null;
     }
 
     private static async Task WriteCsvAsync(

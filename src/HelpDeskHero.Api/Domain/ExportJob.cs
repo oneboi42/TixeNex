@@ -9,4 +9,8 @@ public class ExportJob
     public DateTime? CompletedAt { get; set; }
     public string? FileName { get; set; }
     public string? StorageObjectName { get; set; }
+    public ExportResourceType ResourceType { get; set; } = ExportResourceType.Tickets;
+    public ExportFormat Format { get; set; } = ExportFormat.Csv;
+    public ExportScope Scope { get; set; } = ExportScope.All;
+    public string? ErrorMessage { get; set; }
 }

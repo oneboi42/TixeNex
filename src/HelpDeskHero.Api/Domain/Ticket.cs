@@ -15,6 +15,8 @@ public sealed class Ticket
     public DateTime? DueResolveAtUtc { get; set; }
     public DateTime? FirstRespondedAtUtc { get; set; }
     public DateTime? ResolvedAtUtc { get; set; }
+    public string? RequesterUserId { get; set; }
+    public ApplicationUser? RequesterUser { get; set; }
     public string? AssignedToUserId { get; set; }
     public int EscalationLevel { get; set; }
     public DateTime? LastNotifiedAtUtc { get; set; }

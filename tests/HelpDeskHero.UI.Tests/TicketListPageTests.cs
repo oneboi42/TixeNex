@@ -7,6 +7,7 @@ using HelpDeskHero.Shared.Contracts.Tickets;
 using HelpDeskHero.UI.Pages.Tickets;
 using HelpDeskHero.UI.Services.Api;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization.Infrastructure;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,29 +20,7 @@ public sealed class TicketListPageTests : BunitContext
     [Fact]
     public void TicketListPage_ShouldRenderTicketTitle()
     {
-        Services.AddAuthorizationCore();
-        Services.AddSingleton<IAuthorizationService, AlwaysAllowAuthorizationService>();
-
-        Services.AddSingleton<AuthenticationStateProvider>(
-            new FakeAuthenticationStateProvider());
-
-        Services.AddSingleton<ITicketApiClient>(new FakeTicketApiClient());
-        
-        Services.AddSingleton<ITicketsRealtimeClient, FakeTicketsRealtimeClient>();
-
-
-        var cut = Render(builder =>
-        {
-            builder.OpenComponent<CascadingAuthenticationState>(0);
-
-            builder.AddAttribute(1, "ChildContent", (RenderFragment)(childBuilder =>
-            {
-                childBuilder.OpenComponent<TicketListPage>(2);
-                childBuilder.CloseComponent();
-            }));
-
-            builder.CloseComponent();
-        });
+        var cut = RenderPage(new FakeTicketApiClient());
 
         cut.WaitForAssertion(() =>
         {
@@ -49,33 +28,160 @@ public sealed class TicketListPageTests : BunitContext
         });
     }
 
-    private sealed class AlwaysAllowAuthorizationService : IAuthorizationService
+    [Fact]
+    public void TicketListPage_AsUser_ShouldRenderCreateAndExportHistoryLinks()
+    {
+        var cut = RenderPage(new FakeTicketApiClient(), "User");
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.Find("a[href='tickets/create']").TextContent.Should().Contain("Nowe zgłoszenie");
+            cut.Find("a[href='exports']").TextContent.Should().Contain("Export history");
+        });
+    }
+
+    [Fact]
+    public void TicketListPage_ShouldRenderAssignedAgentDisplayName()
+    {
+        var cut = RenderPage(new FakeTicketApiClient(new TicketDto
+        {
+            Id = 4,
+            Number = "HDH-0004",
+            Title = "Assigned ticket",
+            AssignedToUserId = "agent-id",
+            AssignedToDisplayName = "Support Agent",
+            CreatedAtUtc = DateTime.UtcNow
+        }));
+
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Support Agent"));
+    }
+
+    [Fact]
+    public void TicketListPage_ShouldRenderUnassignedWhenTicketHasNoAgent()
+    {
+        var cut = RenderPage(new FakeTicketApiClient(new TicketDto
+        {
+            Id = 5,
+            Number = "HDH-0005",
+            Title = "Unassigned ticket",
+            CreatedAtUtc = DateTime.UtcNow
+        }));
+
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Unassigned"));
+    }
+
+    [Fact]
+    public void TicketListPage_StartCapabilityCallsDedicatedStartEndpoint()
+    {
+        var api = new FakeTicketApiClient(new TicketDto
+        {
+            Id = 2,
+            Number = "HDH-0002",
+            Title = "Startable ticket",
+            Description = "desc",
+            Status = "New",
+            Priority = "Medium",
+            CanStart = true,
+            RowVersionBase64 = Convert.ToBase64String([1])
+        });
+        var cut = RenderPage(api);
+
+        cut.WaitForAssertion(() =>
+            cut.FindAll("button").Single(x => x.TextContent.Contains("Start work")).Click());
+
+        cut.WaitForAssertion(() => api.StartCalls.Should().Be(1));
+        api.UpdateCalls.Should().Be(0);
+    }
+
+    [Fact]
+    public void TicketListPage_ReopenAndEditButtonsFollowCapabilities()
+    {
+        var api = new FakeTicketApiClient(new TicketDto
+        {
+            Id = 3,
+            Number = "HDH-0003",
+            Title = "Reopenable ticket",
+            Description = "desc",
+            Status = "Resolved",
+            Priority = "Medium",
+            CanEdit = false,
+            CanReopen = true,
+            RowVersionBase64 = Convert.ToBase64String([1])
+        });
+        var cut = RenderPage(api);
+
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Reopen"));
+        cut.Markup.Should().NotContain("Edytuj");
+        cut.FindAll("button").Single(x => x.TextContent.Contains("Reopen")).Click();
+        cut.WaitForAssertion(() => api.ReopenCalls.Should().Be(1));
+    }
+
+    private IRenderedComponent<Bunit.Rendering.ContainerFragment> RenderPage(
+        FakeTicketApiClient api,
+        string role = "Admin")
+    {
+        Services.AddAuthorizationCore();
+        Services.AddSingleton<IAuthorizationService, RoleAwareAuthorizationService>();
+        Services.AddSingleton<AuthenticationStateProvider>(
+            new FakeAuthenticationStateProvider(role));
+        Services.AddSingleton<ITicketApiClient>(api);
+        Services.AddSingleton<ITicketsRealtimeClient, FakeTicketsRealtimeClient>();
+
+        return Render(builder =>
+        {
+            builder.OpenComponent<CascadingAuthenticationState>(0);
+            builder.AddAttribute(1, "ChildContent", (RenderFragment)(childBuilder =>
+            {
+                childBuilder.OpenComponent<TicketListPage>(2);
+                childBuilder.CloseComponent();
+            }));
+            builder.CloseComponent();
+        });
+    }
+
+    private sealed class RoleAwareAuthorizationService : IAuthorizationService
     {
         public Task<AuthorizationResult> AuthorizeAsync(
             ClaimsPrincipal user,
             object? resource,
             IEnumerable<IAuthorizationRequirement> requirements)
         {
-            return Task.FromResult(AuthorizationResult.Success());
+            var authorized = requirements.All(requirement => requirement switch
+            {
+                RolesAuthorizationRequirement roles =>
+                    roles.AllowedRoles.Any(user.IsInRole),
+                DenyAnonymousAuthorizationRequirement =>
+                    user.Identity?.IsAuthenticated == true,
+                _ => true
+            });
+
+            return Task.FromResult(authorized
+                ? AuthorizationResult.Success()
+                : AuthorizationResult.Failed());
         }
 
         public Task<AuthorizationResult> AuthorizeAsync(
             ClaimsPrincipal user,
             object? resource,
-            string policyName)
-        {
-            return Task.FromResult(AuthorizationResult.Success());
-        }
+            string policyName) =>
+            Task.FromResult(AuthorizationResult.Success());
     }
 
     private sealed class FakeAuthenticationStateProvider : AuthenticationStateProvider
     {
+        private readonly string _role;
+
+        public FakeAuthenticationStateProvider(string role)
+        {
+            _role = role;
+        }
+
         public override Task<AuthenticationState> GetAuthenticationStateAsync()
         {
             var claims = new[]
             {
-                new Claim(ClaimTypes.Name, "admin"),
-                new Claim(ClaimTypes.Role, "Admin")
+                new Claim(ClaimTypes.Name, _role.ToLowerInvariant()),
+                new Claim(ClaimTypes.Role, _role)
             };
 
             var identity = new ClaimsIdentity(claims, "TestAuth");
@@ -87,6 +193,26 @@ public sealed class TicketListPageTests : BunitContext
 
     private sealed class FakeTicketApiClient : ITicketApiClient
     {
+        private readonly TicketDto _ticket;
+
+        public FakeTicketApiClient(TicketDto? ticket = null)
+        {
+            _ticket = ticket ?? new TicketDto
+            {
+                Id = 1,
+                Number = "HDH-0001",
+                Title = "Test Ticket from bUnit",
+                Description = "desc",
+                Status = "New",
+                Priority = "High",
+                CreatedAtUtc = DateTime.UtcNow
+            };
+        }
+
+        public int UpdateCalls { get; private set; }
+        public int StartCalls { get; private set; }
+        public int ReopenCalls { get; private set; }
+
         public Task<PagedResultDto<TicketDto>?> GetPageAsync(
             TicketQueryDto query,
             CancellationToken ct = default)
@@ -96,19 +222,7 @@ public sealed class TicketListPageTests : BunitContext
                 PageNumber = 1,
                 PageSize = 10,
                 TotalCount = 1,
-                Items =
-                [
-                    new TicketDto
-                    {
-                        Id = 1,
-                        Number = "HDH-0001",
-                        Title = "Test Ticket from bUnit",
-                        Description = "desc",
-                        Status = "New",
-                        Priority = "High",
-                        CreatedAtUtc = DateTime.UtcNow
-                    }
-                ]
+                Items = [_ticket]
             };
 
             return Task.FromResult<PagedResultDto<TicketDto>?>(result);
@@ -133,6 +247,37 @@ public sealed class TicketListPageTests : BunitContext
             UpdateTicketDto dto,
             CancellationToken ct = default)
         {
+            UpdateCalls++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+        }
+
+        public Task<HttpResponseMessage> StartAsync(
+            int id,
+            TicketLifecycleRequestDto dto,
+            CancellationToken ct = default)
+        {
+            StartCalls++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+        }
+
+        public Task<HttpResponseMessage> ResolveAsync(
+            int id,
+            TicketLifecycleRequestDto dto,
+            CancellationToken ct = default) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+
+        public Task<HttpResponseMessage> CloseAsync(
+            int id,
+            TicketLifecycleRequestDto dto,
+            CancellationToken ct = default) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+
+        public Task<HttpResponseMessage> ReopenAsync(
+            int id,
+            TicketLifecycleRequestDto dto,
+            CancellationToken ct = default)
+        {
+            ReopenCalls++;
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
         }
 

@@ -1,5 +1,5 @@
 @page "/tickets/create"
-@attribute [Authorize(Roles = "Admin,Agent")]
+@attribute [Authorize(Roles = "User,Agent,Admin")]
 
 @using System.Text.Json
 @using HelpDeskHero.Shared.Contracts.Tickets
@@ -22,7 +22,6 @@
 
 <EditForm Model="_model" OnValidSubmit="HandleSubmitAsync">
     <DataAnnotationsValidator />
-    <ValidationSummary />
 
     <div class="card">
         <div class="card-body">

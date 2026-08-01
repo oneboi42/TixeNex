@@ -21,7 +21,7 @@
         <h3 class="mb-0">Zgłoszenia</h3>
         <div class="text-muted">Lista zgłoszeń w systemie HelpDeskHero</div>
     </div>
-    <AuthorizeView Roles="Admin,Agent">
+    <AuthorizeView Roles="User,Agent,Admin">
         <Authorized>
             <div class="d-flex gap-2 flex-wrap justify-content-end">
                 <NavLink class="btn btn-outline-secondary" href="tickets/create">
@@ -109,6 +109,7 @@ else
                         <th>Tytuł</th>
                         <th>Status</th>
                         <th>Priorytet</th>
+                        <th>Assigned to</th>
                         <th>Utworzono</th>
                         <th class="text-end">Akcje</th>
                     </tr>
@@ -135,6 +136,10 @@ else
                             </td>
 
                             <td>
+                                @(item.AssignedToDisplayName ?? "Unassigned")
+                            </td>
+
+                            <td>
                                 @item.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
                             </td>
 
@@ -145,24 +150,23 @@ else
                                         Szczegóły
                                     </button>
 
-                                    <AuthorizeView Roles="Admin,Agent">
-                                        <Authorized>
-                                            <button class="btn btn-outline-primary"
-                                                    disabled="@IsLifecycleBusy(item.Id)"
-                                                    @onclick='() => Navigation.NavigateTo($"/tickets/edit/{item.Id}")'>
-                                                Edytuj
-                                            </button>
+                                    @if (item.CanEdit)
+                                    {
+                                        <button class="btn btn-outline-primary"
+                                                disabled="@IsLifecycleBusy(item.Id)"
+                                                @onclick='() => Navigation.NavigateTo($"/tickets/edit/{item.Id}")'>
+                                            Edytuj
+                                        </button>
+                                    }
 
-                                            @foreach (var action in GetLifecycleActions(item.Status))
-                                            {
-                                                <button class="btn btn-outline-success"
-                                                        disabled="@IsLifecycleBusy(item.Id)"
-                                                        @onclick="() => ChangeStatusAsync(item, action.TargetStatus)">
-                                                    @(IsLifecycleBusy(item.Id) ? "Saving..." : action.Label)
-                                                </button>
-                                            }
-                                        </Authorized>
-                                    </AuthorizeView>
+                                    @foreach (var action in GetLifecycleActions(item))
+                                    {
+                                        <button class="btn btn-outline-success"
+                                                disabled="@IsLifecycleBusy(item.Id)"
+                                                @onclick="() => ChangeStatusAsync(item, action)">
+                                            @(IsLifecycleBusy(item.Id) ? "Saving..." : action.Label)
+                                        </button>
+                                    }
                                 </div>
 
                                 <AuthorizeView Roles="Admin">
@@ -355,7 +359,7 @@ else
 
     private bool IsLifecycleBusy(int ticketId) => _lifecycleBusyTicketIds.Contains(ticketId);
 
-    private async Task ChangeStatusAsync(TicketDto ticket, string targetStatus)
+    private async Task ChangeStatusAsync(TicketDto ticket, LifecycleAction action)
     {
         if (!_lifecycleBusyTicketIds.Add(ticket.Id))
             return;
@@ -364,18 +368,22 @@ else
 
         try
         {
-            var response = await TicketApi.UpdateAsync(ticket.Id, new UpdateTicketDto
+            var request = new TicketLifecycleRequestDto
             {
-                Title = ticket.Title,
-                Description = ticket.Description,
-                Priority = ticket.Priority,
-                Status = targetStatus,
                 RowVersionBase64 = ticket.RowVersionBase64
-            });
+            };
+            var response = action.Action switch
+            {
+                "start" => await TicketApi.StartAsync(ticket.Id, request),
+                "resolve" => await TicketApi.ResolveAsync(ticket.Id, request),
+                "close" => await TicketApi.CloseAsync(ticket.Id, request),
+                "reopen" => await TicketApi.ReopenAsync(ticket.Id, request),
+                _ => throw new InvalidOperationException("Unknown lifecycle action.")
+            };
 
             if (response.IsSuccessStatusCode)
             {
-                ShowToast("success", "Ticket updated", $"Ticket status changed to {targetStatus}.");
+                ShowToast("success", "Ticket updated", $"Ticket status changed to {action.TargetStatus}.");
                 await ReloadAsync();
                 return;
             }
@@ -399,15 +407,23 @@ else
         }
     }
 
-    private static IReadOnlyList<LifecycleAction> GetLifecycleActions(string status) => status switch
+    private static IReadOnlyList<LifecycleAction> GetLifecycleActions(TicketDto ticket)
     {
-        "New" => [new("Start work", "InProgress")],
-        "InProgress" => [new("Resolve", "Resolved")],
-        "Resolved" => [new("Close", "Closed"), new("Reopen", "InProgress")],
-        _ => []
-    };
+        var actions = new List<LifecycleAction>();
 
-    private sealed record LifecycleAction(string Label, string TargetStatus);
+        if (ticket.CanStart)
+            actions.Add(new("Start work", "start", "InProgress"));
+        if (ticket.CanResolve)
+            actions.Add(new("Resolve", "resolve", "Resolved"));
+        if (ticket.CanClose)
+            actions.Add(new("Close", "close", "Closed"));
+        if (ticket.CanReopen)
+            actions.Add(new("Reopen", "reopen", "InProgress"));
+
+        return actions;
+    }
+
+    private sealed record LifecycleAction(string Label, string Action, string TargetStatus);
 
 
     public ValueTask DisposeAsync()
