@@ -53,6 +53,7 @@ builder.Services.AddScoped(sp =>
 
 builder.Services.AddScoped<AuthApiClient>();
 builder.Services.AddScoped<ITicketApiClient, TicketApiClient>();
+builder.Services.AddScoped<UserApiClient>();
 builder.Services.AddScoped<TicketCommentApiClient>();
 builder.Services.AddScoped<TicketAttachmentApiClient>();
 builder.Services.AddScoped<NotificationApiClient>();

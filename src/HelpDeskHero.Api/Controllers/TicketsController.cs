@@ -10,6 +10,7 @@ using HelpDeskHero.Shared.Contracts.Common;
 using HelpDeskHero.Shared.Contracts.Tickets;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,6 +25,7 @@ public sealed class TicketsController : ControllerBase
     private readonly AuditService _audit;
     private readonly ISlaCalculator _slaCalculator;
     private readonly ITicketAssignmentService _ticketAssignmentService;
+    private readonly UserManager<ApplicationUser> _userManager;
     private readonly ITicketVisibilityContextResolver _ticketVisibilityContextResolver;
     private readonly IOutboxWriter _outboxWriter;
     private readonly IWebHostEnvironment _environment;
@@ -33,6 +35,7 @@ public sealed class TicketsController : ControllerBase
         AuditService audit,
         ISlaCalculator slaCalculator,
         ITicketAssignmentService ticketAssignmentService,
+        UserManager<ApplicationUser> userManager,
         ITicketVisibilityContextResolver ticketVisibilityContextResolver,
         IOutboxWriter outboxWriter,
         IWebHostEnvironment environment)
@@ -41,6 +44,7 @@ public sealed class TicketsController : ControllerBase
         _audit = audit;
         _slaCalculator = slaCalculator;
         _ticketAssignmentService = ticketAssignmentService;
+        _userManager = userManager;
         _ticketVisibilityContextResolver = ticketVisibilityContextResolver;
         _outboxWriter = outboxWriter;
         _environment = environment;
@@ -347,6 +351,96 @@ public sealed class TicketsController : ControllerBase
         return NoContent();
     }
 
+
+    [HttpPost("{id:int}/assign")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> Assign(int id, AssignTicketDto dto, CancellationToken ct)
+    {
+        var errors = ValidateAssignment(dto);
+
+        if (errors.Count > 0)
+            return ValidationError(errors);
+
+        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+
+        if (entity is null)
+            return TicketNotFound(id);
+
+        var assignedToUserId = dto.AssignedToUserId.Trim();
+        var assignee = await _userManager.FindByIdAsync(assignedToUserId);
+
+        if (assignee is null)
+        {
+            return BusinessProblem(
+                StatusCodes.Status404NotFound,
+                "Assignee not found",
+                $"The user with ID {assignedToUserId} does not exist.",
+                "assignee_not_found");
+        }
+
+        if (!assignee.IsActive)
+        {
+            return BusinessProblem(
+                StatusCodes.Status409Conflict,
+                "Inactive assignee",
+                "An inactive user cannot be assigned to a ticket.",
+                "assignee_inactive");
+        }
+
+        if (!await _userManager.IsInRoleAsync(assignee, "Agent"))
+        {
+            return BusinessProblem(
+                StatusCodes.Status409Conflict,
+                "Invalid assignee",
+                "Only a user with the Agent role can be assigned to a ticket.",
+                "assignee_must_be_agent");
+        }
+
+        var originalRowVersion = Convert.FromBase64String(dto.RowVersionBase64);
+        _db.Entry(entity).Property(x => x.RowVersion).OriginalValue = originalRowVersion;
+
+        var previousAssignedToUserId = entity.AssignedToUserId;
+
+        if (previousAssignedToUserId == assignee.Id)
+            return NoContent();
+
+        var action = previousAssignedToUserId is null ? "Assign" : "Reassign";
+        var eventType = previousAssignedToUserId is null ? "Assigned" : "Reassigned";
+
+        entity.AssignedToUserId = assignee.Id;
+        entity.UpdatedAtUtc = DateTime.UtcNow;
+
+        await _outboxWriter.AddAsync(
+            "TicketChanged",
+            ToLiveUpdateDto(entity, eventType),
+            ct);
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ConflictProblem();
+        }
+
+        await _audit.WriteAsync(
+            action,
+            "Ticket",
+            entity.Id.ToString(),
+            new
+            {
+                entity.Number,
+                entity.Title,
+                PreviousAssignedToUserId = previousAssignedToUserId,
+                AssignedToUserId = assignee.Id,
+                AssignedToDisplayName = assignee.DisplayName
+            },
+            ct);
+
+        return NoContent();
+    }
+
     [HttpPost("{id:int}/start")]
     public Task<IActionResult> Start(int id, TicketLifecycleRequestDto dto, CancellationToken ct) =>
         TransitionAsync(id, dto, "New", "InProgress", "Started", TicketPermissions.CanWork, ct);
@@ -580,6 +674,19 @@ public sealed class TicketsController : ControllerBase
         else if (!AllowedPriorities.Contains(dto.Priority))
         {
             errors["Priority"] = ["Priority must be one of: Low, Medium, High, Critical."];
+        }
+
+        return errors;
+    }
+
+
+    private static Dictionary<string, string[]> ValidateAssignment(AssignTicketDto dto)
+    {
+        var errors = ValidateRowVersion(dto.RowVersionBase64);
+
+        if (string.IsNullOrWhiteSpace(dto.AssignedToUserId))
+        {
+            errors["AssignedToUserId"] = ["AssignedToUserId is required."];
         }
 
         return errors;

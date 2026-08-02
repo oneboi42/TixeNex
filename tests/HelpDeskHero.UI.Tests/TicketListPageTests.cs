@@ -251,6 +251,14 @@ public sealed class TicketListPageTests : BunitContext
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
         }
 
+        public Task<HttpResponseMessage> AssignAsync(
+            int id,
+            AssignTicketDto dto,
+            CancellationToken ct = default)
+        {
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+        }
+
         public Task<HttpResponseMessage> StartAsync(
             int id,
             TicketLifecycleRequestDto dto,

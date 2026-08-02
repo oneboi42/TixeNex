@@ -2,11 +2,14 @@
 @attribute [Authorize]
 
 @using HelpDeskHero.Shared.Contracts.Tickets
+@using HelpDeskHero.Shared.Contracts.Users
 @using HelpDeskHero.UI.Services.Api
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 
-@inject HelpDeskHero.UI.Services.Api.ITicketApiClient TicketApi
+@inject ITicketApiClient TicketApi
+@inject UserApiClient UserApi
+@inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NavigationManager Nav
 
 <PageTitle>Ticket details</PageTitle>
@@ -47,11 +50,61 @@ else if (_ticket is not null)
                 <dd class="col-sm-9">@_ticket.Description</dd>
             </dl>
 
+            @if (_isAdmin)
+            {
+                <hr />
+
+                <h5>Assignment</h5>
+
+                @if (_agentsLoading)
+                {
+                    <LoadingSpinner Text="Loading agents..." />
+                }
+                else if (_agents.Count == 0)
+                {
+                    <div class="alert alert-warning mb-3">
+                        No active agents are available.
+                    </div>
+                }
+                else
+                {
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col-md-8">
+                            <label for="assigned-agent" class="form-label">
+                                Agent
+                            </label>
+
+                            <select id="assigned-agent"
+                                    class="form-select"
+                                    @bind="_selectedAgentId"
+                                    disabled="@_assignmentBusy">
+                                <option value="">Select an agent</option>
+
+                                @foreach (var agent in _agents)
+                                {
+                                    <option value="@agent.Id">
+                                        @FormatAgent(agent)
+                                    </option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-md-4">
+                            <button class="btn btn-primary w-100"
+                                    disabled="@IsAssignmentButtonDisabled"
+                                    @onclick="AssignAsync">
+                                @AssignmentButtonText
+                            </button>
+                        </div>
+                    </div>
+                }
+            }
+
             <div class="d-flex gap-2 mt-3">
                 @foreach (var action in GetLifecycleActions(_ticket))
                 {
                     <button class="btn btn-success"
-                            disabled="@_lifecycleBusy"
+                            disabled="@(_lifecycleBusy || _assignmentBusy)"
                             @onclick="() => ChangeStatusAsync(action)">
                         @(_lifecycleBusy ? "Saving..." : action.Label)
                     </button>
@@ -59,14 +112,15 @@ else if (_ticket is not null)
 
                 @if (_ticket.CanEdit)
                 {
-                        <button class="btn btn-primary"
-                                disabled="@_lifecycleBusy"
-                                @onclick='() => Nav.NavigateTo($"/tickets/edit/{Id}")'>
-                            Edit
-                        </button>
+                    <button class="btn btn-primary"
+                            disabled="@(_lifecycleBusy || _assignmentBusy)"
+                            @onclick='() => Nav.NavigateTo($"/tickets/edit/{Id}")'>
+                        Edit
+                    </button>
                 }
 
                 <button class="btn btn-secondary"
+                        disabled="@(_lifecycleBusy || _assignmentBusy)"
                         @onclick='() => Nav.NavigateTo("/tickets")'>
                     Back
                 </button>
@@ -91,14 +145,96 @@ else if (_ticket is not null)
     public int Id { get; set; }
 
     private TicketDto? _ticket;
+    private IReadOnlyList<AssignableAgentDto> _agents = [];
+    private string _selectedAgentId = string.Empty;
     private string? _error;
     private bool _loading;
+    private bool _agentsLoading;
     private bool _lifecycleBusy;
+    private bool _assignmentBusy;
+    private bool _isAdmin;
     private bool _toastVisible;
     private string? _toastMessage;
     private long _toastVersion;
 
-    protected override Task OnParametersSetAsync() => LoadTicketAsync();
+    private bool IsAssignmentButtonDisabled =>
+        _assignmentBusy ||
+        string.IsNullOrWhiteSpace(_selectedAgentId) ||
+        _selectedAgentId == _ticket?.AssignedToUserId;
+
+    private string AssignmentButtonText =>
+        _assignmentBusy
+            ? "Saving..."
+            : _ticket?.AssignedToUserId is null
+                ? "Assign"
+                : "Reassign";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var authenticationState =
+            await AuthenticationStateProvider.GetAuthenticationStateAsync();
+
+        _isAdmin = authenticationState.User.IsInRole("Admin");
+
+        await LoadTicketAsync();
+
+        if (_isAdmin && _ticket is not null)
+            await LoadAgentsAsync();
+    }
+
+    private async Task AssignAsync()
+    {
+        if (_ticket is null ||
+            _assignmentBusy ||
+            string.IsNullOrWhiteSpace(_selectedAgentId))
+        {
+            return;
+        }
+
+        _assignmentBusy = true;
+        _error = null;
+
+        try
+        {
+            var request = new AssignTicketDto
+            {
+                AssignedToUserId = _selectedAgentId,
+                RowVersionBase64 = _ticket.RowVersionBase64
+            };
+
+            var response = await TicketApi.AssignAsync(Id, request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadTicketAsync();
+                _selectedAgentId = _ticket?.AssignedToUserId ?? string.Empty;
+                _toastMessage = "Ticket assignment was updated.";
+                _toastVersion++;
+                _toastVisible = true;
+                return;
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+            {
+                await LoadTicketAsync();
+                _selectedAgentId = _ticket?.AssignedToUserId ?? string.Empty;
+                _error = "This ticket was modified by another user. The latest version has been loaded.";
+                return;
+            }
+
+            _error = await ApiErrorMapper.ToMessageAsync(
+                response,
+                "Could not update the ticket assignment.");
+        }
+        catch
+        {
+            _error = "Could not update the ticket assignment.";
+        }
+        finally
+        {
+            _assignmentBusy = false;
+        }
+    }
 
     private async Task ChangeStatusAsync(LifecycleAction action)
     {
@@ -114,6 +250,7 @@ else if (_ticket is not null)
             {
                 RowVersionBase64 = _ticket.RowVersionBase64
             };
+
             var response = action.Action switch
             {
                 "start" => await TicketApi.StartAsync(Id, request),
@@ -126,6 +263,7 @@ else if (_ticket is not null)
             if (response.IsSuccessStatusCode)
             {
                 await LoadTicketAsync();
+                _selectedAgentId = _ticket?.AssignedToUserId ?? string.Empty;
                 _toastMessage = $"Ticket status changed to {action.TargetStatus}.";
                 _toastVersion++;
                 _toastVisible = true;
@@ -135,11 +273,14 @@ else if (_ticket is not null)
             if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
                 await LoadTicketAsync();
+                _selectedAgentId = _ticket?.AssignedToUserId ?? string.Empty;
                 _error = "This ticket was modified by another user. The latest version has been loaded.";
                 return;
             }
 
-            _error = await ApiErrorMapper.ToMessageAsync(response, "Could not update the ticket status.");
+            _error = await ApiErrorMapper.ToMessageAsync(
+                response,
+                "Could not update the ticket status.");
         }
         catch
         {
@@ -157,17 +298,30 @@ else if (_ticket is not null)
 
         if (ticket.CanStart)
             actions.Add(new("Start work", "start", "InProgress"));
+
         if (ticket.CanResolve)
             actions.Add(new("Resolve", "resolve", "Resolved"));
+
         if (ticket.CanClose)
             actions.Add(new("Close", "close", "Closed"));
+
         if (ticket.CanReopen)
             actions.Add(new("Reopen", "reopen", "InProgress"));
 
         return actions;
     }
 
-    private sealed record LifecycleAction(string Label, string Action, string TargetStatus);
+    private static string FormatAgent(AssignableAgentDto agent)
+    {
+        return string.IsNullOrWhiteSpace(agent.UserName)
+            ? agent.DisplayName
+            : $"{agent.DisplayName} ({agent.UserName})";
+    }
+
+    private sealed record LifecycleAction(
+        string Label,
+        string Action,
+        string TargetStatus);
 
     private async Task LoadTicketAsync()
     {
@@ -188,6 +342,26 @@ else if (_ticket is not null)
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task LoadAgentsAsync()
+    {
+        _agentsLoading = true;
+
+        try
+        {
+            _agents = await UserApi.GetAssignableAgentsAsync();
+            _selectedAgentId = _ticket?.AssignedToUserId ?? string.Empty;
+        }
+        catch
+        {
+            _agents = [];
+            _error = "Ticket details were loaded, but the list of agents could not be loaded.";
+        }
+        finally
+        {
+            _agentsLoading = false;
         }
     }
 }
