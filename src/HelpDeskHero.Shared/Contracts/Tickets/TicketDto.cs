@@ -10,6 +10,7 @@ public sealed class TicketDto
     public string Priority { get; set; } = "Medium";
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? UpdatedAtUtc { get; set; }
+    public string? RequesterDisplayName { get; set; }
     public string? AssignedToUserId { get; set; }
     public string? AssignedToDisplayName { get; set; }
     public bool CanEdit { get; set; }

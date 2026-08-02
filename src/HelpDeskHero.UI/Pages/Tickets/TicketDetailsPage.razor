@@ -43,6 +43,12 @@ else if (_ticket is not null)
                     <PriorityBadge Priority="@_ticket.Priority" />
                 </dd>
 
+                @if (_isAdmin)
+                {
+                    <dt class="col-sm-3">Requester</dt>
+                    <dd class="col-sm-9">@(_ticket.RequesterDisplayName ?? "Unknown")</dd>
+                }
+                
                 <dt class="col-sm-3">Assigned to</dt>
                 <dd class="col-sm-9">@(_ticket.AssignedToDisplayName ?? "Unassigned")</dd>
 
@@ -56,7 +62,13 @@ else if (_ticket is not null)
 
                 <h5>Assignment</h5>
 
-                @if (_agentsLoading)
+                @if (_ticket.Status == "Closed")
+                {
+                    <div class="alert alert-info mb-3">
+                        Closed tickets cannot be reassigned.
+                    </div>
+                }
+                else if (_agentsLoading)
                 {
                     <LoadingSpinner Text="Loading agents..." />
                 }
@@ -206,9 +218,12 @@ else if (_ticket is not null)
 
             if (response.IsSuccessStatusCode)
             {
+                var wasReassignment = _ticket.AssignedToUserId is not null;
                 await LoadTicketAsync();
                 _selectedAgentId = _ticket?.AssignedToUserId ?? string.Empty;
-                _toastMessage = "Ticket assignment was updated.";
+                _toastMessage = wasReassignment
+                    ? "Ticket was reassigned and moved to New."
+                    : "Ticket was assigned and moved to New.";
                 _toastVersion++;
                 _toastVisible = true;
                 return;
@@ -216,10 +231,21 @@ else if (_ticket is not null)
 
             if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
-                await LoadTicketAsync();
-                _selectedAgentId = _ticket?.AssignedToUserId ?? string.Empty;
-                _error = "This ticket was modified by another user. The latest version has been loaded.";
-                return;
+                var code = await ApiErrorMapper.GetProblemCodeAsync(response);
+
+                if (code == "concurrency_conflict")
+                {
+                    await LoadTicketAsync();
+                    _selectedAgentId = _ticket?.AssignedToUserId ?? string.Empty;
+                    _error = "This ticket was modified by another user. The latest version has been loaded.";
+                    return;
+                }
+
+                if (code == "closed_ticket_cannot_be_assigned")
+                {
+                    _error = "Closed tickets cannot be reassigned.";
+                    return;
+                }
             }
 
             _error = await ApiErrorMapper.ToMessageAsync(

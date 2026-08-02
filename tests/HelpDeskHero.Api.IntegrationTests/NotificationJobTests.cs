@@ -49,6 +49,36 @@ public sealed class NotificationJobTests
         dispatcher.RecipientIds.Should().BeEquivalentTo(["user", "agent"]);
     }
 
+    [Theory]
+    [InlineData(false, "Ticket assigned: HDH-1")]
+    [InlineData(true, "Ticket reassigned: HDH-1")]
+    public async Task Assignment_NotifiesOnlyNewAssignee(bool isReassignment, string expectedSubject)
+    {
+        await using var db = CreateContext();
+        await SeedTicketConversationAsync(db);
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketAssignedNotificationAsync(1, "agent", isReassignment);
+
+        dispatcher.Messages.Should().ContainSingle();
+        dispatcher.Messages[0].UserId.Should().Be("agent");
+        dispatcher.Messages[0].Subject.Should().Be(expectedSubject);
+        dispatcher.Messages[0].Body.Should().Be("Ticket HDH-1 - Test ticket has been assigned to you.");
+    }
+
+    [Fact]
+    public async Task Assignment_MissingTicket_DoesNotNotify()
+    {
+        await using var db = CreateContext();
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketAssignedNotificationAsync(404, "agent", false);
+
+        dispatcher.Messages.Should().BeEmpty();
+    }
+
     private static AppDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
@@ -96,9 +126,11 @@ public sealed class NotificationJobTests
     private sealed class CollectingDispatcher : INotificationDispatcher
     {
         public List<string> RecipientIds { get; } = [];
+        public List<NotificationMessage> Messages { get; } = [];
 
         public Task DispatchAsync(NotificationMessage message, CancellationToken ct = default)
         {
+            Messages.Add(message);
             if (message.UserId is not null)
                 RecipientIds.Add(message.UserId);
 

@@ -67,6 +67,7 @@ public sealed class TicketsEndpointsTests
         created!.Title.Should().Be(dto.Title);
         created.Priority.Should().Be(dto.Priority);
         created.Status.Should().Be("New");
+        created.RequesterDisplayName.Should().Be("System Admin");
     }
 
     [Fact]
@@ -78,6 +79,8 @@ public sealed class TicketsEndpointsTests
         var response = await CreateTicketAsync(title);
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await response.Content.ReadFromJsonAsync<TicketDto>();
+        created!.RequesterDisplayName.Should().BeNull();
         var ticket = await FindTicketByTitleAsync(title);
         ticket.RequesterUserId.Should().Be(userId);
         ticket.AssignedToUserId.Should().NotBeNullOrWhiteSpace();

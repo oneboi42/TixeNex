@@ -5,6 +5,24 @@ namespace HelpDeskHero.UI.Services.Api;
 
 public static class ApiErrorMapper
 {
+    public static async Task<string?> GetProblemCodeAsync(HttpResponseMessage response)
+    {
+        var content = await response.Content.ReadAsStringAsync();
+
+        if (string.IsNullOrWhiteSpace(content))
+            return null;
+
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            return TryGetString(document.RootElement, "code", out var code) ? code : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static async Task<string> ToMessageAsync(
         HttpResponseMessage response,
         string fallbackMessage = "An error occurred while communicating with the API.")

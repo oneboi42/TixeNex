@@ -109,6 +109,11 @@ else
                         <th>Title</th>
                         <th>Status</th>
                         <th>Priority</th>
+                        <AuthorizeView Roles="Admin">
+                            <Authorized>
+                                <th>Requester</th>
+                            </Authorized>
+                        </AuthorizeView>
                         <th>Assigned to</th>
                         <th>Created</th>
                         <th class="text-end">Actions</th>
@@ -134,6 +139,12 @@ else
                             <td>
                                 <PriorityBadge Priority="@item.Priority" />
                             </td>
+
+                            <AuthorizeView Roles="Admin">
+                                <Authorized>
+                                    <td>@(item.RequesterDisplayName ?? "Unknown")</td>
+                                </Authorized>
+                            </AuthorizeView>
 
                             <td>
                                 @(item.AssignedToDisplayName ?? "Unassigned")
