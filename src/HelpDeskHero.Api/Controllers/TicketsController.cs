@@ -10,6 +10,7 @@ using HelpDeskHero.Shared.Contracts.Common;
 using HelpDeskHero.Shared.Contracts.Tickets;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,6 +25,7 @@ public sealed class TicketsController : ControllerBase
     private readonly AuditService _audit;
     private readonly ISlaCalculator _slaCalculator;
     private readonly ITicketAssignmentService _ticketAssignmentService;
+    private readonly UserManager<ApplicationUser> _userManager;
     private readonly ITicketVisibilityContextResolver _ticketVisibilityContextResolver;
     private readonly IOutboxWriter _outboxWriter;
     private readonly IWebHostEnvironment _environment;
@@ -33,6 +35,7 @@ public sealed class TicketsController : ControllerBase
         AuditService audit,
         ISlaCalculator slaCalculator,
         ITicketAssignmentService ticketAssignmentService,
+        UserManager<ApplicationUser> userManager,
         ITicketVisibilityContextResolver ticketVisibilityContextResolver,
         IOutboxWriter outboxWriter,
         IWebHostEnvironment environment)
@@ -41,6 +44,7 @@ public sealed class TicketsController : ControllerBase
         _audit = audit;
         _slaCalculator = slaCalculator;
         _ticketAssignmentService = ticketAssignmentService;
+        _userManager = userManager;
         _ticketVisibilityContextResolver = ticketVisibilityContextResolver;
         _outboxWriter = outboxWriter;
         _environment = environment;
@@ -93,12 +97,16 @@ public sealed class TicketsController : ControllerBase
         var pagedTickets = q
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize);
+        var includeRequesterDisplayName = User.IsInRole("Admin");
 
         var items = await (
             from x in pagedTickets
             join assignedUser in _db.Users
                 on x.AssignedToUserId equals assignedUser.Id into assignedUsers
             from assignedUser in assignedUsers.DefaultIfEmpty()
+            join requesterUser in _db.Users
+                on x.RequesterUserId equals requesterUser.Id into requesterUsers
+            from requesterUser in requesterUsers.DefaultIfEmpty()
             select new TicketDto
             {
                 Id = x.Id,
@@ -109,6 +117,9 @@ public sealed class TicketsController : ControllerBase
                 Priority = x.Priority,
                 CreatedAtUtc = x.CreatedAtUtc,
                 UpdatedAtUtc = x.UpdatedAtUtc,
+                RequesterDisplayName = includeRequesterDisplayName && requesterUser != null
+                    ? requesterUser.DisplayName
+                    : null,
                 AssignedToUserId = x.AssignedToUserId,
                 AssignedToDisplayName = assignedUser == null
                     ? null
@@ -211,19 +222,29 @@ public sealed class TicketsController : ControllerBase
             join assignedUser in _db.Users
                 on ticket.AssignedToUserId equals assignedUser.Id into assignedUsers
             from assignedUser in assignedUsers.DefaultIfEmpty()
+            join requesterUser in _db.Users
+                on ticket.RequesterUserId equals requesterUser.Id into requesterUsers
+            from requesterUser in requesterUsers.DefaultIfEmpty()
             where ticket.Id == id
             select new
             {
                 Ticket = ticket,
                 AssignedToDisplayName = assignedUser == null
                     ? null
-                    : assignedUser.DisplayName
+                    : assignedUser.DisplayName,
+                RequesterDisplayName = requesterUser == null
+                    ? null
+                    : requesterUser.DisplayName
             }).FirstOrDefaultAsync(ct);
 
         if (result is null)
             return TicketNotFound(id);
 
-        return Ok(ToDto(result.Ticket, visibilityContext, result.AssignedToDisplayName));
+        return Ok(ToDto(
+            result.Ticket,
+            visibilityContext,
+            result.AssignedToDisplayName,
+            User.IsInRole("Admin") ? result.RequesterDisplayName : null));
     }
 
     [HttpPost]
@@ -277,7 +298,17 @@ public sealed class TicketsController : ControllerBase
                 .Where(x => x.Id == entity.AssignedToUserId)
                 .Select(x => x.DisplayName)
                 .SingleOrDefaultAsync(ct);
-        var result = ToDto(entity, visibilityContext, assignedToDisplayName);
+        var requesterDisplayName = User.IsInRole("Admin")
+            ? await _db.Users
+                .Where(x => x.Id == entity.RequesterUserId)
+                .Select(x => x.DisplayName)
+                .SingleOrDefaultAsync(ct)
+            : null;
+        var result = ToDto(
+            entity,
+            visibilityContext,
+            assignedToDisplayName,
+            requesterDisplayName);
 
         return CreatedAtAction(nameof(GetById), new { id = entity.Id }, result);
     }
@@ -343,6 +374,121 @@ public sealed class TicketsController : ControllerBase
         }
 
         await _audit.WriteAsync("Update", "Ticket", entity.Id.ToString(), new { entity.Number, entity.Title }, ct);
+
+        return NoContent();
+    }
+
+
+    [HttpPost("{id:int}/assign")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> Assign(int id, AssignTicketDto dto, CancellationToken ct)
+    {
+        var errors = ValidateAssignment(dto);
+
+        if (errors.Count > 0)
+            return ValidationError(errors);
+
+        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+
+        if (entity is null)
+            return TicketNotFound(id);
+
+        if (entity.Status == "Closed")
+        {
+            return BusinessProblem(
+                StatusCodes.Status409Conflict,
+                "Closed ticket cannot be reassigned",
+                "A closed ticket cannot be assigned or reassigned.",
+                "closed_ticket_cannot_be_assigned");
+        }
+
+        var assignedToUserId = dto.AssignedToUserId.Trim();
+        var assignee = await _userManager.FindByIdAsync(assignedToUserId);
+
+        if (assignee is null)
+        {
+            return BusinessProblem(
+                StatusCodes.Status404NotFound,
+                "Assignee not found",
+                $"The user with ID {assignedToUserId} does not exist.",
+                "assignee_not_found");
+        }
+
+        if (!assignee.IsActive)
+        {
+            return BusinessProblem(
+                StatusCodes.Status409Conflict,
+                "Inactive assignee",
+                "An inactive user cannot be assigned to a ticket.",
+                "assignee_inactive");
+        }
+
+        if (!await _userManager.IsInRoleAsync(assignee, "Agent"))
+        {
+            return BusinessProblem(
+                StatusCodes.Status409Conflict,
+                "Invalid assignee",
+                "Only a user with the Agent role can be assigned to a ticket.",
+                "assignee_must_be_agent");
+        }
+
+        var originalRowVersion = Convert.FromBase64String(dto.RowVersionBase64);
+        _db.Entry(entity).Property(x => x.RowVersion).OriginalValue = originalRowVersion;
+
+        var previousAssignedToUserId = entity.AssignedToUserId;
+
+        if (previousAssignedToUserId == assignee.Id)
+            return NoContent();
+
+        var action = previousAssignedToUserId is null ? "Assign" : "Reassign";
+        var eventType = previousAssignedToUserId is null ? "Assigned" : "Reassigned";
+        var previousStatus = entity.Status;
+
+        entity.AssignedToUserId = assignee.Id;
+        entity.Status = "New";
+        entity.UpdatedAtUtc = DateTime.UtcNow;
+        entity.ResolvedAtUtc = null;
+
+        await _outboxWriter.AddAsync(
+            "TicketChanged",
+            ToLiveUpdateDto(entity, eventType),
+            ct);
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return ConflictProblem();
+        }
+
+        await _audit.WriteAsync(
+            action,
+            "Ticket",
+            entity.Id.ToString(),
+            new
+            {
+                entity.Number,
+                entity.Title,
+                PreviousAssignedToUserId = previousAssignedToUserId,
+                AssignedToUserId = assignee.Id,
+                AssignedToDisplayName = assignee.DisplayName,
+                PreviousStatus = previousStatus,
+                NewStatus = entity.Status
+            },
+            ct);
+
+        if (!_environment.IsEnvironment("Testing"))
+        {
+            var isReassignment = previousAssignedToUserId != null;
+            BackgroundJob.Enqueue<INotificationJob>(job =>
+                job.SendTicketAssignedNotificationAsync(
+                    entity.Id,
+                    assignee.Id,
+                    isReassignment,
+                    default));
+        }
 
         return NoContent();
     }
@@ -585,6 +731,19 @@ public sealed class TicketsController : ControllerBase
         return errors;
     }
 
+
+    private static Dictionary<string, string[]> ValidateAssignment(AssignTicketDto dto)
+    {
+        var errors = ValidateRowVersion(dto.RowVersionBase64);
+
+        if (string.IsNullOrWhiteSpace(dto.AssignedToUserId))
+        {
+            errors["AssignedToUserId"] = ["AssignedToUserId is required."];
+        }
+
+        return errors;
+    }
+
     private static Dictionary<string, string[]> ValidateUpdate(UpdateTicketDto dto)
     {
         var errors = ValidateCreate(new CreateTicketDto
@@ -635,7 +794,8 @@ public sealed class TicketsController : ControllerBase
     private static TicketDto ToDto(
         Ticket entity,
         TicketVisibilityContext context,
-        string? assignedToDisplayName = null) => new()
+        string? assignedToDisplayName = null,
+        string? requesterDisplayName = null) => new()
     {
         Id = entity.Id,
         Number = entity.Number,
@@ -645,6 +805,7 @@ public sealed class TicketsController : ControllerBase
         Priority = entity.Priority,
         CreatedAtUtc = entity.CreatedAtUtc,
         UpdatedAtUtc = entity.UpdatedAtUtc,
+        RequesterDisplayName = requesterDisplayName,
         AssignedToUserId = entity.AssignedToUserId,
         AssignedToDisplayName = entity.AssignedToUserId is null
             ? null

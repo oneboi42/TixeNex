@@ -42,6 +42,12 @@ public sealed class TicketApiClient : ITicketApiClient
         CancellationToken ct = default) =>
         await _http.PutAsJsonAsync($"api/tickets/{id}", dto, ct);
 
+    public async Task<HttpResponseMessage> AssignAsync(
+        int id,
+        AssignTicketDto dto,
+        CancellationToken ct = default) =>
+        await _http.PostAsJsonAsync($"api/tickets/{id}/assign", dto, ct);
+
     public Task<HttpResponseMessage> StartAsync(
         int id,
         TicketLifecycleRequestDto dto,

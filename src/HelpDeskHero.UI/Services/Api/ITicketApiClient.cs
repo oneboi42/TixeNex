@@ -22,6 +22,11 @@ public interface ITicketApiClient
         UpdateTicketDto dto,
         CancellationToken ct = default);
 
+    Task<HttpResponseMessage> AssignAsync(
+        int id,
+        AssignTicketDto dto,
+        CancellationToken ct = default);
+
     Task<HttpResponseMessage> StartAsync(
         int id,
         TicketLifecycleRequestDto dto,

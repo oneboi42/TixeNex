@@ -59,6 +59,30 @@ public sealed class NotificationJob : INotificationJob
         }
     }
 
+    public async Task SendTicketAssignedNotificationAsync(
+        int ticketId,
+        string assignedToUserId,
+        bool isReassignment,
+        CancellationToken ct = default)
+    {
+        var ticket = await _db.Tickets
+            .AsNoTracking()
+            .Where(x => x.Id == ticketId)
+            .Select(x => new { x.Number, x.Title })
+            .FirstOrDefaultAsync(ct);
+
+        if (ticket is null)
+            return;
+
+        await _dispatcher.DispatchAsync(new NotificationMessage
+        {
+            Channel = NotificationChannel.InApp,
+            Subject = $"Ticket {(isReassignment ? "reassigned" : "assigned")}: {ticket.Number}",
+            Body = $"Ticket {ticket.Number} - {ticket.Title} has been assigned to you.",
+            UserId = assignedToUserId
+        }, ct);
+    }
+
     public async Task SendTicketCommentNotificationsAsync(
         int ticketId,
         string authorUserId,

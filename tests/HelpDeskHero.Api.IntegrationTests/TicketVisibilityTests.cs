@@ -195,6 +195,57 @@ public sealed class TicketVisibilityTests
     }
 
     [Fact]
+    public async Task TicketResponses_AsAdmin_IncludeRequesterDisplayName()
+    {
+        var requesterId = await GetUserIdAsync("user");
+        var requesterDisplayName = await GetDisplayNameAsync("user");
+        var marker = $"requester-admin-{Guid.NewGuid():N}";
+        var ticket = (await SeedTicketsAsync(new TicketSeed(marker, requesterId, null))).Single();
+        await LoginAsync("admin", "Admin1234");
+
+        var listItem = (await GetPageAsync(marker)).Items.Single();
+        var details = await _client.GetFromJsonAsync<TicketDto>($"/api/tickets/{ticket.Id}");
+
+        listItem.RequesterDisplayName.Should().Be(requesterDisplayName);
+        details!.RequesterDisplayName.Should().Be(requesterDisplayName);
+    }
+
+    [Theory]
+    [InlineData("agent", "Agent123!")]
+    [InlineData("user", "User123!")]
+    public async Task TicketResponses_AsNonAdmin_OmitRequesterDisplayName(
+        string userName,
+        string password)
+    {
+        var actorId = await GetUserIdAsync(userName);
+        var marker = $"requester-hidden-{userName}-{Guid.NewGuid():N}";
+        var requesterId = userName == "user" ? actorId : await GetUserIdAsync("user");
+        var assignedId = userName == "agent" ? actorId : null;
+        var ticket = (await SeedTicketsAsync(new TicketSeed(marker, requesterId, assignedId))).Single();
+        await LoginAsync(userName, password);
+
+        var listItem = (await GetPageAsync(marker)).Items.Single();
+        var details = await _client.GetFromJsonAsync<TicketDto>($"/api/tickets/{ticket.Id}");
+
+        listItem.RequesterDisplayName.Should().BeNull();
+        details!.RequesterDisplayName.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task LegacyTicket_AsAdmin_ReturnsNullRequesterWithoutError()
+    {
+        var marker = $"requester-legacy-{Guid.NewGuid():N}";
+        var ticket = (await SeedTicketsAsync(new TicketSeed(marker, null, null))).Single();
+        await LoginAsync("admin", "Admin1234");
+
+        var listItem = (await GetPageAsync(marker)).Items.Single();
+        var details = await _client.GetFromJsonAsync<TicketDto>($"/api/tickets/{ticket.Id}");
+
+        listItem.RequesterDisplayName.Should().BeNull();
+        details!.RequesterDisplayName.Should().BeNull();
+    }
+
+    [Fact]
     public async Task GetTickets_AppliesVisibilityBeforeFiltersPaginationAndCount()
     {
         var userAId = await GetUserIdAsync("user");

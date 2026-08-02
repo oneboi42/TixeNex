@@ -71,6 +71,58 @@ public sealed class TicketListPageTests : BunitContext
     }
 
     [Fact]
+    public void TicketListPage_AsAdmin_ShowsRequesterColumnAndDisplayName()
+    {
+        var cut = RenderPage(new FakeTicketApiClient(new TicketDto
+        {
+            Id = 6,
+            Number = "HDH-0006",
+            Title = "Requester ticket",
+            RequesterDisplayName = "Requesting User",
+            CreatedAtUtc = DateTime.UtcNow
+        }));
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.FindAll("th").Should().Contain(x => x.TextContent.Trim() == "Requester");
+            cut.Markup.Should().Contain("Requesting User");
+        });
+    }
+
+    [Fact]
+    public void TicketListPage_AsAdmin_ShowsUnknownForLegacyRequester()
+    {
+        var cut = RenderPage(new FakeTicketApiClient(new TicketDto
+        {
+            Id = 7,
+            Number = "HDH-0007",
+            Title = "Legacy ticket",
+            CreatedAtUtc = DateTime.UtcNow
+        }));
+
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Unknown"));
+    }
+
+    [Theory]
+    [InlineData("Agent")]
+    [InlineData("User")]
+    public void TicketListPage_AsNonAdmin_HidesRequesterColumnAndValue(string role)
+    {
+        var cut = RenderPage(new FakeTicketApiClient(new TicketDto
+        {
+            Id = 8,
+            Number = "HDH-0008",
+            Title = "Hidden requester ticket",
+            RequesterDisplayName = "Sensitive Requester",
+            CreatedAtUtc = DateTime.UtcNow
+        }), role);
+
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Hidden requester ticket"));
+        cut.FindAll("th").Should().NotContain(x => x.TextContent.Trim() == "Requester");
+        cut.Markup.Should().NotContain("Sensitive Requester");
+    }
+
+    [Fact]
     public void TicketListPage_StartCapabilityCallsDedicatedStartEndpoint()
     {
         var api = new FakeTicketApiClient(new TicketDto
@@ -248,6 +300,14 @@ public sealed class TicketListPageTests : BunitContext
             CancellationToken ct = default)
         {
             UpdateCalls++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
+        }
+
+        public Task<HttpResponseMessage> AssignAsync(
+            int id,
+            AssignTicketDto dto,
+            CancellationToken ct = default)
+        {
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
         }
 

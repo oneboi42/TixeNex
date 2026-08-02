@@ -105,6 +105,7 @@ public sealed class TicketLifecycleTests
             new AuditService(db, new HttpContextAccessor { HttpContext = httpContext }),
             new SlaCalculator(db),
             new NoopTicketAssignmentService(),
+            null!, // UserManager is not used by these tests.
             new TicketVisibilityContextResolver(),
             new OutboxWriter(db),
             new TestWebHostEnvironment())
