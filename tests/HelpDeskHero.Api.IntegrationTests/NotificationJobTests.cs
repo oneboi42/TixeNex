@@ -11,6 +11,81 @@ namespace HelpDeskHero.Api.IntegrationTests;
 public sealed class NotificationJobTests
 {
     [Fact]
+    public async Task TicketCreation_NotifiesOnlyRequester()
+    {
+        await using var db = CreateContext();
+        await SeedTicketAsync(db, requesterUserId: "requester", assignedToUserId: "assigned-agent");
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketCreatedNotificationsAsync(1);
+
+        dispatcher.Messages.Should().ContainSingle();
+        dispatcher.Messages[0].UserId.Should().Be("requester");
+        dispatcher.Messages[0].Subject.Should().Be("New ticket: HDH-1");
+        dispatcher.Messages[0].Body.Should().Be("Ticket HDH-1 was created - Test ticket");
+        dispatcher.RecipientIds.Should().NotContain(["other-user", "admin", "other-agent", "assigned-agent"]);
+    }
+
+    [Fact]
+    public async Task AutomaticAssignment_NotifiesOnlyAssignedAgent()
+    {
+        await using var db = CreateContext();
+        await SeedTicketAsync(db, requesterUserId: "requester", assignedToUserId: "assigned-agent");
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketAssignedNotificationAsync(1, "assigned-agent", false);
+
+        dispatcher.Messages.Should().ContainSingle();
+        dispatcher.Messages[0].UserId.Should().Be("assigned-agent");
+        dispatcher.Messages[0].Subject.Should().Be("Ticket assigned: HDH-1");
+        dispatcher.RecipientIds.Should().NotContain(["requester", "other-agent"]);
+    }
+
+    [Fact]
+    public async Task TicketCreation_WhenRequesterIsAssignee_SendsOneCombinedNotification()
+    {
+        await using var db = CreateContext();
+        await SeedTicketAsync(db, requesterUserId: "requester", assignedToUserId: "requester");
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketCreatedNotificationsAsync(1);
+
+        dispatcher.Messages.Should().ContainSingle();
+        dispatcher.Messages[0].UserId.Should().Be("requester");
+        dispatcher.Messages[0].Subject.Should().Be("Ticket created and assigned: HDH-1");
+        dispatcher.Messages[0].Body.Should().Be(
+            "Ticket HDH-1 - Test ticket was created and assigned to you.");
+    }
+
+    [Fact]
+    public async Task TicketCreation_MissingTicket_DoesNotNotify()
+    {
+        await using var db = CreateContext();
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketCreatedNotificationsAsync(404);
+
+        dispatcher.Messages.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task TicketCreation_DeletedTicket_DoesNotNotify()
+    {
+        await using var db = CreateContext();
+        await SeedTicketAsync(db, requesterUserId: "requester", isDeleted: true);
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketCreatedNotificationsAsync(1);
+
+        dispatcher.Messages.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task UserReply_NotifiesAssignedAgentAndPreviousAdminParticipant()
     {
         await using var db = CreateContext();
@@ -63,6 +138,7 @@ public sealed class NotificationJobTests
 
         dispatcher.Messages.Should().ContainSingle();
         dispatcher.Messages[0].UserId.Should().Be("agent");
+        dispatcher.RecipientIds.Should().NotContain("previous-agent");
         dispatcher.Messages[0].Subject.Should().Be(expectedSubject);
         dispatcher.Messages[0].Body.Should().Be("Ticket HDH-1 - Test ticket has been assigned to you.");
     }
@@ -118,6 +194,33 @@ public sealed class NotificationJobTests
             Body = "Previous admin reply",
             CreatedByUserId = "admin",
             CreatedByDisplayName = "Admin"
+        });
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task SeedTicketAsync(
+        AppDbContext db,
+        string requesterUserId,
+        string? assignedToUserId = null,
+        bool isDeleted = false)
+    {
+        db.Users.AddRange(
+            new ApplicationUser { Id = "requester", UserName = "requester", DisplayName = "Requester", IsActive = true },
+            new ApplicationUser { Id = "other-user", UserName = "other-user", DisplayName = "Other User", IsActive = true },
+            new ApplicationUser { Id = "admin", UserName = "admin", DisplayName = "Admin", IsActive = true },
+            new ApplicationUser { Id = "assigned-agent", UserName = "assigned-agent", DisplayName = "Assigned Agent", IsActive = true },
+            new ApplicationUser { Id = "other-agent", UserName = "other-agent", DisplayName = "Other Agent", IsActive = true });
+
+        db.Tickets.Add(new Ticket
+        {
+            Id = 1,
+            Number = "HDH-1",
+            Title = "Test ticket",
+            Description = "Test",
+            RequesterUserId = requesterUserId,
+            AssignedToUserId = assignedToUserId,
+            IsDeleted = isDeleted
         });
 
         await db.SaveChangesAsync();

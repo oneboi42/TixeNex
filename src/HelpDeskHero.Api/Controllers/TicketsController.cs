@@ -289,6 +289,17 @@ public sealed class TicketsController : ControllerBase
         {
             BackgroundJob.Enqueue<INotificationJob>(job =>
                 job.SendTicketCreatedNotificationsAsync(entity.Id, default));
+
+            if (!string.IsNullOrWhiteSpace(entity.AssignedToUserId) &&
+                entity.AssignedToUserId != entity.RequesterUserId)
+            {
+                BackgroundJob.Enqueue<INotificationJob>(job =>
+                    job.SendTicketAssignedNotificationAsync(
+                        entity.Id,
+                        entity.AssignedToUserId,
+                        false,
+                        default));
+            }
         }
 
         var visibilityContext = _ticketVisibilityContextResolver.Resolve(User).Context!;
