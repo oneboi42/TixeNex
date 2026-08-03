@@ -112,19 +112,10 @@
 @code {
     private int _unreadCount;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
         NotificationApi.UnreadCountChanged += OnUnreadCountChanged;
-
-        try
-        {
-            var notifications = await NotificationApi.GetMineAndUpdateUnreadCountAsync();
-            _unreadCount = notifications.Count(x => !x.IsRead);
-        }
-        catch
-        {
-            _unreadCount = 0;
-        }
+        _unreadCount = NotificationApi.CurrentUnreadCount;
     }
 
     private void OnUnreadCountChanged(int unreadCount)
