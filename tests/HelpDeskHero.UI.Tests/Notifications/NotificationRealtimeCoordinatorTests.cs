@@ -6,7 +6,7 @@ using HelpDeskHero.UI.Services.Api;
 using HelpDeskHero.UI.Services.Realtime;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace HelpDeskHero.UI.Tests;
+namespace HelpDeskHero.UI.Tests.Notifications;
 
 public sealed class NotificationRealtimeCoordinatorTests
 {

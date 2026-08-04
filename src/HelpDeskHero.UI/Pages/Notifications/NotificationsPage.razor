@@ -81,7 +81,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         NotificationRealtime.NotificationsChanged += HandleNotificationsChangedAsync;
-        _notifications = (await NotificationRealtime.RefreshAsync()).ToList();
+        await LoadNotificationsAsync();
     }
 
     private async Task LoadNotificationsAsync()

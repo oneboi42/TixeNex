@@ -10,7 +10,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace HelpDeskHero.Api.IntegrationTests;
+namespace HelpDeskHero.Api.IntegrationTests.Exports;
 
 public sealed class ExportAuthorizationTests
 {

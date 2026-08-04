@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace HelpDeskHero.UI.Tests;
+namespace HelpDeskHero.UI.Tests.Layout;
 
 public sealed class MainLayoutNotificationStartupTests : BunitContext
 {

@@ -3,7 +3,7 @@ using System.Text;
 using FluentAssertions;
 using HelpDeskHero.UI.Services.Api;
 
-namespace HelpDeskHero.UI.Tests;
+namespace HelpDeskHero.UI.Tests.Api;
 
 public sealed class ApiErrorMapperTests
 {

@@ -13,8 +13,9 @@ using HelpDeskHero.Shared.Contracts.Tickets;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using HelpDeskHero.Api.IntegrationTests.Infrastructure;
 
-namespace HelpDeskHero.Api.IntegrationTests;
+namespace HelpDeskHero.Api.IntegrationTests.Tickets;
 
 [Collection("ApiIntegration")]
 public sealed class TicketVisibilityTests

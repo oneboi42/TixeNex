@@ -14,7 +14,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 
-namespace HelpDeskHero.Api.IntegrationTests;
+namespace HelpDeskHero.Api.IntegrationTests.Tickets;
 
 [Collection("ApiIntegration")]
 public sealed class TicketLifecycleTests

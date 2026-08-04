@@ -9,8 +9,9 @@ using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using HelpDeskHero.Api.IntegrationTests.Infrastructure;
 
-namespace HelpDeskHero.Api.IntegrationTests;
+namespace HelpDeskHero.Api.IntegrationTests.Tickets;
 
 [Collection("ApiIntegration")]
 public sealed class TicketsEndpointsTests

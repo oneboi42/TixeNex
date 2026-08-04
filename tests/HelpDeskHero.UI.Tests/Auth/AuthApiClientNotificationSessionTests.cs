@@ -11,7 +11,7 @@ using HelpDeskHero.UI.Services.Realtime;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.JSInterop;
 
-namespace HelpDeskHero.UI.Tests;
+namespace HelpDeskHero.UI.Tests.Auth;
 
 public sealed class AuthApiClientNotificationSessionTests
 {

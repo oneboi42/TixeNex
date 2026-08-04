@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace HelpDeskHero.Api.IntegrationTests;
+namespace HelpDeskHero.Api.IntegrationTests.Notifications;
 
 public sealed class NotificationsControllerTests
 {
