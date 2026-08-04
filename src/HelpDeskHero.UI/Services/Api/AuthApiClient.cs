@@ -56,7 +56,7 @@ public sealed class AuthApiClient
         }
 
         _authStateProvider.NotifyUserAuthentication(jwt.Claims);
-        await _notificationRealtime.StartAsync(userId, ct);
+        await _notificationRealtime.TryStartAsync(userId, ct);
 
         return true;
     }

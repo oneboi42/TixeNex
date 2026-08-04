@@ -101,7 +101,7 @@
         var userId = GetUserId(authenticationState.User);
         if (userId is not null)
         {
-            await NotificationRealtime.StartAsync(userId);
+            await NotificationRealtime.TryStartAsync(userId);
         }
     }
 

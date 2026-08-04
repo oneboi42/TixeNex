@@ -32,6 +32,22 @@ public sealed class NotificationRealtimeCoordinator : IAsyncDisposable
     public event Func<IReadOnlyList<UserNotificationDto>, Task>? NotificationsChanged;
     public event Func<UserNotificationDto, Task>? NotificationReceived;
 
+    public async Task<bool> TryStartAsync(string userId, CancellationToken ct = default)
+    {
+        try
+        {
+            await StartAsync(userId, ct);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Notification initialization failed; the authenticated session will continue.");
+            return false;
+        }
+    }
+
     public async Task StartAsync(string userId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(userId);
@@ -45,21 +61,32 @@ public sealed class NotificationRealtimeCoordinator : IAsyncDisposable
                 return;
 
             var session = _sessionState.BeginIdentity(userId);
-            await StopRealtimeCoreAsync(ct);
-
-            _notificationHandler = notification =>
-                HandleNotificationCreatedSafelyAsync(notification, session);
-            _realtime.OnNotificationCreated += _notificationHandler;
 
             try
             {
+                await StopRealtimeCoreAsync(ct);
+
+                _notificationHandler = notification =>
+                    HandleNotificationCreatedSafelyAsync(notification, session);
+                _realtime.OnNotificationCreated += _notificationHandler;
+
                 await _realtime.StartAsync(ct);
                 _started = true;
                 await RefreshCoreAsync(session, ct);
             }
             catch
             {
-                await StopRealtimeCoreAsync(CancellationToken.None);
+                try
+                {
+                    await StopRealtimeCoreAsync(CancellationToken.None);
+                }
+                catch (Exception cleanupException)
+                {
+                    _logger.LogWarning(
+                        cleanupException,
+                        "Failed to fully roll back notification initialization.");
+                }
+
                 throw;
             }
         }

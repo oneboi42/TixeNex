@@ -99,11 +99,161 @@ public sealed class AuthApiClientNotificationSessionTests
         });
 
         loggedIn.Should().BeTrue();
+        (await tokenStore.GetAccessTokenAsync()).Should().Be(loginToken.AccessToken);
+        (await tokenStore.GetRefreshTokenAsync()).Should().Be(loginToken.RefreshToken);
         sessionState.Current.UserId.Should().Be("user-b");
         sessionState.UnreadCount.Should().Be(1);
         realtime.StartCalls.Should().Be(1);
+        realtime.ActiveConnections.Should().Be(1);
+        realtime.SubscriberCount.Should().Be(1);
         (await authStateProvider.GetAuthenticationStateAsync())
             .User.FindFirst(ClaimTypes.NameIdentifier)!.Value.Should().Be("user-b");
+    }
+
+    [Fact]
+    public async Task Login_InvalidCredentialsDoesNotAuthenticateOrStartNotifications()
+    {
+        var sessionState = new NotificationSessionState();
+        var realtime = new FakeRealtimeClient();
+        await using var coordinator = CreateCoordinator(sessionState, realtime, []);
+        var tokenStore = new TokenStore(new MemoryJsRuntime());
+        var authStateProvider = new JwtAuthenticationStateProvider(tokenStore);
+        var authClient = new AuthApiClient(
+            new SingleClientFactory(new HttpClient(new DelegateHandler((_, _) =>
+                Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized))))
+            {
+                BaseAddress = new Uri("https://example.test/")
+            }),
+            tokenStore,
+            authStateProvider,
+            coordinator);
+
+        var loggedIn = await authClient.LoginAsync(new LoginRequestDto
+        {
+            UserName = "user-b",
+            Password = "wrong-password"
+        });
+
+        loggedIn.Should().BeFalse();
+        realtime.StartCalls.Should().Be(0);
+        realtime.SubscriberCount.Should().Be(0);
+        (await tokenStore.GetAccessTokenAsync()).Should().BeNull();
+        (await authStateProvider.GetAuthenticationStateAsync())
+            .User.Identity!.IsAuthenticated.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Login_SignalRStartupFailureKeepsAuthenticationAndAllowsCleanRetry()
+    {
+        var sessionState = new NotificationSessionState();
+        var realtime = new FakeRealtimeClient();
+        var startFailure = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        realtime.EnqueueStart(startFailure.Task);
+        await using var coordinator = CreateCoordinator(sessionState, realtime, []);
+        var tokenStore = new TokenStore(new MemoryJsRuntime());
+        var authStateProvider = new JwtAuthenticationStateProvider(tokenStore);
+        var loginToken = CreateTokenResponse("user-b");
+        var authClient = CreateAuthClient(
+            loginToken,
+            tokenStore,
+            authStateProvider,
+            coordinator);
+
+        var loginTask = authClient.LoginAsync(new LoginRequestDto
+        {
+            UserName = "user-b",
+            Password = "password"
+        });
+        realtime.StartCalls.Should().Be(1);
+
+        startFailure.SetException(new InvalidOperationException("SignalR unavailable."));
+
+        (await loginTask).Should().BeTrue();
+        (await tokenStore.GetAccessTokenAsync()).Should().Be(loginToken.AccessToken);
+        (await tokenStore.GetRefreshTokenAsync()).Should().Be(loginToken.RefreshToken);
+        (await authStateProvider.GetAuthenticationStateAsync())
+            .User.Identity!.IsAuthenticated.Should().BeTrue();
+        sessionState.UnreadCount.Should().Be(0);
+        realtime.ActiveConnections.Should().Be(0);
+        realtime.SubscriberCount.Should().Be(0);
+
+        var received = 0;
+        coordinator.NotificationReceived += _ =>
+        {
+            received++;
+            return Task.CompletedTask;
+        };
+
+        await coordinator.StartAsync("user-b");
+        await realtime.RaiseAsync(new UserNotificationDto
+        {
+            Id = 42,
+            Subject = "Retry",
+            Body = "Retry"
+        });
+
+        realtime.StartCalls.Should().Be(2);
+        realtime.ActiveConnections.Should().Be(1);
+        realtime.MaxActiveConnections.Should().Be(1);
+        realtime.SubscriberCount.Should().Be(1);
+        received.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Login_InitialNotificationRefreshFailureKeepsAuthenticationAndAllowsCleanRetry()
+    {
+        var sessionState = new NotificationSessionState();
+        var realtime = new FakeRealtimeClient();
+        var refreshFailure = new TaskCompletionSource<HttpResponseMessage>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        var notificationCalls = 0;
+        await using var coordinator = CreateCoordinator(
+            sessionState,
+            realtime,
+            (_, _) =>
+            {
+                notificationCalls++;
+                return notificationCalls == 1
+                    ? refreshFailure.Task
+                    : Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = JsonContent.Create(Array.Empty<UserNotificationDto>())
+                    });
+            });
+        var tokenStore = new TokenStore(new MemoryJsRuntime());
+        var authStateProvider = new JwtAuthenticationStateProvider(tokenStore);
+        var loginToken = CreateTokenResponse("user-b");
+        var authClient = CreateAuthClient(
+            loginToken,
+            tokenStore,
+            authStateProvider,
+            coordinator);
+
+        var loginTask = authClient.LoginAsync(new LoginRequestDto
+        {
+            UserName = "user-b",
+            Password = "password"
+        });
+        notificationCalls.Should().Be(1);
+
+        refreshFailure.SetException(new HttpRequestException("Notifications unavailable."));
+
+        (await loginTask).Should().BeTrue();
+        (await tokenStore.GetAccessTokenAsync()).Should().Be(loginToken.AccessToken);
+        (await authStateProvider.GetAuthenticationStateAsync())
+            .User.Identity!.IsAuthenticated.Should().BeTrue();
+        sessionState.UnreadCount.Should().Be(0);
+        realtime.ActiveConnections.Should().Be(0);
+        realtime.SubscriberCount.Should().Be(0);
+
+        await coordinator.StartAsync("user-b");
+
+        notificationCalls.Should().Be(2);
+        realtime.StartCalls.Should().Be(2);
+        realtime.ActiveConnections.Should().Be(1);
+        realtime.MaxActiveConnections.Should().Be(1);
+        realtime.SubscriberCount.Should().Be(1);
     }
 
     private static NotificationRealtimeCoordinator CreateCoordinator(
@@ -111,11 +261,21 @@ public sealed class AuthApiClientNotificationSessionTests
         FakeRealtimeClient realtime,
         IReadOnlyList<UserNotificationDto> notifications)
     {
-        var http = new HttpClient(new DelegateHandler((_, _) =>
-            Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        return CreateCoordinator(
+            state,
+            realtime,
+            (_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
                 Content = JsonContent.Create(notifications)
-            })))
+            }));
+    }
+
+    private static NotificationRealtimeCoordinator CreateCoordinator(
+        NotificationSessionState state,
+        FakeRealtimeClient realtime,
+        Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> handler)
+    {
+        var http = new HttpClient(new DelegateHandler(handler))
         {
             BaseAddress = new Uri("https://example.test/")
         };
@@ -126,6 +286,36 @@ public sealed class AuthApiClientNotificationSessionTests
             state,
             NullLogger<NotificationRealtimeCoordinator>.Instance);
     }
+
+    private static AuthApiClient CreateAuthClient(
+        TokenResponseDto token,
+        TokenStore tokenStore,
+        JwtAuthenticationStateProvider authStateProvider,
+        NotificationRealtimeCoordinator coordinator)
+    {
+        return new AuthApiClient(
+            new SingleClientFactory(new HttpClient(new DelegateHandler((_, _) =>
+                Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = JsonContent.Create(token)
+                })))
+            {
+                BaseAddress = new Uri("https://example.test/")
+            }),
+            tokenStore,
+            authStateProvider,
+            coordinator);
+    }
+
+    private static TokenResponseDto CreateTokenResponse(string userId) => new()
+    {
+        AccessToken = CreateJwt(userId),
+        RefreshToken = $"refresh-{userId}",
+        AccessTokenExpiresAtUtc = DateTime.UtcNow.AddMinutes(15),
+        RefreshTokenExpiresAtUtc = DateTime.UtcNow.AddDays(1),
+        UserName = userId,
+        DisplayName = userId
+    };
 
     private static string CreateJwt(string userId)
     {
@@ -196,6 +386,7 @@ public sealed class AuthApiClientNotificationSessionTests
     private sealed class FakeRealtimeClient : INotificationRealtimeClient
     {
         private Func<UserNotificationDto, Task>? _handler;
+        private readonly Queue<Task> _startTasks = new();
 
         public event Func<UserNotificationDto, Task>? OnNotificationCreated
         {
@@ -205,18 +396,38 @@ public sealed class AuthApiClientNotificationSessionTests
 
         public int StartCalls { get; private set; }
         public int StopCalls { get; private set; }
+        public int ActiveConnections { get; private set; }
+        public int MaxActiveConnections { get; private set; }
         public bool HasSubscriber => _handler is not null;
+        public int SubscriberCount => _handler?.GetInvocationList().Length ?? 0;
 
-        public Task StartAsync(CancellationToken ct = default)
+        public void EnqueueStart(Task task) => _startTasks.Enqueue(task);
+
+        public async Task StartAsync(CancellationToken ct = default)
         {
             StartCalls++;
-            return Task.CompletedTask;
+            if (_startTasks.Count > 0)
+                await _startTasks.Dequeue().WaitAsync(ct);
+
+            ActiveConnections++;
+            MaxActiveConnections = Math.Max(MaxActiveConnections, ActiveConnections);
         }
 
         public Task StopAsync(CancellationToken ct = default)
         {
             StopCalls++;
+            ActiveConnections = Math.Max(0, ActiveConnections - 1);
             return Task.CompletedTask;
+        }
+
+        public async Task RaiseAsync(UserNotificationDto notification)
+        {
+            var handlers = _handler;
+            if (handlers is null)
+                return;
+
+            foreach (var handler in handlers.GetInvocationList().Cast<Func<UserNotificationDto, Task>>())
+                await handler(notification);
         }
     }
 }
