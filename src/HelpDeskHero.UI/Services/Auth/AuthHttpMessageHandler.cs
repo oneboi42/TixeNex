@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using HelpDeskHero.Shared.Contracts.Auth;
+using HelpDeskHero.UI.Services.Realtime;
 using Microsoft.AspNetCore.Components;
 
 namespace HelpDeskHero.UI.Services.Auth;
@@ -12,15 +13,21 @@ public sealed class AuthHttpMessageHandler : DelegatingHandler
     private readonly TokenStore _tokenStore;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly NavigationManager _navigationManager;
+    private readonly JwtAuthenticationStateProvider _authStateProvider;
+    private readonly NotificationSessionState _notificationSessionState;
 
     public AuthHttpMessageHandler(
         TokenStore tokenStore,
         IHttpClientFactory httpClientFactory,
-        NavigationManager navigationManager)
+        NavigationManager navigationManager,
+        JwtAuthenticationStateProvider authStateProvider,
+        NotificationSessionState notificationSessionState)
     {
         _tokenStore = tokenStore;
         _httpClientFactory = httpClientFactory;
         _navigationManager = navigationManager;
+        _authStateProvider = authStateProvider;
+        _notificationSessionState = notificationSessionState;
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(
@@ -124,6 +131,16 @@ public sealed class AuthHttpMessageHandler : DelegatingHandler
     private async Task LogoutAndRedirectAsync()
     {
         await _tokenStore.ClearAsync();
+
+        try
+        {
+            await _notificationSessionState.ResetAsync();
+        }
+        finally
+        {
+            _authStateProvider.NotifyUserLogout();
+        }
+
         _navigationManager.NavigateTo("/login", forceLoad: false);
     }
 

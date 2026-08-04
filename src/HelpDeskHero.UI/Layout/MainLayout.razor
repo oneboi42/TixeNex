@@ -96,27 +96,22 @@
     protected override async Task OnInitializedAsync()
     {
         NotificationRealtime.NotificationReceived += ShowNotificationToastAsync;
-        AuthenticationStateProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
 
         var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        if (authenticationState.User.Identity?.IsAuthenticated == true)
+        var userId = GetUserId(authenticationState.User);
+        if (userId is not null)
         {
-            await NotificationRealtime.StartAsync();
+            await NotificationRealtime.TryStartAsync(userId);
         }
     }
 
-    private void OnAuthenticationStateChanged(Task<AuthenticationState> authenticationStateTask)
+    private static string? GetUserId(ClaimsPrincipal user)
     {
-        _ = StartRealtimeForAuthenticatedUserAsync(authenticationStateTask);
-    }
+        if (user.Identity?.IsAuthenticated != true)
+            return null;
 
-    private async Task StartRealtimeForAuthenticatedUserAsync(Task<AuthenticationState> authenticationStateTask)
-    {
-        var authenticationState = await authenticationStateTask;
-        if (authenticationState.User.Identity?.IsAuthenticated == true)
-        {
-            await NotificationRealtime.StartAsync();
-        }
+        return user.FindFirst(ClaimTypes.NameIdentifier)?.Value
+            ?? user.FindFirst("sub")?.Value;
     }
 
     private async Task ShowNotificationToastAsync(UserNotificationDto notification)
@@ -130,6 +125,5 @@
     public void Dispose()
     {
         NotificationRealtime.NotificationReceived -= ShowNotificationToastAsync;
-        AuthenticationStateProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
     }
 }

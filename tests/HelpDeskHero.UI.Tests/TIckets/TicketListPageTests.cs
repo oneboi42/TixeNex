@@ -13,7 +13,7 @@ using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.Extensions.DependencyInjection;
 using HelpDeskHero.UI.Services.Realtime;
 
-namespace HelpDeskHero.UI.Tests;
+namespace HelpDeskHero.UI.Tests.Tickets;
 
 public sealed class TicketListPageTests : BunitContext
 {

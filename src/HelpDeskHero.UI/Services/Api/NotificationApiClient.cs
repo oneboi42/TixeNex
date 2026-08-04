@@ -1,18 +1,28 @@
 using System.Net.Http.Json;
 using HelpDeskHero.Shared.Contracts.Notifications;
+using HelpDeskHero.UI.Services.Realtime;
 
 namespace HelpDeskHero.UI.Services.Api;
 
 public sealed class NotificationApiClient
 {
     private readonly HttpClient _http;
+    private readonly NotificationSessionState _sessionState;
 
-    public NotificationApiClient(HttpClient http)
+    public NotificationApiClient(HttpClient http, NotificationSessionState sessionState)
     {
         _http = http;
+        _sessionState = sessionState;
     }
 
-    public event Action<int>? UnreadCountChanged;
+    public event Action<int>? UnreadCountChanged
+    {
+        add => _sessionState.UnreadCountChanged += value;
+        remove => _sessionState.UnreadCountChanged -= value;
+    }
+
+    public int CurrentUnreadCount => _sessionState.UnreadCount;
+    public NotificationSession CurrentSession => _sessionState.Current;
 
     public async Task<IReadOnlyList<UserNotificationDto>> GetMineAsync(CancellationToken ct = default)
     {
@@ -23,8 +33,9 @@ public sealed class NotificationApiClient
 
     public async Task<IReadOnlyList<UserNotificationDto>> GetMineAndUpdateUnreadCountAsync(CancellationToken ct = default)
     {
+        var session = _sessionState.Current;
         var notifications = await GetMineAsync(ct);
-        UpdateUnreadCount(notifications);
+        _sessionState.TryUpdateUnreadCount(session, notifications.Count(x => !x.IsRead));
         return notifications;
     }
 
@@ -55,8 +66,12 @@ public sealed class NotificationApiClient
         return null;
     }
 
-    public void UpdateUnreadCount(IEnumerable<UserNotificationDto> notifications)
+    public void UpdateUnreadCount(
+        IEnumerable<UserNotificationDto> notifications,
+        NotificationSession? session = null)
     {
-        UnreadCountChanged?.Invoke(notifications.Count(x => !x.IsRead));
+        _sessionState.TryUpdateUnreadCount(
+            session ?? _sessionState.Current,
+            notifications.Count(x => !x.IsRead));
     }
 }

@@ -20,23 +20,35 @@ public sealed class NotificationJob : INotificationJob
     {
         var ticket = await _db.Tickets
             .AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == ticketId, ct);
+            .Where(x => x.Id == ticketId)
+            .Select(x => new
+            {
+                x.Number,
+                x.Title,
+                x.RequesterUserId,
+                x.AssignedToUserId
+            })
+            .FirstOrDefaultAsync(ct);
 
         if (ticket is null)
             return;
 
-        var recipientUserIds = await GetUserIdsInRolesAsync(["Admin", "Agent", "User"], ct);
+        if (string.IsNullOrWhiteSpace(ticket.RequesterUserId))
+            return;
 
-        foreach (var userId in recipientUserIds)
+        var requesterIsAssignee = ticket.RequesterUserId == ticket.AssignedToUserId;
+
+        await _dispatcher.DispatchAsync(new NotificationMessage
         {
-            await _dispatcher.DispatchAsync(new NotificationMessage
-            {
-                Channel = NotificationChannel.InApp,
-                Subject = $"New ticket: {ticket.Number}",
-                Body = $"Ticket {ticket.Number} was created - {ticket.Title}",
-                UserId = userId
-            }, ct);
-        }
+            Channel = NotificationChannel.InApp,
+            Subject = requesterIsAssignee
+                ? $"Ticket created and assigned: {ticket.Number}"
+                : $"New ticket: {ticket.Number}",
+            Body = requesterIsAssignee
+                ? $"Ticket {ticket.Number} - {ticket.Title} was created and assigned to you."
+                : $"Ticket {ticket.Number} was created - {ticket.Title}",
+            UserId = ticket.RequesterUserId
+        }, ct);
     }
 
     public async Task SendDailySummaryAsync(CancellationToken ct = default)

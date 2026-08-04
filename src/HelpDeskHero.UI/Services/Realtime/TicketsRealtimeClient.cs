@@ -9,6 +9,7 @@ public sealed class TicketsRealtimeClient : ITicketsRealtimeClient, INotificatio
 {
     private readonly IConfiguration _configuration;
     private readonly TokenStore _tokenStore;
+    private readonly SemaphoreSlim _connectionLock = new(1, 1);
     private HubConnection? _connection;
 
     public TicketsRealtimeClient(IConfiguration configuration, TokenStore tokenStore)
@@ -22,18 +23,61 @@ public sealed class TicketsRealtimeClient : ITicketsRealtimeClient, INotificatio
 
     public async Task StartAsync(CancellationToken ct = default)
     {
-        if (_connection is not null &&
-            (_connection.State == HubConnectionState.Connected ||
-             _connection.State == HubConnectionState.Connecting ||
-             _connection.State == HubConnectionState.Reconnecting))
+        await _connectionLock.WaitAsync(ct);
+        try
         {
-            return;
+            if (_connection is not null &&
+                (_connection.State == HubConnectionState.Connected ||
+                 _connection.State == HubConnectionState.Connecting ||
+                 _connection.State == HubConnectionState.Reconnecting))
+            {
+                return;
+            }
+
+            _connection ??= CreateConnection();
+
+            try
+            {
+                await _connection.StartAsync(ct);
+                await _connection.SendAsync("JoinDashboard", ct);
+            }
+            catch
+            {
+                await _connection.DisposeAsync();
+                _connection = null;
+                throw;
+            }
         }
+        finally
+        {
+            _connectionLock.Release();
+        }
+    }
 
-        _connection ??= CreateConnection();
+    public async Task StopAsync(CancellationToken ct = default)
+    {
+        await _connectionLock.WaitAsync(ct);
+        try
+        {
+            if (_connection is null)
+                return;
 
-        await _connection.StartAsync(ct);
-        await _connection.SendAsync("JoinDashboard", ct);
+            var connection = _connection;
+            _connection = null;
+
+            try
+            {
+                await connection.StopAsync(ct);
+            }
+            finally
+            {
+                await connection.DisposeAsync();
+            }
+        }
+        finally
+        {
+            _connectionLock.Release();
+        }
     }
 
     private HubConnection CreateConnection()
@@ -73,9 +117,7 @@ public sealed class TicketsRealtimeClient : ITicketsRealtimeClient, INotificatio
 
     public async ValueTask DisposeAsync()
     {
-        if (_connection is not null)
-        {
-            await _connection.DisposeAsync();
-        }
+        await StopAsync();
+        _connectionLock.Dispose();
     }
 }

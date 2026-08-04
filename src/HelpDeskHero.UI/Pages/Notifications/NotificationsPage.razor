@@ -81,7 +81,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         NotificationRealtime.NotificationsChanged += HandleNotificationsChangedAsync;
-        _notifications = (await NotificationRealtime.RefreshAsync()).ToList();
+        await LoadNotificationsAsync();
     }
 
     private async Task LoadNotificationsAsync()
@@ -105,6 +105,7 @@ else
 
     private async Task MarkAsReadAsync(UserNotificationDto item)
     {
+        var session = NotificationApi.CurrentSession;
         _error = null;
         _toastVisible = false;
         _markingReadId = item.Id;
@@ -121,7 +122,7 @@ else
             }
 
             item.IsRead = true;
-            NotificationApi.UpdateUnreadCount(_notifications);
+            NotificationApi.UpdateUnreadCount(_notifications, session);
             _toastVisible = true;
         }
         catch

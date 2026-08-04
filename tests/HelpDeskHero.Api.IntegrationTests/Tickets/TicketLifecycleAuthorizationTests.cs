@@ -9,8 +9,10 @@ using HelpDeskHero.Shared.Contracts.Common;
 using HelpDeskHero.Shared.Contracts.Tickets;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using HelpDeskHero.Api.IntegrationTests.Infrastructure;
 
-namespace HelpDeskHero.Api.IntegrationTests;
+
+namespace HelpDeskHero.Api.IntegrationTests.Tickets;
 
 [Collection("ApiIntegration")]
 public sealed class TicketLifecycleAuthorizationTests

@@ -86,7 +86,7 @@
             await AuthApiClient.RevokeAllSessionsAsync();
             await AuthApiClient.LogoutAsync();
 
-            Navigation.NavigateTo("/login", forceLoad: true);
+            Navigation.NavigateTo("/login", replace: true);
         }
         catch
         {

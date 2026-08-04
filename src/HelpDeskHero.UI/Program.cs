@@ -56,6 +56,7 @@ builder.Services.AddScoped<ITicketApiClient, TicketApiClient>();
 builder.Services.AddScoped<UserApiClient>();
 builder.Services.AddScoped<TicketCommentApiClient>();
 builder.Services.AddScoped<TicketAttachmentApiClient>();
+builder.Services.AddScoped<NotificationSessionState>();
 builder.Services.AddScoped<NotificationApiClient>();
 builder.Services.AddScoped<DashboardApiClient>();
 builder.Services.AddScoped<ExportApiClient>();
