@@ -29,9 +29,31 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
         {
             b.ToTable("Users");
 
-            b.Property(x => x.DisplayName).HasMaxLength(200).IsRequired();
-            b.Property(x => x.IsActive).IsRequired();
-            b.Property(x => x.CreatedAtUtc).IsRequired();
+            b.Property(x => x.DisplayName)
+                .HasMaxLength(200)
+                .IsRequired();
+
+            b.Property(x => x.IsActive)
+                .IsRequired();
+
+            b.Property(x => x.CreatedAtUtc)
+                .IsRequired();
+
+            b.Property(x => x.IsDemoUser)
+                .IsRequired()
+                .HasDefaultValue(false);
+
+            b.Property(x => x.DemoExpiresAtUtc);
+
+            b.Property(x => x.DemoAbsoluteExpiresAtUtc);
+
+            b.Property(x => x.LastActivityAtUtc);
+
+            b.HasIndex(x => new
+            {
+                x.IsDemoUser,
+                x.DemoExpiresAtUtc
+            });
         });
 
         modelBuilder.Entity<ExportJob>(b =>
