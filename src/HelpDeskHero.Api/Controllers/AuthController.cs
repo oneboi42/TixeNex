@@ -1,11 +1,13 @@
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
+using HelpDeskHero.Api.Infrastructure.Security;
 using HelpDeskHero.Api.Infrastructure.Services;
 using HelpDeskHero.Shared.Contracts.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using System.Security.Claims;
 
 namespace HelpDeskHero.Api.Controllers;
@@ -19,19 +21,22 @@ public sealed class AuthController : ControllerBase
     private readonly TokenService _tokenService;
     private readonly RefreshTokenService _refreshTokenService;
     private readonly AppDbContext _db;
+    private readonly DemoOptions _demoOptions;
 
     public AuthController(
         SignInManager<ApplicationUser> signInManager,
         UserManager<ApplicationUser> userManager,
         TokenService tokenService,
         RefreshTokenService refreshTokenService,
-        AppDbContext db)
+        AppDbContext db,
+        IOptions<DemoOptions> demoOptions)
     {
         _signInManager = signInManager;
         _userManager = userManager;
         _tokenService = tokenService;
         _refreshTokenService = refreshTokenService;
         _db = db;
+        _demoOptions = demoOptions.Value;
     }
 
     [HttpPost("login")]
@@ -50,63 +55,74 @@ public sealed class AuthController : ControllerBase
         if (!result.Succeeded)
             return Unauthorized();
 
-        var (accessToken, accessExp) = await _tokenService.CreateAccessTokenAsync(user);
-
-        var (refreshToken, refreshExp) = await _refreshTokenService.CreateAsync(
-            user.Id,
-            dto.DeviceName,
-            HttpContext.Connection.RemoteIpAddress?.ToString(),
-            ct);
-
-        var roles = await _userManager.GetRolesAsync(user);
-
-        return Ok(new TokenResponseDto
-        {
-            AccessToken = accessToken,
-            AccessTokenExpiresAtUtc = accessExp,
-            RefreshToken = refreshToken,
-            RefreshTokenExpiresAtUtc = refreshExp,
-            UserName = user.UserName ?? string.Empty,
-            DisplayName = user.DisplayName,
-            Roles = roles.ToArray()
-        });
+        return Ok(
+            await CreateTokenResponseAsync(
+                user,
+                dto.DeviceName,
+                ct));
     }
 
     [HttpPost("refresh")]
     [AllowAnonymous]
-    public async Task<ActionResult<TokenResponseDto>> Refresh(RefreshRequestDto dto, CancellationToken ct)
+    public async Task<ActionResult<TokenResponseDto>> Refresh(
+        RefreshRequestDto dto,
+        CancellationToken ct)
     {
-        var refresh = await _refreshTokenService.GetActiveByRawTokenAsync(dto.RefreshToken, ct);
+        var refresh =
+            await _refreshTokenService
+                .GetActiveByRawTokenAsync(
+                    dto.RefreshToken,
+                    ct);
 
-        if (refresh is null || refresh.User is null || !refresh.IsActive || !refresh.User.IsActive)
+        if (refresh is null ||
+            refresh.User is null ||
+            !refresh.IsActive ||
+            !refresh.User.IsActive)
+        {
             return Unauthorized();
-
-        await _refreshTokenService.RevokeAsync(refresh, ct);
+        }
 
         var user = refresh.User;
+        var now = DateTime.UtcNow;
 
-        var (accessToken, accessExp) = await _tokenService.CreateAccessTokenAsync(user);
-
-        var (newRefreshToken, refreshExp) = await _refreshTokenService.CreateAsync(
-            user.Id,
-            dto.DeviceName,
-            HttpContext.Connection.RemoteIpAddress?.ToString(),
-            ct);
-
-        var roles = await _userManager.GetRolesAsync(user);
-
-        return Ok(new TokenResponseDto
+        if (user.IsDemoUser)
         {
-            AccessToken = accessToken,
-            AccessTokenExpiresAtUtc = accessExp,
-            RefreshToken = newRefreshToken,
-            RefreshTokenExpiresAtUtc = refreshExp,
-            UserName = user.UserName ?? string.Empty,
-            DisplayName = user.DisplayName,
-            Roles = roles.ToArray()
-        });
-    }
+            if (!user.DemoExpiresAtUtc.HasValue ||
+                !user.DemoAbsoluteExpiresAtUtc.HasValue ||
+                user.DemoExpiresAtUtc <= now ||
+                user.DemoAbsoluteExpiresAtUtc <= now)
+            {
+                refresh.RevokedAtUtc = now;
+                user.IsActive = false;
 
+                await _db.SaveChangesAsync(ct);
+
+                return Unauthorized();
+            }
+
+            var requestedExpiration =
+                now.AddMinutes(
+                    _demoOptions.SlidingLifetimeMinutes);
+
+            user.DemoExpiresAtUtc =
+                requestedExpiration <
+                user.DemoAbsoluteExpiresAtUtc.Value
+                    ? requestedExpiration
+                    : user.DemoAbsoluteExpiresAtUtc.Value;
+
+            user.LastActivityAtUtc = now;
+        }
+
+        refresh.RevokedAtUtc = now;
+
+        await _db.SaveChangesAsync(ct);
+
+        return Ok(
+            await CreateTokenResponseAsync(
+                user,
+                dto.DeviceName,
+                ct));
+    }
 
     [HttpPost("revoke-all")]
     [Authorize]
@@ -145,5 +161,66 @@ public sealed class AuthController : ControllerBase
         }
 
         return NoContent();
+    }
+
+    private async Task<TokenResponseDto>
+        CreateTokenResponseAsync(
+            ApplicationUser user,
+            string deviceName,
+            CancellationToken ct)
+    {
+        DateTime? tokenLimit = null;
+
+        if (user.IsDemoUser)
+        {
+            tokenLimit = user.DemoExpiresAtUtc
+                ?? throw new InvalidOperationException(
+                    "Demo user does not have an expiration time.");
+        }
+
+        var (accessToken, accessExpiresAtUtc) =
+            await _tokenService.CreateAccessTokenAsync(
+                user,
+                tokenLimit);
+
+        var normalizedDeviceName =
+            string.IsNullOrWhiteSpace(deviceName)
+                ? "Unknown device"
+                : deviceName.Trim();
+
+        var (refreshToken, refreshExpiresAtUtc) =
+            await _refreshTokenService.CreateAsync(
+                user.Id,
+                normalizedDeviceName,
+                HttpContext.Connection
+                    .RemoteIpAddress?
+                    .ToString(),
+                tokenLimit,
+                ct);
+
+        var roles =
+            await _userManager.GetRolesAsync(user);
+
+        return new TokenResponseDto
+        {
+            AccessToken = accessToken,
+            AccessTokenExpiresAtUtc =
+                accessExpiresAtUtc,
+
+            RefreshToken = refreshToken,
+            RefreshTokenExpiresAtUtc =
+                refreshExpiresAtUtc,
+
+            UserName =
+                user.UserName ?? string.Empty,
+            DisplayName = user.DisplayName,
+            Roles = roles.ToArray(),
+
+            IsDemoUser = user.IsDemoUser,
+            DemoExpiresAtUtc =
+                user.DemoExpiresAtUtc,
+            DemoAbsoluteExpiresAtUtc =
+                user.DemoAbsoluteExpiresAtUtc
+        };
     }
 }

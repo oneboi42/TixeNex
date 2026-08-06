@@ -80,6 +80,24 @@ builder.Services.AddSwaggerGen(options =>
 // JWT configuration
 builder.Services.Configure<JwtOptions>(builder.Configuration.GetSection("Jwt"));
 
+builder.Services
+    .AddOptions<DemoOptions>()
+    .Bind(builder.Configuration.GetSection(DemoOptions.SectionName))
+    .Validate(
+        options => options.SlidingLifetimeMinutes > 0,
+        "Demo:SlidingLifetimeMinutes must be greater than zero.")
+    .Validate(
+        options => options.AbsoluteLifetimeMinutes >=
+                   options.SlidingLifetimeMinutes,
+        "Demo:AbsoluteLifetimeMinutes must be greater than or equal to the sliding lifetime.")
+    .Validate(
+        options => options.MaxActiveUsers > 0,
+        "Demo:MaxActiveUsers must be greater than zero.")
+    .Validate(
+        options => options.AllowedRoles.Length > 0,
+        "Demo:AllowedRoles must contain at least one role.")
+    .ValidateOnStart();
+
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
