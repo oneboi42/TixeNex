@@ -79,6 +79,9 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
             b.Property(x => x.Status).HasMaxLength(30).IsRequired();
             b.Property(x => x.Priority).HasMaxLength(30).IsRequired();
             b.Property(x => x.CreatedAtUtc).IsRequired();
+            b.Property(x => x.UpdatedAtUtc);
+            b.Property(x => x.DemoExpiresAtUtc);
+
             b.Property(x => x.DueFirstResponseAtUtc);
             b.Property(x => x.DueResolveAtUtc);
             b.Property(x => x.FirstRespondedAtUtc);
@@ -87,7 +90,8 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
             b.Property(x => x.AssignedToUserId).HasMaxLength(450);
             b.Property(x => x.EscalationLevel).IsRequired();
             b.Property(x => x.LastNotifiedAtUtc);
-
+    
+            b.HasIndex(x => x.DemoExpiresAtUtc);
             b.HasOne(x => x.RequesterUser)
                 .WithMany()
                 .HasForeignKey(x => x.RequesterUserId)
