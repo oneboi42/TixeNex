@@ -165,8 +165,14 @@ public sealed class TicketsController : ControllerBase
     [Authorize(Policy = "CanManageTickets")]
     public async Task<ActionResult<List<TicketDto>>> GetDeleted(CancellationToken ct)
     {
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+
+        if (accessError is not null)
+            return accessError;
+
         var items = await _db.Tickets
             .IgnoreQueryFilters()
+            .ApplyWorkspace(visibilityContext)
             .Where(x => x.IsDeleted)
             .OrderByDescending(x => x.DeletedAtUtc ?? x.CreatedAtUtc)
             .Select(x => new TicketDto
@@ -190,8 +196,14 @@ public sealed class TicketsController : ControllerBase
     [Authorize(Policy = "CanManageTickets")]
     public async Task<IActionResult> Restore(int id, CancellationToken ct)
     {
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+
+        if (accessError is not null)
+            return accessError;
+
         var ticket = await _db.Tickets
             .IgnoreQueryFilters()
+            .ApplyWorkspace(visibilityContext)
             .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         if (ticket is null)
@@ -307,7 +319,7 @@ public sealed class TicketsController : ControllerBase
             Status = "New",
             CreatedAtUtc = now,
             RequesterUserId = currentUserId,
-            DemoExpiresAtUtc = currentUser.IsDemoUser
+            DemoExpiresAtUtc = currentUser.IsDemoWorkspace
                 ? currentUser.DemoAbsoluteExpiresAtUtc
                 : null
         };
@@ -374,7 +386,9 @@ public sealed class TicketsController : ControllerBase
         if (accessError is not null)
             return accessError;
 
-        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var entity = await _db.Tickets
+            .ApplyWorkspace(visibilityContext)
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         if (entity is null)
             return TicketNotFound(id);
@@ -435,7 +449,14 @@ public sealed class TicketsController : ControllerBase
         if (errors.Count > 0)
             return ValidationError(errors);
 
-        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+
+        if (accessError is not null)
+            return accessError;
+
+        var entity = await _db.Tickets
+            .ApplyWorkspace(visibilityContext)
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         if (entity is null)
             return TicketNotFound(id);
@@ -477,6 +498,17 @@ public sealed class TicketsController : ControllerBase
                 "Invalid assignee",
                 "Only a user with the Agent role can be assigned to a ticket.",
                 "assignee_must_be_agent");
+        }
+
+        var ticketIsDemoWorkspace = entity.DemoExpiresAtUtc is not null;
+
+        if (assignee.IsDemoWorkspace != ticketIsDemoWorkspace)
+        {
+            return BusinessProblem(
+                StatusCodes.Status409Conflict,
+                "Invalid assignee workspace",
+                "Ticket and assignee must belong to the same workspace.",
+                "assignee_workspace_mismatch");
         }
 
         var originalRowVersion = Convert.FromBase64String(dto.RowVersionBase64);
@@ -560,7 +592,14 @@ public sealed class TicketsController : ControllerBase
     [Authorize(Policy = "CanManageTickets")]
     public async Task<IActionResult> SoftDelete(int id, CancellationToken ct)
     {
-        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+
+        if (accessError is not null)
+            return accessError;
+
+        var entity = await _db.Tickets
+            .ApplyWorkspace(visibilityContext)
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         if (entity is null)
             return TicketNotFound(id);
@@ -634,7 +673,9 @@ public sealed class TicketsController : ControllerBase
         if (accessError is not null)
             return accessError;
 
-        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var entity = await _db.Tickets
+            .ApplyWorkspace(visibilityContext)
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         if (entity is null)
             return TicketNotFound(id);

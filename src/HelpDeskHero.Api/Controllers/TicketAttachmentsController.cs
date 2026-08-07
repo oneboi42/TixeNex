@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using HelpDeskHero.Api.Application.TicketVisibility;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using HelpDeskHero.Api.Infrastructure.Storage;
@@ -16,17 +17,28 @@ public sealed class TicketAttachmentsController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly IFileStorage _storage;
+    private readonly ITicketVisibilityContextResolver _ticketVisibilityContextResolver;
 
-    public TicketAttachmentsController(AppDbContext db, IFileStorage storage)
+    public TicketAttachmentsController(
+        AppDbContext db,
+        IFileStorage storage,
+        ITicketVisibilityContextResolver ticketVisibilityContextResolver)
     {
         _db = db;
         _storage = storage;
+        _ticketVisibilityContextResolver = ticketVisibilityContextResolver;
     }
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<TicketAttachmentDto>>> GetAll(int ticketId, CancellationToken ct)
     {
-        if (!await _db.Tickets.AnyAsync(x => x.Id == ticketId, ct))
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+        if (accessError is not null)
+            return accessError;
+
+        if (!await _db.Tickets
+                .ApplyVisibility(visibilityContext)
+                .AnyAsync(x => x.Id == ticketId, ct))
             return TicketNotFound(ticketId);
 
         var items = await _db.TicketAttachments
@@ -59,7 +71,13 @@ public sealed class TicketAttachmentsController : ControllerBase
         if (errors.Count > 0)
             return ValidationError(errors);
 
-        if (!await _db.Tickets.AnyAsync(x => x.Id == ticketId, ct))
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+        if (accessError is not null)
+            return accessError;
+
+        if (!await _db.Tickets
+                .ApplyVisibility(visibilityContext)
+                .AnyAsync(x => x.Id == ticketId, ct))
             return TicketNotFound(ticketId);
 
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -89,7 +107,13 @@ public sealed class TicketAttachmentsController : ControllerBase
     [HttpGet("{attachmentId:int}/download")]
     public async Task<IActionResult> Download(int ticketId, int attachmentId, CancellationToken ct)
     {
-        if (!await _db.Tickets.AnyAsync(x => x.Id == ticketId, ct))
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+        if (accessError is not null)
+            return accessError;
+
+        if (!await _db.Tickets
+                .ApplyVisibility(visibilityContext)
+                .AnyAsync(x => x.Id == ticketId, ct))
             return TicketNotFound(ticketId);
 
         var item = await _db.TicketAttachments
@@ -107,7 +131,13 @@ public sealed class TicketAttachmentsController : ControllerBase
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> Delete(int ticketId, int attachmentId, CancellationToken ct)
     {
-        if (!await _db.Tickets.AnyAsync(x => x.Id == ticketId, ct))
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+        if (accessError is not null)
+            return accessError;
+
+        if (!await _db.Tickets
+                .ApplyVisibility(visibilityContext)
+                .AnyAsync(x => x.Id == ticketId, ct))
             return TicketNotFound(ticketId);
 
         var item = await _db.TicketAttachments
@@ -122,6 +152,26 @@ public sealed class TicketAttachmentsController : ControllerBase
         await _db.SaveChangesAsync(ct);
 
         return NoContent();
+    }
+
+    private ActionResult? ResolveTicketVisibility(out TicketVisibilityContext context)
+    {
+        var resolution = _ticketVisibilityContextResolver.Resolve(User);
+
+        if (resolution.Status == TicketVisibilityResolutionStatus.Unauthorized)
+        {
+            context = null!;
+            return Unauthorized();
+        }
+
+        if (resolution.Status == TicketVisibilityResolutionStatus.Forbidden)
+        {
+            context = null!;
+            return Forbid();
+        }
+
+        context = resolution.Context!;
+        return null;
     }
 
     private BadRequestObjectResult ValidationError(Dictionary<string, string[]> errors)

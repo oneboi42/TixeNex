@@ -43,6 +43,9 @@ public sealed class TokenService
                 user.UserName ?? string.Empty),
             new("display_name", user.DisplayName),
             new(
+                "is_demo_workspace",
+                user.IsDemoWorkspace ? "true" : "false"),
+            new(
                 "is_demo",
                 user.IsDemoUser ? "true" : "false"),
             new(ClaimTypes.NameIdentifier, user.Id),

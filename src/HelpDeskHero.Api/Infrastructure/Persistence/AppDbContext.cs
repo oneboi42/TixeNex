@@ -39,6 +39,10 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
             b.Property(x => x.CreatedAtUtc)
                 .IsRequired();
 
+            b.Property(x => x.IsDemoWorkspace)
+                .IsRequired()
+                .HasDefaultValue(false);
+
             b.Property(x => x.IsDemoUser)
                 .IsRequired()
                 .HasDefaultValue(false);

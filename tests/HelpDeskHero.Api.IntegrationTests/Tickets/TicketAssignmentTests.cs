@@ -159,6 +159,85 @@ public sealed class TicketAssignmentTests
         (await GetTicketAsync(ticket.Id)).AssignedToUserId.Should().BeNull();
     }
 
+    [Fact]
+    public async Task Assign_DemoTicketToTemporaryDemoAgent_Succeeds()
+    {
+        var demoAgent = await CreateDemoSessionAsync("Agent");
+        var demoAgentId = await GetUserIdAsync(demoAgent.UserName);
+        var demoAdmin = await CreateDemoSessionAsync("Admin");
+        var ticket = await SeedTicketAsync(
+            "New",
+            demoExpiresAtUtc: DateTime.UtcNow.AddHours(1));
+        UseToken(demoAdmin.AccessToken);
+
+        var response = await AssignAsync(ticket, demoAgentId);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await GetTicketAsync(ticket.Id)).AssignedToUserId.Should().Be(demoAgentId);
+    }
+
+    [Fact]
+    public async Task Assign_RejectsAssigneeFromDifferentWorkspaceInEitherDirection()
+    {
+        var normalAgentId = await GetUserIdAsync("agent");
+        var demoAgent = await CreateDemoSessionAsync("Agent");
+        var demoAgentId = await GetUserIdAsync(demoAgent.UserName);
+        var demoTicket = await SeedTicketAsync(
+            "New",
+            demoExpiresAtUtc: DateTime.UtcNow.AddHours(1));
+        var normalTicket = await SeedTicketAsync("New");
+
+        var demoAdmin = await CreateDemoSessionAsync("Admin");
+        UseToken(demoAdmin.AccessToken);
+        var demoToNormalResponse = await AssignAsync(demoTicket, normalAgentId);
+
+        await LoginAsync("admin");
+        var normalToDemoResponse = await AssignAsync(normalTicket, demoAgentId);
+
+        demoToNormalResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        normalToDemoResponse.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        using var demoProblem = JsonDocument.Parse(
+            await demoToNormalResponse.Content.ReadAsStringAsync());
+        using var normalProblem = JsonDocument.Parse(
+            await normalToDemoResponse.Content.ReadAsStringAsync());
+        demoProblem.RootElement.GetProperty("code").GetString()
+            .Should().Be("assignee_workspace_mismatch");
+        normalProblem.RootElement.GetProperty("code").GetString()
+            .Should().Be("assignee_workspace_mismatch");
+
+        (await GetTicketAsync(demoTicket.Id)).AssignedToUserId.Should().BeNull();
+        (await GetTicketAsync(normalTicket.Id)).AssignedToUserId.Should().BeNull();
+        await AssertNoWorkAsync(demoTicket.Id);
+        await AssertNoWorkAsync(normalTicket.Id);
+    }
+
+    [Fact]
+    public async Task Assign_CannotTargetTicketFromDifferentWorkspace()
+    {
+        var normalAgentId = await GetUserIdAsync("agent");
+        var demoAgent = await CreateDemoSessionAsync("Agent");
+        var demoAgentId = await GetUserIdAsync(demoAgent.UserName);
+        var normalTicket = await SeedTicketAsync("New");
+        var demoTicket = await SeedTicketAsync(
+            "New",
+            demoExpiresAtUtc: DateTime.UtcNow.AddHours(1));
+
+        var demoAdmin = await CreateDemoSessionAsync("Admin");
+        UseToken(demoAdmin.AccessToken);
+        var demoAdminResponse = await AssignAsync(normalTicket, demoAgentId);
+
+        await LoginAsync("admin");
+        var normalAdminResponse = await AssignAsync(demoTicket, normalAgentId);
+
+        demoAdminResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        normalAdminResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        (await GetTicketAsync(normalTicket.Id)).AssignedToUserId.Should().BeNull();
+        (await GetTicketAsync(demoTicket.Id)).AssignedToUserId.Should().BeNull();
+        await AssertNoWorkAsync(normalTicket.Id);
+        await AssertNoWorkAsync(demoTicket.Id);
+    }
+
     private async Task<HttpResponseMessage> AssignAsync(Ticket ticket, string agentId) =>
         await _client.PostAsJsonAsync($"/api/tickets/{ticket.Id}/assign", new AssignTicketDto
         {
@@ -166,7 +245,11 @@ public sealed class TicketAssignmentTests
             RowVersionBase64 = Convert.ToBase64String(ticket.RowVersion)
         });
 
-    private async Task<Ticket> SeedTicketAsync(string status, string? assignedToUserId = null, bool resolved = false)
+    private async Task<Ticket> SeedTicketAsync(
+        string status,
+        string? assignedToUserId = null,
+        bool resolved = false,
+        DateTime? demoExpiresAtUtc = null)
     {
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -187,6 +270,7 @@ public sealed class TicketAssignmentTests
             EscalationLevel = 2,
             LastNotifiedAtUtc = now.AddMinutes(-20),
             AssignedToUserId = assignedToUserId,
+            DemoExpiresAtUtc = demoExpiresAtUtc,
             RowVersion = [1]
         };
         db.Tickets.Add(ticket);
@@ -215,6 +299,23 @@ public sealed class TicketAssignmentTests
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         return await db.Users.Where(x => x.UserName == userName).Select(x => x.Id).SingleAsync();
+    }
+
+    private async Task<TokenResponseDto> CreateDemoSessionAsync(string role)
+    {
+        var response = await _client.PostAsJsonAsync("/api/demo/sessions", new CreateDemoSessionRequestDto
+        {
+            Role = role,
+            DeviceName = nameof(TicketAssignmentTests)
+        });
+        response.EnsureSuccessStatusCode();
+        return (await response.Content.ReadFromJsonAsync<TokenResponseDto>())!;
+    }
+
+    private void UseToken(string accessToken)
+    {
+        _client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", accessToken);
     }
 
     private async Task LoginAsync(string userName)

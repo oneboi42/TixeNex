@@ -320,6 +320,186 @@ public sealed class TicketVisibilityTests
         detailsResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
+    [Fact]
+    public async Task AdminVisibility_IsRestrictedToMatchingWorkspace()
+    {
+        var marker = $"admin-workspace-{Guid.NewGuid():N}";
+        var tickets = await SeedTicketsAsync(
+            new TicketSeed($"{marker}-normal", null, null),
+            new TicketSeed(
+                $"{marker}-demo",
+                null,
+                null,
+                DemoExpiresAtUtc: DateTime.UtcNow.AddHours(1)));
+
+        await LoginAsync("admin", "Admin1234");
+
+        var normalPage = await GetPageAsync(marker);
+        normalPage.Items.Select(x => x.Id).Should().Equal(tickets[0].Id);
+        (await _client.GetAsync($"/api/tickets/{tickets[1].Id}"))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        SetWorkspaceToken("demo-admin", "Admin", isDemoWorkspace: true);
+
+        var demoPage = await GetPageAsync(marker);
+        demoPage.Items.Select(x => x.Id).Should().Equal(tickets[1].Id);
+        (await _client.GetAsync($"/api/tickets/{tickets[0].Id}"))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task AgentVisibility_PreservesAssignedAndOwnRulesWithinWorkspace()
+    {
+        var agentId = await GetUserIdAsync("agent");
+        var otherUserId = await GetUserIdAsync("user");
+        var marker = $"agent-workspace-{Guid.NewGuid():N}";
+        var demoExpiration = DateTime.UtcNow.AddHours(1);
+        var tickets = await SeedTicketsAsync(
+            new TicketSeed($"{marker}-normal-assigned", otherUserId, agentId),
+            new TicketSeed($"{marker}-normal-own", agentId, null),
+            new TicketSeed($"{marker}-demo-assigned", otherUserId, agentId, DemoExpiresAtUtc: demoExpiration),
+            new TicketSeed($"{marker}-demo-own", agentId, null, DemoExpiresAtUtc: demoExpiration));
+
+        await LoginAsync("agent", "Agent123!");
+
+        var normalPage = await GetPageAsync(marker);
+        normalPage.Items.Select(x => x.Id).Should()
+            .BeEquivalentTo([tickets[0].Id, tickets[1].Id]);
+
+        SetWorkspaceToken(agentId, "Agent", isDemoWorkspace: true);
+
+        var demoPage = await GetPageAsync(marker);
+        demoPage.Items.Select(x => x.Id).Should()
+            .BeEquivalentTo([tickets[2].Id, tickets[3].Id]);
+    }
+
+    [Fact]
+    public async Task UserVisibility_PreservesOwnershipWithinMatchingWorkspace()
+    {
+        var userId = await GetUserIdAsync("user");
+        var marker = $"user-workspace-{Guid.NewGuid():N}";
+        var tickets = await SeedTicketsAsync(
+            new TicketSeed($"{marker}-normal", userId, null),
+            new TicketSeed(
+                $"{marker}-demo",
+                userId,
+                null,
+                DemoExpiresAtUtc: DateTime.UtcNow.AddHours(1)));
+
+        await LoginAsync("user", "User123!");
+
+        var normalPage = await GetPageAsync(marker);
+        normalPage.Items.Select(x => x.Id).Should().Equal(tickets[0].Id);
+        (await _client.GetAsync($"/api/tickets/{tickets[1].Id}"))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        SetWorkspaceToken(userId, "User", isDemoWorkspace: true);
+
+        var demoPage = await GetPageAsync(marker);
+        demoPage.Items.Select(x => x.Id).Should().Equal(tickets[1].Id);
+        (await _client.GetAsync($"/api/tickets/{tickets[0].Id}"))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task LegacyDemoToken_UsesIsDemoClaimAsWorkspaceFallback()
+    {
+        var marker = $"legacy-demo-claim-{Guid.NewGuid():N}";
+        var ticket = (await SeedTicketsAsync(new TicketSeed(
+            marker,
+            null,
+            null,
+            DemoExpiresAtUtc: DateTime.UtcNow.AddHours(1)))).Single();
+        SetToken(
+            new Claim(ClaimTypes.NameIdentifier, "legacy-demo-admin"),
+            new Claim(ClaimTypes.Role, "Admin"),
+            new Claim("is_demo", "true"));
+
+        var result = await GetPageAsync(marker);
+
+        result.Items.Select(x => x.Id).Should().Equal(ticket.Id);
+    }
+
+    [Fact]
+    public async Task Update_CannotCrossWorkspaceInEitherDirection()
+    {
+        var marker = $"update-workspace-{Guid.NewGuid():N}";
+        var tickets = await SeedTicketsAsync(
+            new TicketSeed($"{marker}-normal", null, null),
+            new TicketSeed(
+                $"{marker}-demo",
+                null,
+                null,
+                DemoExpiresAtUtc: DateTime.UtcNow.AddHours(1)));
+
+        await LoginAsync("admin", "Admin1234");
+        var normalAdminResponse = await UpdateTicketAsync(tickets[1]);
+
+        SetWorkspaceToken("demo-admin", "Admin", isDemoWorkspace: true);
+        var demoAdminResponse = await UpdateTicketAsync(tickets[0]);
+
+        normalAdminResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        demoAdminResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task Restore_CannotCrossWorkspaceInEitherDirection()
+    {
+        var marker = $"restore-workspace-{Guid.NewGuid():N}";
+        var tickets = await SeedTicketsAsync(
+            new TicketSeed($"{marker}-normal", null, null, IsDeleted: true),
+            new TicketSeed(
+                $"{marker}-demo",
+                null,
+                null,
+                IsDeleted: true,
+                DemoExpiresAtUtc: DateTime.UtcNow.AddHours(1)));
+
+        await LoginAsync("admin", "Admin1234");
+        var normalAdminResponse = await _client.PostAsync(
+            $"/api/tickets/{tickets[1].Id}/restore",
+            null);
+
+        SetWorkspaceToken("demo-admin", "Admin", isDemoWorkspace: true);
+        var demoAdminResponse = await _client.PostAsync(
+            $"/api/tickets/{tickets[0].Id}/restore",
+            null);
+
+        normalAdminResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        demoAdminResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        (await db.Tickets.IgnoreQueryFilters()
+                .CountAsync(x =>
+                    (x.Id == tickets[0].Id || x.Id == tickets[1].Id) && x.IsDeleted))
+            .Should().Be(2);
+    }
+
+    [Fact]
+    public async Task CommentsAndAttachments_RejectCrossWorkspaceTicketIds()
+    {
+        var marker = $"resources-workspace-{Guid.NewGuid():N}";
+        var tickets = await SeedTicketsAsync(
+            new TicketSeed($"{marker}-normal", null, null),
+            new TicketSeed(
+                $"{marker}-demo",
+                null,
+                null,
+                DemoExpiresAtUtc: DateTime.UtcNow.AddHours(1)));
+
+        await LoginAsync("admin", "Admin1234");
+        var commentsResponse = await _client.GetAsync(
+            $"/api/tickets/{tickets[1].Id}/comments");
+
+        SetWorkspaceToken("demo-admin", "Admin", isDemoWorkspace: true);
+        var attachmentsResponse = await _client.GetAsync(
+            $"/api/tickets/{tickets[0].Id}/attachments");
+
+        commentsResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        attachmentsResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
     private async Task LoginAsync(string userName, string password)
     {
         var response = await _client.PostAsJsonAsync("/api/auth/login", new LoginRequestDto
@@ -372,7 +552,9 @@ public sealed class TicketVisibilityTests
             RequesterUserId = seed.RequesterUserId,
             AssignedToUserId = seed.AssignedToUserId,
             IsDeleted = seed.IsDeleted,
-            DeletedAtUtc = seed.IsDeleted ? createdAtUtc : null
+            DeletedAtUtc = seed.IsDeleted ? createdAtUtc : null,
+            DemoExpiresAtUtc = seed.DemoExpiresAtUtc,
+            RowVersion = [1]
         }).ToList();
 
         db.Tickets.AddRange(tickets);
@@ -388,6 +570,32 @@ public sealed class TicketVisibilityTests
             $"/api/tickets?search={Uri.EscapeDataString(search)}&{additionalQuery}");
 
         return result!;
+    }
+
+    private async Task<HttpResponseMessage> UpdateTicketAsync(Ticket ticket)
+    {
+        return await _client.PutAsJsonAsync($"/api/tickets/{ticket.Id}", new UpdateTicketDto
+        {
+            Title = $"{ticket.Title}-updated",
+            Description = ticket.Description,
+            Priority = ticket.Priority,
+            Status = ticket.Status,
+            RowVersionBase64 = Convert.ToBase64String(ticket.RowVersion)
+        });
+    }
+
+    private void SetWorkspaceToken(
+        string userId,
+        string role,
+        bool isDemoWorkspace)
+    {
+        SetToken(
+            new Claim(ClaimTypes.NameIdentifier, userId),
+            new Claim(ClaimTypes.Role, role),
+            new Claim(
+                "is_demo_workspace",
+                isDemoWorkspace ? "true" : "false"),
+            new Claim("is_demo", isDemoWorkspace ? "true" : "false"));
     }
 
     private void SetToken(params Claim[] claims)
@@ -415,5 +623,6 @@ public sealed class TicketVisibilityTests
         string? AssignedToUserId,
         string Status = "New",
         string Priority = "Medium",
-        bool IsDeleted = false);
+        bool IsDeleted = false,
+        DateTime? DemoExpiresAtUtc = null);
 }

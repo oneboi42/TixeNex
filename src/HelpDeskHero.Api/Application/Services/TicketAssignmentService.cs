@@ -20,16 +20,26 @@ public sealed class TicketAssignmentService : ITicketAssignmentService
     public async Task<string?> AssignAsync(Ticket ticket, CancellationToken ct = default)
     {
         var agents = await _userManager.GetUsersInRoleAsync("Agent");
-        if (agents.Count == 0)
+        var isDemoWorkspace = ticket.DemoExpiresAtUtc is not null;
+        var eligibleAgents = agents
+            .Where(agent =>
+                agent.IsDemoWorkspace == isDemoWorkspace &&
+                (!isDemoWorkspace || !agent.IsDemoUser))
+            .ToList();
+
+        if (eligibleAgents.Count == 0)
             return null;
 
         var agentLoads = new List<(string UserId, int ActiveTicketCount)>();
 
-        foreach (var agent in agents)
+        foreach (var agent in eligibleAgents)
         {
             var activeTicketCount = await _db.Tickets.CountAsync(
                 x => x.AssignedToUserId == agent.Id &&
-                     (x.Status == "New" || x.Status == "InProgress"),
+                     (x.Status == "New" || x.Status == "InProgress") &&
+                     (isDemoWorkspace
+                         ? x.DemoExpiresAtUtc != null
+                         : x.DemoExpiresAtUtc == null),
                 ct);
 
             agentLoads.Add((agent.Id, activeTicketCount));

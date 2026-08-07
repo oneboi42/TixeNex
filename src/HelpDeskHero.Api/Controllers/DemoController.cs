@@ -99,6 +99,7 @@ public sealed class DemoController : ControllerBase
             EmailConfirmed = true,
             IsActive = true,
 
+            IsDemoWorkspace = true,
             IsDemoUser = true,
             CreatedAtUtc = now,
             LastActivityAtUtc = now,
