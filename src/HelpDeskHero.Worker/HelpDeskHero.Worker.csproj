@@ -17,9 +17,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference
-      Include="..\HelpDeskHero.Api\HelpDeskHero.Api.csproj"
-      AdditionalProperties="ExcludeAppSettingsFromPublish=true" />
+    <ProjectReference Include="..\HelpDeskHero.Api\HelpDeskHero.Api.csproj" />
   </ItemGroup>
 
+  <Target Name="RemoveApiAppSettingsFromWorkerPublish"
+          AfterTargets="ComputeResolvedFilesToPublishList">
+
+    <ItemGroup>
+      <ResolvedFileToPublish
+        Remove="$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\HelpDeskHero.Api'))\appsettings*.json" />
+    </ItemGroup>
+
+  </Target>
 </Project>
