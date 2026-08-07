@@ -335,4 +335,9 @@ public sealed class AppDbContext : IdentityDbContext<ApplicationUser>
 
         return base.SaveChangesAsync(cancellationToken);
     }
+    internal Task<int> SaveChangesForCleanupAsync(
+        CancellationToken cancellationToken = default)
+    {
+        return base.SaveChangesAsync(cancellationToken);
+    }
 }

@@ -101,6 +101,8 @@ builder.Services
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+builder.Services.AddScoped<IDemoCleanupJob, DemoCleanupJob>();
+
 if (!isTesting)
 {
     builder.Services.AddHangfire(config =>
@@ -281,11 +283,33 @@ if (app.Environment.IsDevelopment())
 
 if (!app.Environment.IsEnvironment("Testing"))
 {
-    var recurringJobManager = app.Services.GetRequiredService<IRecurringJobManager>();
+    var recurringJobManager =
+        app.Services
+            .GetRequiredService<IRecurringJobManager>();
+
     recurringJobManager.AddOrUpdate<INotificationJob>(
         "daily-summary",
         job => job.SendDailySummaryAsync(default),
         "0 7 * * *");
+
+    var demoOptions = app.Services
+        .GetRequiredService<IOptions<DemoOptions>>()
+        .Value;
+
+    if (demoOptions.Enabled)
+    {
+        recurringJobManager.AddOrUpdate<IDemoCleanupJob>(
+            "demo-cleanup",
+            job =>
+                job.CleanupExpiredDemoDataAsync(
+                    default),
+            "*/10 * * * *");
+    }
+    else
+    {
+        recurringJobManager.RemoveIfExists(
+            "demo-cleanup");
+    }
 }
 
 app.MapControllers();
