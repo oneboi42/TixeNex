@@ -50,7 +50,7 @@
                 </NavLink>
             </div>
 
-            <AuthorizeView Roles="Admin,Agent" Context="createAuth">
+            <AuthorizeView Roles="Admin,Agent,User" Context="createAuth">
                 <Authorized>
                     <div class="nav-item">
                         <NavLink class="nav-link" href="tickets/create">
@@ -86,11 +86,14 @@
 
             <div class="nav-section-title">Account</div>
 
-            <div class="nav-item">
-                <NavLink class="nav-link" href="account/settings">
-                    Account Settings
-                </NavLink>
-            </div>
+            @if (!IsDemoUser(mainAuth.User))
+            {
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="account/settings">
+                        Account Settings
+                    </NavLink>
+                </div>
+            }
 
             <div class="nav-item">
                 <NavLink class="nav-link" href="logout">
@@ -111,6 +114,13 @@
 
 @code {
     private int _unreadCount;
+
+    private static bool IsDemoUser(System.Security.Claims.ClaimsPrincipal user) =>
+        string.Equals(
+            user.FindFirst("is_demo")?.Value,
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+
 
     protected override void OnInitialized()
     {

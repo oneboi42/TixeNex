@@ -122,8 +122,18 @@ public sealed class AuthHttpMessageHandler : DelegatingHandler
             return false;
         }
 
-        await _tokenStore.SetAccessTokenAsync(dto.AccessToken);
-        await _tokenStore.SetRefreshTokenAsync(dto.RefreshToken);
+        try
+        {
+            var jwt = new JwtSecurityTokenHandler().ReadJwtToken(dto.AccessToken);
+
+            await _tokenStore.SetAuthenticationAsync(dto);
+            _authStateProvider.NotifyUserAuthentication(jwt.Claims);
+        }
+        catch
+        {
+            await _tokenStore.ClearAsync();
+            return false;
+        }
 
         return true;
     }

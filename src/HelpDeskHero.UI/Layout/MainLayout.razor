@@ -2,11 +2,13 @@
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Authorization
 @using HelpDeskHero.Shared.Contracts.Notifications
+@using HelpDeskHero.UI.Services.Auth
 @using HelpDeskHero.UI.Services.Realtime
 @implements IDisposable
 
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NotificationRealtimeCoordinator NotificationRealtime
+@inject TokenStore TokenStore
 
 <div class="app-shell">
     <aside class="app-sidebar">
@@ -47,6 +49,19 @@
             </AuthorizeView>
         </header>
 
+        @if (_isDemoSession)
+        {
+            <div class="alert alert-warning rounded-0 border-start-0 border-end-0 mb-0 py-2 px-3">
+                <strong>Public demo workspace</strong>
+                <span class="mx-1">·</span>
+                @_demoDisplayName
+                <span class="mx-1">·</span>
+                session window ends @FormatUtc(_demoExpiresAtUtc)
+                <span class="mx-1">·</span>
+                shared demo data
+            </div>
+        }
+
         <main class="app-content">
             @Body
         </main>
@@ -62,9 +77,81 @@
           ToastVersion="_toastVersion" />
 
 @code {
+    private bool _toastVisible;
+    private string? _toastMessage;
+    private long _toastVersion;
+
+    private bool _isDemoSession;
+    private string _demoDisplayName = "Demo user";
+    private DateTime? _demoExpiresAtUtc;
+
+    protected override async Task OnInitializedAsync()
+    {
+        NotificationRealtime.NotificationReceived += ShowNotificationToastAsync;
+        TokenStore.SessionChanged += OnStoredSessionChanged;
+        AuthenticationStateProvider.AuthenticationStateChanged += OnAuthenticationStateChanged;
+
+        var authenticationState =
+            await AuthenticationStateProvider.GetAuthenticationStateAsync();
+
+        var userId = GetUserId(authenticationState.User);
+
+        if (userId is not null)
+        {
+            await NotificationRealtime.TryStartAsync(userId);
+        }
+
+        await RefreshDemoBannerAsync();
+    }
+
+    private async Task RefreshDemoBannerAsync()
+    {
+        var authenticationState =
+            await AuthenticationStateProvider.GetAuthenticationStateAsync();
+
+        var user = authenticationState.User;
+
+        _isDemoSession =
+            user.Identity?.IsAuthenticated == true &&
+            string.Equals(
+                user.FindFirst("is_demo")?.Value,
+                "true",
+                StringComparison.OrdinalIgnoreCase);
+
+        if (!_isDemoSession)
+        {
+            _demoDisplayName = "Demo user";
+            _demoExpiresAtUtc = null;
+            return;
+        }
+
+        _demoDisplayName = GetDisplayName(user);
+        _demoExpiresAtUtc = await TokenStore.GetDemoExpiresAtUtcAsync();
+    }
+
+    private void OnStoredSessionChanged()
+    {
+        QueueDemoBannerRefresh();
+    }
+
+    private void OnAuthenticationStateChanged(Task<AuthenticationState> _)
+    {
+        QueueDemoBannerRefresh();
+    }
+
+    private void QueueDemoBannerRefresh()
+    {
+        _ = InvokeAsync(async () =>
+        {
+            await RefreshDemoBannerAsync();
+            StateHasChanged();
+        });
+    }
+
     private static string GetDisplayName(ClaimsPrincipal user)
     {
-        return user.Identity?.Name
+        return user.FindFirst("display_name")?.Value
+            ?? user.Identity?.Name
             ?? user.FindFirst("name")?.Value
             ?? user.FindFirst(ClaimTypes.Name)?.Value
             ?? user.FindFirst("unique_name")?.Value
@@ -89,22 +176,6 @@
             ?? "No role";
     }
 
-    private bool _toastVisible;
-    private string? _toastMessage;
-    private long _toastVersion;
-
-    protected override async Task OnInitializedAsync()
-    {
-        NotificationRealtime.NotificationReceived += ShowNotificationToastAsync;
-
-        var authenticationState = await AuthenticationStateProvider.GetAuthenticationStateAsync();
-        var userId = GetUserId(authenticationState.User);
-        if (userId is not null)
-        {
-            await NotificationRealtime.TryStartAsync(userId);
-        }
-    }
-
     private static string? GetUserId(ClaimsPrincipal user)
     {
         if (user.Identity?.IsAuthenticated != true)
@@ -113,6 +184,11 @@
         return user.FindFirst(ClaimTypes.NameIdentifier)?.Value
             ?? user.FindFirst("sub")?.Value;
     }
+
+    private static string FormatUtc(DateTime? value) =>
+        value.HasValue
+            ? $"{value.Value.ToUniversalTime():HH:mm} UTC"
+            : "soon";
 
     private async Task ShowNotificationToastAsync(UserNotificationDto notification)
     {
@@ -125,5 +201,7 @@
     public void Dispose()
     {
         NotificationRealtime.NotificationReceived -= ShowNotificationToastAsync;
+        TokenStore.SessionChanged -= OnStoredSessionChanged;
+        AuthenticationStateProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;
     }
 }

@@ -43,10 +43,22 @@ else if (_ticket is not null)
                     <PriorityBadge Priority="@_ticket.Priority" />
                 </dd>
 
-                @if (_isAdmin)
+                @if (_isAdmin || _ticket.IsDemoTicket)
                 {
                     <dt class="col-sm-3">Requester</dt>
-                    <dd class="col-sm-9">@(_ticket.RequesterDisplayName ?? "Unknown")</dd>
+                    <dd class="col-sm-9">
+                        @(_ticket.RequesterDisplayName ?? "Unknown")
+                        @if (_ticket.IsRequesterCurrentUser)
+                        {
+                            <span class="text-muted">(you)</span>
+                        }
+                    </dd>
+                }
+
+                @if (_ticket.IsDemoTicket)
+                {
+                    <dt class="col-sm-3">Demo data expires</dt>
+                    <dd class="col-sm-9">@FormatUtc(_ticket.DemoExpiresAtUtc)</dd>
                 }
                 
                 <dt class="col-sm-3">Assigned to</dt>
@@ -343,6 +355,11 @@ else if (_ticket is not null)
             ? agent.DisplayName
             : $"{agent.DisplayName} ({agent.UserName})";
     }
+
+    private static string FormatUtc(DateTime? value) =>
+        value.HasValue
+            ? $"{value.Value.ToUniversalTime():yyyy-MM-dd HH:mm} UTC"
+            : "Unavailable";
 
     private sealed record LifecycleAction(
         string Label,

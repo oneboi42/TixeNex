@@ -17,7 +17,7 @@ var apiBaseUrl = builder.Configuration["Api:BaseUrl"]
 builder.Services.AddAuthorizationCore(options =>
 {
     options.AddPolicy("CanManageTickets", policy =>
-        policy.RequireRole("Admin", "Agent"));
+        policy.RequireRole("User", "Admin", "Agent"));
 
     options.AddPolicy("CanViewAudit", policy =>
         policy.RequireRole("Admin"));
