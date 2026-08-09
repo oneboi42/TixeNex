@@ -82,9 +82,28 @@ public sealed class ExportService : IExportService
                 "Export job {JobId} changed to Running.",
                 jobId);
 
+            var exportOwner = await _db.Users
+                .AsNoTracking()
+                .Where(user => user.Id == job.UserId)
+                .Select(user => new
+                {
+                    user.IsDemoWorkspace
+                })
+                .SingleOrDefaultAsync(cancellationToken);
+
+            if (exportOwner is null)
+            {
+                throw new InvalidOperationException(
+                    $"Export owner {job.UserId} was not found.");
+            }
+
             var ticketQuery = _db.Tickets
                 .AsNoTracking()
                 .Where(ticket => !ticket.IsDeleted);
+
+            ticketQuery = exportOwner.IsDemoWorkspace
+                ? ticketQuery.Where(ticket => ticket.DemoExpiresAtUtc != null)
+                : ticketQuery.Where(ticket => ticket.DemoExpiresAtUtc == null);
 
             ticketQuery = job.Scope switch
             {
@@ -98,12 +117,29 @@ public sealed class ExportService : IExportService
             };
 
             var rows = await ticketQuery
+                .OrderByDescending(ticket => ticket.CreatedAtUtc)
+                .ThenByDescending(ticket => ticket.Id)
                 .Select(ticket => new TicketExportRow
                 {
                     Id = ticket.Id,
+                    TicketNumber = ticket.Number,
                     Title = ticket.Title,
+                    Description = ticket.Description,
                     Status = ticket.Status,
-                    CreatedAt = ticket.CreatedAtUtc
+                    Priority = ticket.Priority,
+                    Requester = ticket.RequesterUser != null
+                        ? ticket.RequesterUser.DisplayName
+                        : string.Empty,
+                    AssignedTo = _db.Users
+                        .Where(user => user.Id == ticket.AssignedToUserId)
+                        .Select(user => user.DisplayName)
+                        .FirstOrDefault() ?? string.Empty,
+                    CreatedAtUtc = ticket.CreatedAtUtc,
+                    UpdatedAtUtc = ticket.UpdatedAtUtc,
+                    FirstRespondedAtUtc = ticket.FirstRespondedAtUtc,
+                    ResolvedAtUtc = ticket.ResolvedAtUtc,
+                    DueFirstResponseAtUtc = ticket.DueFirstResponseAtUtc,
+                    DueResolveAtUtc = ticket.DueResolveAtUtc
                 })
                 .ToListAsync(cancellationToken);
             var fileName =
