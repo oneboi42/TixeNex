@@ -9,6 +9,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 @inject NotificationRealtimeCoordinator NotificationRealtime
 @inject TokenStore TokenStore
+@inject NavigationManager Navigation
 
 <div class="app-shell">
     <aside class="app-sidebar">
@@ -49,7 +50,7 @@
             </AuthorizeView>
         </header>
 
-        @if (_isDemoSession)
+        @if (_isDemoSession && !IsHomePage)
         {
             <div class="alert alert-warning rounded-0 border-start-0 border-end-0 mb-0 py-2 px-3">
                 <strong>Public demo workspace</strong>
@@ -58,7 +59,7 @@
                 <span class="mx-1">·</span>
                 session window ends @FormatUtc(_demoExpiresAtUtc)
                 <span class="mx-1">·</span>
-                shared demo data
+                extends with activity
             </div>
         }
 
@@ -84,6 +85,11 @@
     private bool _isDemoSession;
     private string _demoDisplayName = "Demo user";
     private DateTime? _demoExpiresAtUtc;
+
+    private bool IsHomePage =>
+    string.IsNullOrWhiteSpace(
+        Navigation.ToBaseRelativePath(Navigation.Uri)
+            .TrimEnd('/'));
 
     protected override async Task OnInitializedAsync()
     {
