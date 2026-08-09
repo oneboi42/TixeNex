@@ -57,7 +57,7 @@
                 <span class="mx-1">·</span>
                 @_demoDisplayName
                 <span class="mx-1">·</span>
-                session window ends @FormatUtc(_demoExpiresAtUtc)
+                session window ends @FormatLocalTime(_demoExpiresAtUtc)
                 <span class="mx-1">·</span>
                 extends with activity
             </div>
@@ -191,10 +191,10 @@
             ?? user.FindFirst("sub")?.Value;
     }
 
-    private static string FormatUtc(DateTime? value) =>
-        value.HasValue
-            ? $"{value.Value.ToUniversalTime():HH:mm} UTC"
-            : "soon";
+    private static string FormatLocalTime(DateTime? value) =>
+    value.HasValue
+        ? value.Value.ToLocalTime().ToString("HH:mm")
+        : "soon";
 
     private async Task ShowNotificationToastAsync(UserNotificationDto notification)
     {

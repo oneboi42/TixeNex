@@ -176,7 +176,15 @@ public sealed class TokenStore
         await RemoveAsync("sessionStorage", DemoExpiresKey);
         await RemoveAsync("sessionStorage", DemoAbsoluteExpiresKey);
     }
-
+    private static DateTime NormalizeUtc(DateTime value)
+    {
+        return value.Kind switch
+        {
+            DateTimeKind.Utc => value,
+            DateTimeKind.Local => value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
+        };
+    }
     private async Task SetDateAsync(
         string key,
         DateTime? value)
@@ -190,8 +198,8 @@ public sealed class TokenStore
         await SetAsync(
             "sessionStorage",
             key,
-            value.Value.ToUniversalTime()
-                .ToString("O", CultureInfo.InvariantCulture));
+            NormalizeUtc(value.Value)
+                .ToString("o", CultureInfo.InvariantCulture));
     }
 
     private async Task<DateTime?> GetDateAsync(string key)
@@ -208,7 +216,7 @@ public sealed class TokenStore
             CultureInfo.InvariantCulture,
             DateTimeStyles.RoundtripKind,
             out var result)
-                ? result.ToUniversalTime()
+                ? NormalizeUtc(result)
                 : null;
     }
 

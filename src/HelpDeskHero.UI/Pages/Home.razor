@@ -43,11 +43,11 @@
                                 <dt class="col-sm-5">Role</dt>
                                 <dd class="col-sm-7">@GetRole(homeAuth.User)</dd>
 
-                                <dt class="col-sm-5">Current expiry</dt>
-                                <dd class="col-sm-7">@FormatUtc(_demoExpiresAtUtc)</dd>
+                                <dt class="col-sm-5">Current session ends</dt>
+                                <dd class="col-sm-7">@FormatLocalDateTime(_demoExpiresAtUtc)</dd>
 
                                 <dt class="col-sm-5">Maximum session limit</dt>
-                                <dd class="col-sm-7">@FormatUtc(_demoAbsoluteExpiresAtUtc)</dd>
+                                <dd class="col-sm-7">@FormatLocalDateTime(_demoAbsoluteExpiresAtUtc)</dd>
                             </dl>
                         </div>
                     </div>
@@ -163,10 +163,10 @@
         return "No role";
     }
 
-    private static string FormatUtc(DateTime? value) =>
-        value.HasValue
-            ? $"{value.Value.ToUniversalTime():yyyy-MM-dd HH:mm} UTC"
-            : "Unavailable";
+    private static string FormatLocalDateTime(DateTime? value) =>
+    value.HasValue
+        ? value.Value.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+        : "—";
 
     public void Dispose()
     {

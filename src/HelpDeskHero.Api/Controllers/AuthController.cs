@@ -87,10 +87,16 @@ public sealed class AuthController : ControllerBase
 
         if (user.IsDemoUser)
         {
-            if (!user.DemoExpiresAtUtc.HasValue ||
-                !user.DemoAbsoluteExpiresAtUtc.HasValue ||
-                user.DemoExpiresAtUtc <= now ||
-                user.DemoAbsoluteExpiresAtUtc <= now)
+            var demoExpiresAtUtc =
+                AsUtc(user.DemoExpiresAtUtc);
+
+            var demoAbsoluteExpiresAtUtc =
+                AsUtc(user.DemoAbsoluteExpiresAtUtc);
+
+            if (!demoExpiresAtUtc.HasValue ||
+                !demoAbsoluteExpiresAtUtc.HasValue ||
+                demoExpiresAtUtc <= now ||
+                demoAbsoluteExpiresAtUtc <= now)
             {
                 refresh.RevokedAtUtc = now;
                 user.IsActive = false;
@@ -106,9 +112,9 @@ public sealed class AuthController : ControllerBase
 
             user.DemoExpiresAtUtc =
                 requestedExpiration <
-                user.DemoAbsoluteExpiresAtUtc.Value
+                demoAbsoluteExpiresAtUtc.Value
                     ? requestedExpiration
-                    : user.DemoAbsoluteExpiresAtUtc.Value;
+                    : demoAbsoluteExpiresAtUtc.Value;
 
             user.LastActivityAtUtc = now;
         }
@@ -173,7 +179,7 @@ public sealed class AuthController : ControllerBase
 
         if (user.IsDemoUser)
         {
-            tokenLimit = user.DemoExpiresAtUtc
+            tokenLimit = AsUtc(user.DemoExpiresAtUtc)
                 ?? throw new InvalidOperationException(
                     "Demo user does not have an expiration time.");
         }
@@ -217,10 +223,25 @@ public sealed class AuthController : ControllerBase
             Roles = roles.ToArray(),
 
             IsDemoUser = user.IsDemoUser,
+
             DemoExpiresAtUtc =
-                user.DemoExpiresAtUtc,
+                AsUtc(user.DemoExpiresAtUtc),
+
             DemoAbsoluteExpiresAtUtc =
-                user.DemoAbsoluteExpiresAtUtc
+                AsUtc(user.DemoAbsoluteExpiresAtUtc)
+        };
+    }
+
+    private static DateTime? AsUtc(DateTime? value)
+    {
+        if (!value.HasValue)
+            return null;
+
+        return value.Value.Kind switch
+        {
+            DateTimeKind.Utc => value.Value,
+            DateTimeKind.Local => value.Value.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(value.Value, DateTimeKind.Utc)
         };
     }
 }
