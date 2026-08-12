@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using HelpDeskHero.Shared.Contracts.Audit;
 using Microsoft.AspNetCore.Authorization;
@@ -27,45 +28,90 @@ public sealed class AuditController : ControllerBase
         [FromQuery] DateTime? toUtc,
         CancellationToken ct)
     {
-        var query = _db.AuditLogs.AsNoTracking().AsQueryable();
+        var currentUserId =
+            User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(currentUserId))
+            return Unauthorized();
+
+        var currentUser = await _db.Users
+            .AsNoTracking()
+            .Where(user => user.Id == currentUserId)
+            .Select(user => new
+            {
+                user.IsDemoWorkspace
+            })
+            .SingleOrDefaultAsync(ct);
+
+        if (currentUser is null)
+            return Unauthorized();
+
+        var query =
+            from audit in _db.AuditLogs.AsNoTracking()
+            join actor in _db.Users.AsNoTracking()
+                on audit.UserId equals actor.Id
+            where actor.IsDemoWorkspace == currentUser.IsDemoWorkspace
+            select new
+            {
+                Audit = audit,
+                ActorDisplayName = actor.DisplayName
+            };
 
         if (!string.IsNullOrWhiteSpace(action))
         {
-            query = query.Where(x => x.Action == action);
+            query = query.Where(
+                item => item.Audit.Action == action);
         }
 
         if (!string.IsNullOrWhiteSpace(entityName))
         {
-            query = query.Where(x => x.EntityName == entityName);
+            query = query.Where(
+                item => item.Audit.EntityName == entityName);
         }
 
         if (!string.IsNullOrWhiteSpace(performedBy))
         {
-            query = query.Where(x => x.UserName != null && x.UserName.Contains(performedBy));
+            query = query.Where(
+                item =>
+                    (item.Audit.UserName != null &&
+                     item.Audit.UserName.Contains(performedBy)) ||
+                    item.ActorDisplayName.Contains(performedBy));
         }
 
         if (fromUtc.HasValue)
         {
-            query = query.Where(x => x.CreatedAtUtc >= fromUtc.Value);
+            query = query.Where(
+                item => item.Audit.CreatedAtUtc >= fromUtc.Value);
         }
 
         if (toUtc.HasValue)
         {
-            query = query.Where(x => x.CreatedAtUtc <= toUtc.Value);
+            query = query.Where(
+                item => item.Audit.CreatedAtUtc <= toUtc.Value);
         }
 
         var rows = await query
-            .OrderByDescending(x => x.CreatedAtUtc)
+            .OrderByDescending(item => item.Audit.CreatedAtUtc)
             .Take(200)
-            .Select(x => new AuditLogListItemDto
+            .Select(item => new AuditLogListItemDto
             {
-                CreatedAtUtc = x.CreatedAtUtc,
-                Action = x.Action,
-                EntityName = x.EntityName,
-                EntityId = x.EntityId,
-                PerformedBy = x.UserName ?? string.Empty,
-                IpAddress = x.IpAddress ?? string.Empty,
-                Details = x.DetailsJson ?? string.Empty
+                CreatedAtUtc = item.Audit.CreatedAtUtc,
+                Action = item.Audit.Action,
+                EntityName = item.Audit.EntityName,
+                EntityId = item.Audit.EntityId,
+
+                PerformedBy = string.IsNullOrWhiteSpace(
+                    item.ActorDisplayName)
+                        ? item.Audit.UserName ?? string.Empty
+                        : item.ActorDisplayName,
+
+                // Do not expose public demo visitors' IP addresses
+                // to other demo visitors.
+                IpAddress = currentUser.IsDemoWorkspace
+                    ? string.Empty
+                    : item.Audit.IpAddress ?? string.Empty,
+
+                Details = item.Audit.DetailsJson ?? string.Empty
             })
             .ToListAsync(ct);
 

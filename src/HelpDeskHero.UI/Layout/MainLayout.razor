@@ -85,6 +85,7 @@
     private bool _isDemoSession;
     private string _demoDisplayName = "Demo user";
     private DateTime? _demoExpiresAtUtc;
+    private CancellationTokenSource? _demoExpiryCts;
 
     private bool IsHomePage =>
     string.IsNullOrWhiteSpace(
@@ -128,11 +129,101 @@
         {
             _demoDisplayName = "Demo user";
             _demoExpiresAtUtc = null;
+            CancelDemoExpiryTimer();
             return;
         }
 
         _demoDisplayName = GetDisplayName(user);
         _demoExpiresAtUtc = await TokenStore.GetDemoExpiresAtUtcAsync();
+
+        ScheduleDemoExpiry(_demoExpiresAtUtc);
+    }
+
+    private void ScheduleDemoExpiry(DateTime? expiresAtUtc)
+    {
+        CancelDemoExpiryTimer();
+
+        if (!expiresAtUtc.HasValue)
+            return;
+
+        var delay =
+            expiresAtUtc.Value.ToUniversalTime() - DateTime.UtcNow;
+
+        if (delay < TimeSpan.Zero)
+            delay = TimeSpan.Zero;
+
+        var cts = new CancellationTokenSource();
+        _demoExpiryCts = cts;
+
+        _ = WaitForDemoExpiryAsync(delay, cts);
+    }
+
+    private async Task WaitForDemoExpiryAsync(
+        TimeSpan delay,
+        CancellationTokenSource cts)
+    {
+        try
+        {
+            await Task.Delay(delay, cts.Token);
+
+            await InvokeAsync(
+                () => HandleDemoExpiryAsync(cts));
+        }
+        catch (OperationCanceledException)
+        {
+            // The session was refreshed, replaced, or cleared.
+        }
+    }
+
+    private async Task HandleDemoExpiryAsync(
+        CancellationTokenSource cts)
+    {
+        if (cts != _demoExpiryCts ||
+            cts.IsCancellationRequested)
+        {
+            return;
+        }
+
+        // Re-read the value in case a token refresh extended
+        // the session at almost the same moment as this timer fired.
+        var latestExpiry =
+            await TokenStore.GetDemoExpiresAtUtcAsync();
+
+        if (latestExpiry.HasValue &&
+            latestExpiry.Value.ToUniversalTime() > DateTime.UtcNow)
+        {
+            ScheduleDemoExpiry(latestExpiry);
+            return;
+        }
+
+        await TokenStore.ClearAsync();
+
+        try
+        {
+            await NotificationRealtime.ResetAsync();
+        }
+        finally
+        {
+            if (AuthenticationStateProvider
+                is JwtAuthenticationStateProvider jwtProvider)
+            {
+                jwtProvider.NotifyUserLogout();
+            }
+        }
+
+        Navigation.NavigateTo("/login");
+    }
+
+    private void CancelDemoExpiryTimer()
+    {
+        var cts = _demoExpiryCts;
+        _demoExpiryCts = null;
+
+        if (cts is null)
+            return;
+
+        cts.Cancel();
+        cts.Dispose();
     }
 
     private void OnStoredSessionChanged()
@@ -206,6 +297,8 @@
 
     public void Dispose()
     {
+        CancelDemoExpiryTimer();
+
         NotificationRealtime.NotificationReceived -= ShowNotificationToastAsync;
         TokenStore.SessionChanged -= OnStoredSessionChanged;
         AuthenticationStateProvider.AuthenticationStateChanged -= OnAuthenticationStateChanged;

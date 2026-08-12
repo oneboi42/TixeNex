@@ -141,15 +141,12 @@ public sealed class DemoCleanupJob : IDemoCleanupJob
         IReadOnlyCollection<string> expiredUserIds,
         CancellationToken ct)
     {
-        // SQL Server gets a real transaction. EF Core InMemory, used by the
-        // integration tests, intentionally skips it because it is not a
-        // relational provider.
         if (_db.Database.IsRelational())
         {
             await using var transaction =
                 await _db.Database.BeginTransactionAsync(ct);
 
-            await DeleteDatabaseEntitiesAsync(
+            await DeleteDatabaseEntitiesRelationalAsync(
                 expiredTicketIds,
                 expiredUserIds,
                 ct);
@@ -162,6 +159,132 @@ public sealed class DemoCleanupJob : IDemoCleanupJob
             expiredTicketIds,
             expiredUserIds,
             ct);
+    }
+
+    private async Task DeleteDatabaseEntitiesRelationalAsync(
+        IReadOnlyCollection<int> expiredTicketIds,
+        IReadOnlyCollection<string> expiredUserIds,
+        CancellationToken ct)
+    {
+        var ticketIds = expiredTicketIds.ToArray();
+        var userIds = expiredUserIds.ToArray();
+
+        var ticketEntityIds = ticketIds
+            .Select(id => id.ToString())
+            .ToArray();
+
+        if (ticketIds.Length > 0)
+        {
+            await _db.AuditLogs
+                .Where(log =>
+                    log.EntityName == "Ticket" &&
+                    ticketEntityIds.Contains(log.EntityId))
+                .ExecuteDeleteAsync(ct);
+
+            await _db.Tickets
+                .IgnoreQueryFilters()
+                .Where(ticket =>
+                    ticketIds.Contains(ticket.Id))
+                .ExecuteDeleteAsync(ct);
+        }
+
+        if (userIds.Length == 0)
+            return;
+
+        await _db.Tickets
+            .IgnoreQueryFilters()
+            .Where(ticket =>
+                !ticketIds.Contains(ticket.Id) &&
+                ticket.RequesterUserId != null &&
+                userIds.Contains(ticket.RequesterUserId))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    ticket => ticket.RequesterUserId,
+                    ticket => null),
+                ct);
+
+        await _db.Tickets
+            .IgnoreQueryFilters()
+            .Where(ticket =>
+                !ticketIds.Contains(ticket.Id) &&
+                ticket.AssignedToUserId != null &&
+                userIds.Contains(ticket.AssignedToUserId))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    ticket => ticket.AssignedToUserId,
+                    ticket => null),
+                ct);
+
+        await _db.Tickets
+            .IgnoreQueryFilters()
+            .Where(ticket =>
+                !ticketIds.Contains(ticket.Id) &&
+                ticket.DeletedByUserId != null &&
+                userIds.Contains(ticket.DeletedByUserId))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    ticket => ticket.DeletedByUserId,
+                    ticket => null),
+                ct);
+
+        await _db.TicketEscalations
+            .IgnoreQueryFilters()
+            .Where(escalation =>
+                !ticketIds.Contains(escalation.TicketId) &&
+                escalation.AssignedToUserId != null &&
+                userIds.Contains(escalation.AssignedToUserId))
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    escalation => escalation.AssignedToUserId,
+                    escalation => null),
+                ct);
+
+        await _db.UserNotifications
+            .Where(notification =>
+                notification.UserId != null &&
+                userIds.Contains(notification.UserId))
+            .ExecuteDeleteAsync(ct);
+
+        await _db.AuditLogs
+            .Where(log =>
+                log.UserId != null &&
+                userIds.Contains(log.UserId))
+            .ExecuteDeleteAsync(ct);
+
+        await _db.ExportJobs
+            .Where(exportJob =>
+                userIds.Contains(exportJob.UserId))
+            .ExecuteDeleteAsync(ct);
+
+        await _db.RefreshTokens
+            .Where(refreshToken =>
+                userIds.Contains(refreshToken.UserId))
+            .ExecuteDeleteAsync(ct);
+
+        await _db.UserClaims
+            .Where(claim =>
+                userIds.Contains(claim.UserId))
+            .ExecuteDeleteAsync(ct);
+
+        await _db.UserLogins
+            .Where(login =>
+                userIds.Contains(login.UserId))
+            .ExecuteDeleteAsync(ct);
+
+        await _db.UserTokens
+            .Where(token =>
+                userIds.Contains(token.UserId))
+            .ExecuteDeleteAsync(ct);
+
+        await _db.UserRoles
+            .Where(role =>
+                userIds.Contains(role.UserId))
+            .ExecuteDeleteAsync(ct);
+
+        await _db.Users
+            .Where(user =>
+                userIds.Contains(user.Id))
+            .ExecuteDeleteAsync(ct);
     }
 
     private async Task DeleteDatabaseEntitiesAsync(
