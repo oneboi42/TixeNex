@@ -11,4 +11,8 @@ public sealed class TokenResponseDto
     public string UserName { get; set; } = string.Empty;
     public string DisplayName { get; set; } = string.Empty;
     public string[] Roles { get; set; } = [];
+
+    public bool IsDemoUser { get; set; }
+    public DateTime? DemoExpiresAtUtc { get; set; }
+    public DateTime? DemoAbsoluteExpiresAtUtc { get; set; }
 }

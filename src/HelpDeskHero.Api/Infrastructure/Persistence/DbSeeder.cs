@@ -55,6 +55,8 @@ public static class DbSeeder
         await CreateUserIfMissingAsync(userManager, "agent1", "agent1@helpdeskhero.local", "Support Agent 1", agentPassword, resetPasswords, ["Agent"]);
         await CreateUserIfMissingAsync(userManager, "agent2", "agent2@helpdeskhero.local", "Support Agent 2", agentPassword, resetPasswords, ["Agent"]);
         await CreateUserIfMissingAsync(userManager, "user", "user@helpdeskhero.local", "Demo User", userPassword, resetPasswords, ["User"]);
+        await CreateUserIfMissingAsync(userManager, "demo-agent-1", "demo-agent-1@demo.helpdeskhero.local", "Demo Agent 1", agentPassword, resetPasswords, ["Agent"], isDemoWorkspace: true);
+        await CreateUserIfMissingAsync(userManager, "demo-agent-2", "demo-agent-2@demo.helpdeskhero.local", "Demo Agent 2", agentPassword, resetPasswords, ["Agent"], isDemoWorkspace: true);
 
         await SeedSlaPoliciesAsync(db, ct);
     }
@@ -87,13 +89,34 @@ public static class DbSeeder
         string displayName,
         string password,
         bool resetPassword,
-        string[] roles)
+        string[] roles,
+        bool isDemoWorkspace = false)
     {
         var user = await userManager.FindByNameAsync(userName)
             ?? await userManager.FindByEmailAsync(email);
 
         if (user is not null)
         {
+            if (user.IsDemoWorkspace != isDemoWorkspace ||
+                user.IsDemoUser ||
+                user.DemoExpiresAtUtc is not null ||
+                user.DemoAbsoluteExpiresAtUtc is not null ||
+                user.LastActivityAtUtc is not null)
+            {
+                user.IsDemoWorkspace = isDemoWorkspace;
+                user.IsDemoUser = false;
+                user.DemoExpiresAtUtc = null;
+                user.DemoAbsoluteExpiresAtUtc = null;
+                user.LastActivityAtUtc = null;
+
+                var updateResult = await userManager.UpdateAsync(user);
+                if (!updateResult.Succeeded)
+                {
+                    var errors = string.Join("; ", updateResult.Errors.Select(x => $"{x.Code}: {x.Description}"));
+                    throw new InvalidOperationException($"Cannot update seed user '{userName}'. {errors}");
+                }
+            }
+
             await AddMissingRolesAsync(userManager, user, roles);
 
             if (resetPassword &&
@@ -111,7 +134,9 @@ public static class DbSeeder
             Email = email,
             DisplayName = displayName,
             IsActive = true,
-            EmailConfirmed = true
+            EmailConfirmed = true,
+            IsDemoWorkspace = isDemoWorkspace,
+            IsDemoUser = false
         };
 
         var createResult = await userManager.CreateAsync(user, password);

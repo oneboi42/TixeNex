@@ -3,7 +3,6 @@ using System.Text;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 
 namespace HelpDeskHero.Api.Infrastructure.Services;
 
@@ -18,13 +17,36 @@ public sealed class RefreshTokenService
         _configuration = configuration;
     }
 
-    public async Task<(string rawToken, DateTime expiresAtUtc)> CreateAsync(string userId, string deviceName, string? ipAddress, CancellationToken ct = default)
+    public async Task<(string rawToken, DateTime expiresAtUtc)>
+        CreateAsync(
+            string userId,
+            string deviceName,
+            string? ipAddress,
+            DateTime? notAfterUtc = null,
+            CancellationToken ct = default)
     {
-        var rawToken = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+        var rawToken = Convert.ToBase64String(
+            RandomNumberGenerator.GetBytes(64));
+
         var hash = ComputeSha256(rawToken);
 
-        var days = int.Parse(_configuration["Jwt:RefreshTokenDays"] ?? "7");
-        var expiresAtUtc = DateTime.UtcNow.AddDays(days);
+        var days = int.Parse(
+            _configuration["Jwt:RefreshTokenDays"] ?? "7");
+
+        var now = DateTime.UtcNow;
+        var expiresAtUtc = now.AddDays(days);
+
+        if (notAfterUtc.HasValue &&
+            notAfterUtc.Value < expiresAtUtc)
+        {
+            expiresAtUtc = notAfterUtc.Value;
+        }
+
+        if (expiresAtUtc <= now)
+        {
+            throw new InvalidOperationException(
+                "Cannot create a refresh token for an expired session.");
+        }
 
         var refresh = new RefreshToken
         {
@@ -32,7 +54,7 @@ public sealed class RefreshTokenService
             TokenHash = hash,
             DeviceName = deviceName,
             IpAddress = ipAddress,
-            CreatedAtUtc = DateTime.UtcNow,
+            CreatedAtUtc = now,
             ExpiresAtUtc = expiresAtUtc
         };
 

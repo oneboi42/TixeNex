@@ -1,3 +1,5 @@
+using HelpDeskHero.Api.BackgroundJobs;
+using HelpDeskHero.Api.BackgroundJobs.Contracts;
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -26,6 +28,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["Jwt:Key"] = "HelpDeskHero.Tests.Super.Secret.Key.For.Jwt.Token.Signing.123456789",
                 ["Jwt:AccessTokenMinutes"] = "60",
                 ["Jwt:RefreshTokenDays"] = "7",
+                ["Demo:Enabled"] = "true",
                 ["SeedUsers:Admin:Password"] = "Admin1234",
                 ["SeedUsers:Agent:Password"] = "Agent123!",
                 ["SeedUsers:User:Password"] = "User123!",
@@ -52,6 +55,8 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
             {
                 options.UseInMemoryDatabase(_databaseName);
             });
+
+            services.AddScoped<INotificationJob, NotificationJob>();
         });
     }
 }

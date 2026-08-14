@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using HelpDeskHero.Api.Application.TicketVisibility;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.BackgroundJobs.Contracts;
 using HelpDeskHero.Api.Infrastructure.Persistence;
@@ -16,17 +17,28 @@ public sealed class TicketCommentsController : ControllerBase
 {
     private readonly AppDbContext _db;
     private readonly INotificationJob _notificationJob;
+    private readonly ITicketVisibilityContextResolver _ticketVisibilityContextResolver;
 
-    public TicketCommentsController(AppDbContext db, INotificationJob notificationJob)
+    public TicketCommentsController(
+        AppDbContext db,
+        INotificationJob notificationJob,
+        ITicketVisibilityContextResolver ticketVisibilityContextResolver)
     {
         _db = db;
         _notificationJob = notificationJob;
+        _ticketVisibilityContextResolver = ticketVisibilityContextResolver;
     }
 
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<TicketCommentDto>>> GetAll(int ticketId, CancellationToken ct)
     {
-        if (!await _db.Tickets.AnyAsync(x => x.Id == ticketId, ct))
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+        if (accessError is not null)
+            return accessError;
+
+        if (!await _db.Tickets
+                .ApplyVisibility(visibilityContext)
+                .AnyAsync(x => x.Id == ticketId, ct))
             return TicketNotFound(ticketId);
 
         var items = await _db.TicketComments
@@ -58,7 +70,13 @@ public sealed class TicketCommentsController : ControllerBase
         if (errors.Count > 0)
             return ValidationError(errors);
 
-        if (!await _db.Tickets.AnyAsync(x => x.Id == ticketId, ct))
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+        if (accessError is not null)
+            return accessError;
+
+        if (!await _db.Tickets
+                .ApplyVisibility(visibilityContext)
+                .AnyAsync(x => x.Id == ticketId, ct))
             return TicketNotFound(ticketId);
 
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -82,6 +100,26 @@ public sealed class TicketCommentsController : ControllerBase
         var result = ToDto(entity);
 
         return CreatedAtAction(nameof(GetAll), new { ticketId }, result);
+    }
+
+    private ActionResult? ResolveTicketVisibility(out TicketVisibilityContext context)
+    {
+        var resolution = _ticketVisibilityContextResolver.Resolve(User);
+
+        if (resolution.Status == TicketVisibilityResolutionStatus.Unauthorized)
+        {
+            context = null!;
+            return Unauthorized();
+        }
+
+        if (resolution.Status == TicketVisibilityResolutionStatus.Forbidden)
+        {
+            context = null!;
+            return Forbid();
+        }
+
+        context = resolution.Context!;
+        return null;
     }
 
     private static Dictionary<string, string[]> ValidateCreate(string body)

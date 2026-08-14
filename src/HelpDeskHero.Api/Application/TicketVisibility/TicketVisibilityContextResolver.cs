@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using HelpDeskHero.Api.Infrastructure.Security;
 
 namespace HelpDeskHero.Api.Application.TicketVisibility;
 
@@ -30,6 +31,9 @@ public sealed class TicketVisibilityContextResolver : ITicketVisibilityContextRe
 
         return new TicketVisibilityResolution(
             TicketVisibilityResolutionStatus.Resolved,
-            new TicketVisibilityContext(userId, scope.Value));
+            new TicketVisibilityContext(
+                userId,
+                scope.Value,
+                DemoWorkspaceClaims.IsDemoWorkspace(principal)));
     }
 }

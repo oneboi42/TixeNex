@@ -314,5 +314,10 @@ public sealed class ExportAuthorizationTests
             string objectName,
             CancellationToken cancellationToken = default) =>
             Task.FromResult(Array.Empty<byte>());
+
+        public Task DeleteAsync(
+            string objectName,
+            CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 }

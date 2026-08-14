@@ -30,10 +30,4 @@
     <ProjectReference Include="..\HelpDeskHero.Shared\HelpDeskHero.Shared.csproj" />
   </ItemGroup>
 
-  <ItemGroup Condition="'$(ExcludeAppSettingsFromPublish)' == 'true'">
-    <Content
-      Update="appsettings*.json"
-      CopyToPublishDirectory="Never" />
-  </ItemGroup>
-
 </Project>

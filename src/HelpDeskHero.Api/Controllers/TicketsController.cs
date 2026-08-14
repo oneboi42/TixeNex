@@ -117,9 +117,17 @@ public sealed class TicketsController : ControllerBase
                 Priority = x.Priority,
                 CreatedAtUtc = x.CreatedAtUtc,
                 UpdatedAtUtc = x.UpdatedAtUtc,
-                RequesterDisplayName = includeRequesterDisplayName && requesterUser != null
-                    ? requesterUser.DisplayName
-                    : null,
+                RequesterDisplayName =
+                    requesterUser != null &&
+                    (includeRequesterDisplayName || requesterUser.IsDemoUser)
+                        ? requesterUser.DisplayName
+                        : null,
+                IsRequesterCurrentUser =
+                    x.RequesterUserId == visibilityContext.UserId,
+                IsDemoTicket =
+                    x.DemoExpiresAtUtc != null,
+                DemoExpiresAtUtc =
+                    x.DemoExpiresAtUtc,
                 AssignedToUserId = x.AssignedToUserId,
                 AssignedToDisplayName = assignedUser == null
                     ? null
@@ -157,8 +165,14 @@ public sealed class TicketsController : ControllerBase
     [Authorize(Policy = "CanManageTickets")]
     public async Task<ActionResult<List<TicketDto>>> GetDeleted(CancellationToken ct)
     {
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+
+        if (accessError is not null)
+            return accessError;
+
         var items = await _db.Tickets
             .IgnoreQueryFilters()
+            .ApplyWorkspace(visibilityContext)
             .Where(x => x.IsDeleted)
             .OrderByDescending(x => x.DeletedAtUtc ?? x.CreatedAtUtc)
             .Select(x => new TicketDto
@@ -182,8 +196,14 @@ public sealed class TicketsController : ControllerBase
     [Authorize(Policy = "CanManageTickets")]
     public async Task<IActionResult> Restore(int id, CancellationToken ct)
     {
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+
+        if (accessError is not null)
+            return accessError;
+
         var ticket = await _db.Tickets
             .IgnoreQueryFilters()
+            .ApplyWorkspace(visibilityContext)
             .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         if (ticket is null)
@@ -234,7 +254,10 @@ public sealed class TicketsController : ControllerBase
                     : assignedUser.DisplayName,
                 RequesterDisplayName = requesterUser == null
                     ? null
-                    : requesterUser.DisplayName
+                    : requesterUser.DisplayName,
+                RequesterIsDemoUser =
+                    requesterUser != null &&
+                    requesterUser.IsDemoUser
             }).FirstOrDefaultAsync(ct);
 
         if (result is null)
@@ -244,7 +267,9 @@ public sealed class TicketsController : ControllerBase
             result.Ticket,
             visibilityContext,
             result.AssignedToDisplayName,
-            User.IsInRole("Admin") ? result.RequesterDisplayName : null));
+            User.IsInRole("Admin") || result.RequesterIsDemoUser
+                ? result.RequesterDisplayName
+                : null));
     }
 
     [HttpPost]
@@ -261,7 +286,29 @@ public sealed class TicketsController : ControllerBase
         if (string.IsNullOrWhiteSpace(currentUserId))
             return Unauthorized();
 
-        var nextNumber = $"HDH-{DateTime.UtcNow:yyyyMMddHHmmss}";
+        var currentUser = await _userManager.FindByIdAsync(currentUserId);
+
+        if (currentUser is null || !currentUser.IsActive)
+            return Unauthorized();
+
+        var now = DateTime.UtcNow;
+
+        if (currentUser.IsDemoUser)
+        {
+            if (!currentUser.DemoExpiresAtUtc.HasValue ||
+                !currentUser.DemoAbsoluteExpiresAtUtc.HasValue ||
+                currentUser.DemoExpiresAtUtc <= now ||
+                currentUser.DemoAbsoluteExpiresAtUtc <= now)
+            {
+                return Unauthorized();
+            }
+        }
+
+        var numberSuffix = Guid.NewGuid()
+            .ToString("N")[..6]
+            .ToUpperInvariant();
+
+        var nextNumber = $"HDH-{now:yyyyMMddHHmmss}-{numberSuffix}";
 
         var entity = new Ticket
         {
@@ -270,8 +317,11 @@ public sealed class TicketsController : ControllerBase
             Description = dto.Description.Trim(),
             Priority = dto.Priority,
             Status = "New",
-            CreatedAtUtc = DateTime.UtcNow,
-            RequesterUserId = currentUserId
+            CreatedAtUtc = now,
+            RequesterUserId = currentUserId,
+            DemoExpiresAtUtc = currentUser.IsDemoWorkspace
+                ? currentUser.DemoAbsoluteExpiresAtUtc
+                : null
         };
 
         await _slaCalculator.ApplySlaAsync(entity, ct);
@@ -309,12 +359,10 @@ public sealed class TicketsController : ControllerBase
                 .Where(x => x.Id == entity.AssignedToUserId)
                 .Select(x => x.DisplayName)
                 .SingleOrDefaultAsync(ct);
-        var requesterDisplayName = User.IsInRole("Admin")
-            ? await _db.Users
-                .Where(x => x.Id == entity.RequesterUserId)
-                .Select(x => x.DisplayName)
-                .SingleOrDefaultAsync(ct)
-            : null;
+        var requesterDisplayName =
+            User.IsInRole("Admin") || currentUser.IsDemoUser
+                ? currentUser.DisplayName
+                : null;
         var result = ToDto(
             entity,
             visibilityContext,
@@ -338,7 +386,9 @@ public sealed class TicketsController : ControllerBase
         if (accessError is not null)
             return accessError;
 
-        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var entity = await _db.Tickets
+            .ApplyWorkspace(visibilityContext)
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         if (entity is null)
             return TicketNotFound(id);
@@ -399,7 +449,14 @@ public sealed class TicketsController : ControllerBase
         if (errors.Count > 0)
             return ValidationError(errors);
 
-        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+
+        if (accessError is not null)
+            return accessError;
+
+        var entity = await _db.Tickets
+            .ApplyWorkspace(visibilityContext)
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         if (entity is null)
             return TicketNotFound(id);
@@ -441,6 +498,17 @@ public sealed class TicketsController : ControllerBase
                 "Invalid assignee",
                 "Only a user with the Agent role can be assigned to a ticket.",
                 "assignee_must_be_agent");
+        }
+
+        var ticketIsDemoWorkspace = entity.DemoExpiresAtUtc is not null;
+
+        if (assignee.IsDemoWorkspace != ticketIsDemoWorkspace)
+        {
+            return BusinessProblem(
+                StatusCodes.Status409Conflict,
+                "Invalid assignee workspace",
+                "Ticket and assignee must belong to the same workspace.",
+                "assignee_workspace_mismatch");
         }
 
         var originalRowVersion = Convert.FromBase64String(dto.RowVersionBase64);
@@ -524,7 +592,14 @@ public sealed class TicketsController : ControllerBase
     [Authorize(Policy = "CanManageTickets")]
     public async Task<IActionResult> SoftDelete(int id, CancellationToken ct)
     {
-        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var accessError = ResolveTicketVisibility(out var visibilityContext);
+
+        if (accessError is not null)
+            return accessError;
+
+        var entity = await _db.Tickets
+            .ApplyWorkspace(visibilityContext)
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         if (entity is null)
             return TicketNotFound(id);
@@ -598,7 +673,9 @@ public sealed class TicketsController : ControllerBase
         if (accessError is not null)
             return accessError;
 
-        var entity = await _db.Tickets.FirstOrDefaultAsync(x => x.Id == id, ct);
+        var entity = await _db.Tickets
+            .ApplyWorkspace(visibilityContext)
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         if (entity is null)
             return TicketNotFound(id);
@@ -817,6 +894,9 @@ public sealed class TicketsController : ControllerBase
         CreatedAtUtc = entity.CreatedAtUtc,
         UpdatedAtUtc = entity.UpdatedAtUtc,
         RequesterDisplayName = requesterDisplayName,
+        IsRequesterCurrentUser = entity.RequesterUserId == context.UserId,
+        IsDemoTicket = entity.DemoExpiresAtUtc != null,
+        DemoExpiresAtUtc = entity.DemoExpiresAtUtc,
         AssignedToUserId = entity.AssignedToUserId,
         AssignedToDisplayName = entity.AssignedToUserId is null
             ? null

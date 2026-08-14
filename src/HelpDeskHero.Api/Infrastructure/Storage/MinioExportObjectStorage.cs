@@ -57,4 +57,28 @@ public sealed class MinioExportObjectStorage
 
         return outputStream.ToArray();
     }
+    public async Task DeleteAsync(
+        string objectName,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(objectName))
+        {
+            throw new ArgumentException(
+                "Object name cannot be empty.",
+                nameof(objectName));
+        }
+
+        var removeObjectArgs = new RemoveObjectArgs()
+            .WithBucket(_options.BucketName)
+            .WithObject(objectName);
+
+        await _minioClient.RemoveObjectAsync(
+            removeObjectArgs,
+            cancellationToken);
+
+        _logger.LogInformation(
+            "Deleted export object {ObjectName} from MinIO bucket {BucketName}.",
+            objectName,
+            _options.BucketName);
+    }
 }

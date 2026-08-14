@@ -9,7 +9,8 @@ public enum TicketVisibilityScope
 
 public sealed record TicketVisibilityContext(
     string UserId,
-    TicketVisibilityScope Scope);
+    TicketVisibilityScope Scope,
+    bool IsDemoWorkspace);
 
 public enum TicketVisibilityResolutionStatus
 {

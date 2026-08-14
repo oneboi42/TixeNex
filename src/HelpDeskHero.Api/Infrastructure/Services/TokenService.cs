@@ -19,42 +19,76 @@ public sealed class TokenService
         _userManager = userManager;
     }
 
-    public async Task<(string token, DateTime expiresAtUtc)> CreateAccessTokenAsync(ApplicationUser user)
+    public async Task<(string token, DateTime expiresAtUtc)>
+        CreateAccessTokenAsync(
+            ApplicationUser user,
+            DateTime? notAfterUtc = null)
     {
         var jwt = _configuration.GetSection("Jwt");
+
         var issuer = jwt["Issuer"]!;
         var audience = jwt["Audience"]!;
         var key = jwt["Key"]!;
-        var minutes = int.Parse(jwt["AccessTokenMinutes"] ?? "15");
+
+        var minutes = int.Parse(
+            jwt["AccessTokenMinutes"] ?? "15");
 
         var roles = await _userManager.GetRolesAsync(user);
 
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Id),
-            new(JwtRegisteredClaimNames.UniqueName, user.UserName ?? string.Empty),
+            new(
+                JwtRegisteredClaimNames.UniqueName,
+                user.UserName ?? string.Empty),
             new("display_name", user.DisplayName),
+            new(
+                "is_demo_workspace",
+                user.IsDemoWorkspace ? "true" : "false"),
+            new(
+                "is_demo",
+                user.IsDemoUser ? "true" : "false"),
             new(ClaimTypes.NameIdentifier, user.Id),
-            new(ClaimTypes.Name, user.UserName ?? string.Empty)
+            new(
+                ClaimTypes.Name,
+                user.UserName ?? string.Empty)
         };
 
-        claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
+        claims.AddRange(
+            roles.Select(
+                role => new Claim(ClaimTypes.Role, role)));
 
-        var expiresAtUtc = DateTime.UtcNow.AddMinutes(minutes);
+        var now = DateTime.UtcNow;
+        var expiresAtUtc = now.AddMinutes(minutes);
+
+        if (notAfterUtc.HasValue &&
+            notAfterUtc.Value < expiresAtUtc)
+        {
+            expiresAtUtc = notAfterUtc.Value;
+        }
+
+        if (expiresAtUtc <= now)
+        {
+            throw new InvalidOperationException(
+                "Cannot create an access token for an expired session.");
+        }
 
         var credentials = new SigningCredentials(
-            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key)),
+            new SymmetricSecurityKey(
+                Encoding.UTF8.GetBytes(key)),
             SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
             issuer: issuer,
             audience: audience,
             claims: claims,
-            notBefore: DateTime.UtcNow,
+            notBefore: now,
             expires: expiresAtUtc,
             signingCredentials: credentials);
 
-        var tokenValue = new JwtSecurityTokenHandler().WriteToken(token);
+        var tokenValue =
+            new JwtSecurityTokenHandler().WriteToken(token);
+
         return (tokenValue, expiresAtUtc);
     }
 }
