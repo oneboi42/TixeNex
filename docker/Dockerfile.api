@@ -13,6 +13,7 @@ COPY . .
 RUN dotnet publish src/HelpDeskHero.Api/HelpDeskHero.Api.csproj \
     -c Release \
     -o /app/publish \
+    --no-restore \
     /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final

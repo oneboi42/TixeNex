@@ -2,6 +2,7 @@ using HelpDeskHero.Shared.Contracts.Tickets;
 using HelpDeskHero.Shared.Contracts.Notifications;
 using HelpDeskHero.UI.Services.Auth;
 using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.AspNetCore.Components;
 
 namespace HelpDeskHero.UI.Services.Realtime;
 
@@ -10,12 +11,15 @@ public sealed class TicketsRealtimeClient : ITicketsRealtimeClient, INotificatio
     private readonly IConfiguration _configuration;
     private readonly TokenStore _tokenStore;
     private readonly SemaphoreSlim _connectionLock = new(1, 1);
+    private readonly NavigationManager _navigationManager;
     private HubConnection? _connection;
 
-    public TicketsRealtimeClient(IConfiguration configuration, TokenStore tokenStore)
+    public TicketsRealtimeClient(IConfiguration configuration, TokenStore tokenStore,
+                                NavigationManager navigationManager)
     {
         _configuration = configuration;
         _tokenStore = tokenStore;
+        _navigationManager = navigationManager;
     }
 
     public event Func<TicketLiveUpdateDto, Task>? OnTicketChanged;
@@ -82,8 +86,12 @@ public sealed class TicketsRealtimeClient : ITicketsRealtimeClient, INotificatio
 
     private HubConnection CreateConnection()
     {
-        var apiBaseUrl = _configuration["Api:BaseUrl"]
-            ?? throw new InvalidOperationException("Missing Api:BaseUrl.");
+        var configuredApiBaseUrl = _configuration["Api:BaseUrl"];
+
+        var apiBaseUrl =
+            string.IsNullOrWhiteSpace(configuredApiBaseUrl)
+                ? _navigationManager.BaseUri
+                : configuredApiBaseUrl;
 
         var hubUrl = new Uri(new Uri(apiBaseUrl.TrimEnd('/') + "/"), "hubs/tickets");
 
