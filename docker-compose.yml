@@ -5,42 +5,39 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
-      MSSQL_PID: "Developer"
-    ports:
-    - 14333:1433
+      MSSQL_PID: "Express"
     volumes:
-    - sql_data:/var/opt/mssql
+      - sql_data:/var/opt/mssql
     restart: unless-stopped
     healthcheck:
       test:
-      - CMD-SHELL
-      - /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -C -Q "SELECT 1" || exit 1
+        - CMD-SHELL
+        - /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$${MSSQL_SA_PASSWORD}" -C -Q "SELECT 1" || exit 1
       interval: 10s
       timeout: 5s
       retries: 15
       start_period: 30s
+
   rabbitmq:
     image: rabbitmq:4-management
     container_name: helpdeskhero-rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER}"
       RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD}"
-    ports:
-    - 5672:5672
-    - 15672:15672
     volumes:
-    - rabbitmq_data:/var/lib/rabbitmq
+      - rabbitmq_data:/var/lib/rabbitmq
     restart: unless-stopped
     healthcheck:
       test:
-      - CMD
-      - rabbitmq-diagnostics
-      - -q
-      - ping
+        - CMD
+        - rabbitmq-diagnostics
+        - -q
+        - ping
       interval: 10s
       timeout: 5s
       retries: 15
       start_period: 20s
+
   minio:
     image: quay.io/minio/minio:latest
     container_name: helpdeskhero-minio
@@ -48,17 +45,16 @@ services:
     environment:
       MINIO_ROOT_USER: "${MINIO_ROOT_USER}"
       MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD}"
-    ports:
-    - 9000:9000
-    - 9001:9001
     volumes:
-    - minio_data:/data
+      - minio_data:/data
     restart: unless-stopped
+
   api:
     build:
       context: .
       dockerfile: ./docker/Dockerfile.api
     container_name: helpdeskhero-api
+
     depends_on:
       db:
         condition: service_healthy
@@ -66,41 +62,61 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+
     environment:
-      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ASPNETCORE_HTTP_PORTS: "8080"
+
       Logging__LogLevel__Default: Information
       Logging__LogLevel__Microsoft: Warning
       Logging__LogLevel__Microsoft.Hosting.Lifetime: Information
       Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: Warning
-      ConnectionStrings__DefaultConnection: Server=db,1433;Database=HelpDeskHero;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True
-      Jwt__Issuer: HelpDeskHero
-      Jwt__Audience: HelpDeskHero
+
+      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=HelpDeskHero;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+
+      Jwt__Issuer: "HelpDeskHero"
+      Jwt__Audience: "HelpDeskHero"
       Jwt__Key: "${JWT_KEY}"
-      Jwt__AccessTokenMinutes: '60'
+      Jwt__AccessTokenMinutes: "60"
+
       SeedUsers__Admin__Password: "${SEED_ADMIN_PASSWORD}"
       SeedUsers__Agent__Password: "${SEED_AGENT_PASSWORD}"
       SeedUsers__User__Password: "${SEED_USER_PASSWORD}"
-      RabbitMQ__Host: rabbitmq
+
+      RabbitMQ__Host: "rabbitmq"
       RabbitMQ__UserName: "${RABBITMQ_USER}"
       RabbitMQ__Password: "${RABBITMQ_PASSWORD}"
-      Minio__Endpoint: minio:9000
+
+      Minio__Endpoint: "minio:9000"
       Minio__AccessKey: "${MINIO_ROOT_USER}"
       Minio__SecretKey: "${MINIO_ROOT_PASSWORD}"
-      Minio__BucketName: exports
+      Minio__BucketName: "exports"
       Minio__UseSsl: "false"
-      FileStorage__RootPath: /app/App_Data/attachments
+
+      FileStorage__RootPath: "/app/App_Data/attachments"
+
+      Demo__Enabled: "true"
+      Demo__SlidingLifetimeMinutes: "60"
+      Demo__AbsoluteLifetimeMinutes: "180"
+      Demo__MaxActiveUsers: "50"
+      Demo__AllowedRoles__0: "User"
+      Demo__AllowedRoles__1: "Agent"
+      Demo__AllowedRoles__2: "Admin"
+
       UseHttpsRedirection: "false"
+
     volumes:
-    - api_attachments:/app/App_Data/attachments
-    - dataprotection_keys:/root/.aspnet/DataProtection-Keys
-    ports:
-    - 5001:8080
+      - api_attachments:/app/App_Data/attachments
+      - dataprotection_keys:/root/.aspnet/DataProtection-Keys
+
     restart: unless-stopped
+
   worker:
     build:
       context: .
       dockerfile: ./docker/Dockerfile.worker
     container_name: helpdeskhero-worker
+
     depends_on:
       db:
         condition: service_healthy
@@ -108,35 +124,46 @@ services:
         condition: service_healthy
       minio:
         condition: service_started
+
     environment:
       DOTNET_ENVIRONMENT: "Production"
+
       Logging__LogLevel__Default: Information
       Logging__LogLevel__Microsoft: Warning
       Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: Warning
-      ConnectionStrings__DefaultConnection: Server=db,1433;Database=HelpDeskHero;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True
-      RabbitMQ__Host: rabbitmq
+
+      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=HelpDeskHero;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+
+      RabbitMQ__Host: "rabbitmq"
       RabbitMQ__UserName: "${RABBITMQ_USER}"
       RabbitMQ__Password: "${RABBITMQ_PASSWORD}"
-      Minio__Endpoint: minio:9000
+
+      Minio__Endpoint: "minio:9000"
       Minio__AccessKey: "${MINIO_ROOT_USER}"
       Minio__SecretKey: "${MINIO_ROOT_PASSWORD}"
-      Minio__BucketName: exports
+      Minio__BucketName: "exports"
       Minio__UseSsl: "false"
+
     restart: unless-stopped
+
   ui:
     build:
       context: .
       dockerfile: ./docker/Dockerfile.ui
     container_name: helpdeskhero-ui
+
     depends_on:
       api:
         condition: service_started
+
     ports:
-    - 8080:80
+      - "127.0.0.1:8080:80"
+
     restart: unless-stopped
+
 volumes:
-  sql_data: null
-  api_attachments: null
-  rabbitmq_data: null
-  minio_data: null
-  dataprotection_keys: null
+  sql_data:
+  api_attachments:
+  rabbitmq_data:
+  minio_data:
+  dataprotection_keys:

@@ -26,10 +26,11 @@ public sealed class AuthApiClient
         _notificationRealtime = notificationRealtime;
     }
 
-    public async Task<bool> LoginAsync(LoginRequestDto dto, CancellationToken ct = default)
+    public async Task<bool> LoginAsync(
+        LoginRequestDto dto,
+        CancellationToken ct = default)
     {
         var client = _httpClientFactory.CreateClient("AnonymousApi");
-
         var response = await client.PostAsJsonAsync("api/auth/login", dto, ct);
 
         if (!response.IsSuccessStatusCode)
@@ -38,27 +39,34 @@ public sealed class AuthApiClient
         var token = await response.Content.ReadFromJsonAsync<TokenResponseDto>(
             cancellationToken: ct);
 
-        if (token is null)
+        return token is not null &&
+            await CompleteAuthenticationAsync(token, ct);
+    }
+
+    public async Task<bool> StartDemoSessionAsync(
+        string role,
+        string deviceName,
+        CancellationToken ct = default)
+    {
+        var client = _httpClientFactory.CreateClient("AnonymousApi");
+
+        var response = await client.PostAsJsonAsync(
+            "api/demo/sessions",
+            new CreateDemoSessionRequestDto
+            {
+                Role = role,
+                DeviceName = deviceName
+            },
+            ct);
+
+        if (!response.IsSuccessStatusCode)
             return false;
 
-        await _tokenStore.SetAccessTokenAsync(token.AccessToken);
-        await _tokenStore.SetRefreshTokenAsync(token.RefreshToken);
+        var token = await response.Content.ReadFromJsonAsync<TokenResponseDto>(
+            cancellationToken: ct);
 
-        var jwt = new JwtSecurityTokenHandler().ReadJwtToken(token.AccessToken);
-        var userId = jwt.Claims.FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier)?.Value
-            ?? jwt.Claims.FirstOrDefault(x => x.Type == "sub")?.Value;
-
-        if (string.IsNullOrWhiteSpace(userId))
-        {
-            await _tokenStore.ClearAsync();
-            _authStateProvider.NotifyUserLogout();
-            return false;
-        }
-
-        _authStateProvider.NotifyUserAuthentication(jwt.Claims);
-        await _notificationRealtime.TryStartAsync(userId, ct);
-
-        return true;
+        return token is not null &&
+            await CompleteAuthenticationAsync(token, ct);
     }
 
     public async Task LogoutAsync(CancellationToken ct = default)
@@ -91,13 +99,46 @@ public sealed class AuthApiClient
             }
         }
     }
+
     public async Task RevokeAllSessionsAsync(CancellationToken ct = default)
     {
         var client = _httpClientFactory.CreateClient("AuthorizedApi");
-
         var response = await client.PostAsync("api/auth/revoke-all", null, ct);
-
         response.EnsureSuccessStatusCode();
     }
 
+    private async Task<bool> CompleteAuthenticationAsync(
+        TokenResponseDto token,
+        CancellationToken ct)
+    {
+        JwtSecurityToken jwt;
+
+        try
+        {
+            jwt = new JwtSecurityTokenHandler().ReadJwtToken(token.AccessToken);
+        }
+        catch
+        {
+            await _tokenStore.ClearAsync();
+            _authStateProvider.NotifyUserLogout();
+            return false;
+        }
+
+        var userId = jwt.Claims
+            .FirstOrDefault(x => x.Type == ClaimTypes.NameIdentifier)?.Value
+            ?? jwt.Claims.FirstOrDefault(x => x.Type == "sub")?.Value;
+
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            await _tokenStore.ClearAsync();
+            _authStateProvider.NotifyUserLogout();
+            return false;
+        }
+
+        await _tokenStore.SetAuthenticationAsync(token);
+        _authStateProvider.NotifyUserAuthentication(jwt.Claims);
+        await _notificationRealtime.TryStartAsync(userId, ct);
+
+        return true;
+    }
 }

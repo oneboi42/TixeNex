@@ -13,9 +13,15 @@
 <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
     <div>
         <h3 class="mb-1">Dashboard</h3>
+        <div class="text-muted">
+            Metrics reflect tickets available to your current account.
+        </div>
+
         @if (_lastLoadedAt is not null)
         {
-            <small class="text-muted">Last refreshed: @_lastLoadedAt.Value.ToLocalTime().ToString("T")</small>
+            <small class="text-muted">
+                Last refreshed: @_lastLoadedAt.Value.ToString("T")
+            </small>
         }
     </div>
 
@@ -38,7 +44,7 @@ else if (_model is not null)
     <div class="row g-3 mb-4">
         <div class="col-md-3">
             <div class="card p-3">
-                <strong>Total</strong>
+                <strong>Tickets</strong>
                 <span>@_model.TotalTickets</span>
             </div>
         </div>
@@ -95,41 +101,55 @@ else if (_model is not null)
         </div>
     </div>
 
-    <h5>Recent audit</h5>
+    <h5>Recent activity</h5>
 
     @if (_model.RecentAuditItems.Count == 0)
     {
-        <EmptyState Title="No audit entries" Message="There are no recent audit entries." />
+        <EmptyState Title="No recent activity"
+                    Message="There are no recent activity entries to show." />
     }
     else
     {
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>When</th>
-                    <th>Action</th>
-                    <th>Entity</th>
-                    <th>User</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var item in _model.RecentAuditItems)
-                {
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
                     <tr>
-                        <td>@item.CreatedAtUtc.ToString("u")</td>
-                        <td>@item.Action</td>
-                        <td>@item.EntityName</td>
-                        <td>@item.PerformedBy</td>
+                        <th>When</th>
+                        <th>Action</th>
+                        <th>Entity</th>
+                        <th>Performed by</th>
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach (var item in _model.RecentAuditItems)
+                    {
+                        <tr>
+                            <td>
+                                @item.CreatedAtUtc
+                                    .ToLocalTime()
+                                    .ToString("yyyy-MM-dd HH:mm")
+                            </td>
+                            <td>
+                                <span class="badge @GetActionBadge(item.Action)">
+                                    @item.Action
+                                </span>
+                            </td>
+                            <td>@item.EntityName</td>
+                            <td>@item.PerformedBy</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
     }
 }
 
 @code {
-    private readonly PeriodicTimer _refreshTimer = new(TimeSpan.FromSeconds(45));
+    private readonly PeriodicTimer _refreshTimer =
+        new(TimeSpan.FromSeconds(45));
+
     private readonly CancellationTokenSource _disposeCts = new();
+
     private DashboardSummaryDto? _model;
     private string? _error;
     private bool _loading;
@@ -151,10 +171,13 @@ else if (_model is not null)
 
         try
         {
-            _model = await DashboardApi.GetSummaryAsync(_disposeCts.Token);
+            _model = await DashboardApi.GetSummaryAsync(
+                _disposeCts.Token);
+
             _lastLoadedAt = DateTime.Now;
         }
-        catch (OperationCanceledException) when (_disposeCts.IsCancellationRequested)
+        catch (OperationCanceledException)
+            when (_disposeCts.IsCancellationRequested)
         {
         }
         catch
@@ -171,7 +194,8 @@ else if (_model is not null)
     {
         try
         {
-            while (await _refreshTimer.WaitForNextTickAsync(_disposeCts.Token))
+            while (await _refreshTimer.WaitForNextTickAsync(
+                       _disposeCts.Token))
             {
                 await InvokeAsync(RefreshAsync);
             }
@@ -179,6 +203,24 @@ else if (_model is not null)
         catch (OperationCanceledException)
         {
         }
+    }
+
+    private static string GetActionBadge(string action)
+    {
+        return action switch
+        {
+            "Create" => "bg-success",
+            "Assign" => "bg-primary",
+            "Reassign" => "bg-primary",
+            "Started" => "bg-info text-dark",
+            "Resolved" => "bg-success",
+            "Closed" => "bg-secondary",
+            "Reopened" => "bg-warning text-dark",
+            "Restore" => "bg-info text-dark",
+            "SoftDelete" => "bg-danger",
+            "Delete" => "bg-danger",
+            _ => "bg-secondary"
+        };
     }
 
     public async ValueTask DisposeAsync()

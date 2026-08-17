@@ -8,6 +8,7 @@ using HelpDeskHero.Shared.Contracts.Notifications;
 using HelpDeskHero.UI.Layout;
 using HelpDeskHero.UI.Services.Api;
 using HelpDeskHero.UI.Services.Realtime;
+using HelpDeskHero.UI.Services.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -48,6 +49,7 @@ public sealed class MainLayoutNotificationStartupTests : BunitContext
         Services.AddSingleton<IAuthorizationService, PermissiveAuthorizationService>();
         Services.AddSingleton(notificationApi);
         Services.AddSingleton(coordinator);
+        Services.AddSingleton<TokenStore>();
 
         var cut = Render(builder =>
         {

@@ -141,9 +141,6 @@ public sealed class DemoCleanupJob : IDemoCleanupJob
         IReadOnlyCollection<string> expiredUserIds,
         CancellationToken ct)
     {
-        // SQL Server gets a real transaction. EF Core InMemory, used by the
-        // integration tests, intentionally skips it because it is not a
-        // relational provider.
         if (_db.Database.IsRelational())
         {
             await using var transaction =
