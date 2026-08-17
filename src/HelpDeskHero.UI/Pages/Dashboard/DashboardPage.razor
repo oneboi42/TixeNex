@@ -125,9 +125,9 @@ else if (_model is not null)
                     {
                         <tr>
                             <td>
-                                @item.CreatedAtUtc
+                                @(item.CreatedAtUtc
                                     .ToLocalTime()
-                                    .ToString("yyyy-MM-dd HH:mm")
+                                    .ToString("yyyy-MM-dd HH:mm"))
                             </td>
                             <td>
                                 <span class="badge @GetActionBadge(item.Action)">
