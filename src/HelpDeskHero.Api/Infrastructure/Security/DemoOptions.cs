@@ -6,9 +6,9 @@ public sealed class DemoOptions
 
     public bool Enabled { get; set; }
 
-    public int SlidingLifetimeMinutes { get; set; } = 60;
+    public int SlidingLifetimeMinutes { get; set; } = 30;
 
-    public int AbsoluteLifetimeMinutes { get; set; } = 180;
+    public int AbsoluteLifetimeMinutes { get; set; } = 90;
 
     public int MaxActiveUsers { get; set; } = 50;
 

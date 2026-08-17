@@ -184,17 +184,20 @@
             return;
         }
 
-        // Re-read the value in case a token refresh extended
-        // the session at almost the same moment as this timer fired.
         var latestExpiry =
             await TokenStore.GetDemoExpiresAtUtcAsync();
 
         if (latestExpiry.HasValue &&
             latestExpiry.Value.ToUniversalTime() > DateTime.UtcNow)
         {
+            _demoExpiresAtUtc = latestExpiry;
+
             ScheduleDemoExpiry(latestExpiry);
+
+            StateHasChanged();
             return;
         }
+
 
         await TokenStore.ClearAsync();
 
