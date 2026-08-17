@@ -8,6 +8,8 @@ services:
       MSSQL_PID: "Express"
     volumes:
       - sql_data:/var/opt/mssql
+    ports:
+      - "127.0.0.1:14333:1433"
     restart: unless-stopped
     healthcheck:
       test:
@@ -26,6 +28,9 @@ services:
       RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD}"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
     restart: unless-stopped
     healthcheck:
       test:
@@ -47,6 +52,9 @@ services:
       MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD}"
     volumes:
       - minio_data:/data
+    ports:
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     restart: unless-stopped
 
   api:
