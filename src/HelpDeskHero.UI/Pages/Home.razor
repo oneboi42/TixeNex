@@ -77,13 +77,6 @@
                 <button class="btn btn-outline-primary" @onclick='() => Nav.NavigateTo("/tickets/create")'>
                     Create a ticket
                 </button>
-
-                @if (homeAuth.User.IsInRole("Admin"))
-                {
-                    <button class="btn btn-outline-secondary" @onclick='() => Nav.NavigateTo("/admin")'>
-                        Open administration
-                    </button>
-                }
             </div>
         }
         else
