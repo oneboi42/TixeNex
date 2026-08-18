@@ -11,13 +11,18 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-var apiBaseUrl = builder.Configuration["Api:BaseUrl"]
-    ?? throw new InvalidOperationException("Missing Api:BaseUrl.");
+var configuredApiBaseUrl =
+    builder.Configuration["Api:BaseUrl"];
+
+var apiBaseUrl =
+    string.IsNullOrWhiteSpace(configuredApiBaseUrl)
+        ? builder.HostEnvironment.BaseAddress
+        : configuredApiBaseUrl;
 
 builder.Services.AddAuthorizationCore(options =>
 {
     options.AddPolicy("CanManageTickets", policy =>
-        policy.RequireRole("User", "Admin", "Agent"));
+        policy.RequireRole("User", "Agent", "Admin"));
 
     options.AddPolicy("CanViewAudit", policy =>
         policy.RequireRole("Admin"));

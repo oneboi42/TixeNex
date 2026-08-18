@@ -12,6 +12,7 @@ COPY . .
 
 RUN dotnet publish src/HelpDeskHero.UI/HelpDeskHero.UI.csproj \
     -c Release \
+    --no-restore \
     -o /app/publish
 
 FROM nginx:alpine AS final
