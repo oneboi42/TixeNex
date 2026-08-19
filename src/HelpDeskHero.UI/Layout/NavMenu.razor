@@ -75,25 +75,10 @@
                         </div>
                     </Authorized>
                 </AuthorizeView>
-            </Authorized>
-        </AuthorizeView>
-    </nav>
 
-    <AuthorizeView Context="accountAuth">
-        <Authorized>
-            <div class="sidebar-footer">
-                <div class="nav-section-title footer-section-title">Account</div>
+                <div class="nav-section-title">Account</div>
 
-                <div class="sidebar-profile">
-                    <div class="sidebar-profile-name">
-                        @GetDisplayName(accountAuth.User)
-                    </div>
-                    <div class="sidebar-profile-role">
-                        @GetRole(accountAuth.User)
-                    </div>
-                </div>
-
-                @if (!IsDemoUser(accountAuth.User))
+                @if (!IsDemoUser(mainAuth.User))
                 {
                     <div class="nav-item">
                         <NavLink class="nav-link" href="account/settings">
@@ -107,18 +92,31 @@
                         Sign out
                     </NavLink>
                 </div>
-            </div>
-        </Authorized>
+            </Authorized>
 
-        <NotAuthorized>
-            <div class="sidebar-footer">
+            <NotAuthorized>
                 <div class="nav-item">
                     <NavLink class="nav-link" href="login">
                         Sign in
                     </NavLink>
                 </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </nav>
+
+    <AuthorizeView Context="accountAuth">
+        <Authorized>
+            <div class="sidebar-footer">
+                <div class="sidebar-profile">
+                    <div class="sidebar-profile-name">
+                        @GetDisplayName(accountAuth.User)
+                    </div>
+                    <div class="sidebar-profile-role">
+                        @GetRole(accountAuth.User)
+                    </div>
+                </div>
             </div>
-        </NotAuthorized>
+        </Authorized>
     </AuthorizeView>
 </div>
 

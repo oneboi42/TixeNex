@@ -1,6 +1,7 @@
 @page "/tickets"
 @attribute [Authorize]
 @implements IAsyncDisposable
+@namespace HelpDeskHero.UI.Pages.Tickets
 
 @using HelpDeskHero.Shared.Contracts.Common
 @using HelpDeskHero.Shared.Contracts.Tickets
@@ -16,17 +17,19 @@
 
 <PageTitle>Tickets</PageTitle>
 
-<div class="d-flex justify-content-between align-items-start gap-3 mb-4">
+<div class="tickets-page">
+
+<div class="d-flex justify-content-between align-items-start gap-3 mb-4 tickets-page-header">
     <div>
-        <h2 class="mb-1 fw-semibold">Tickets</h2>
-        <div class="text-muted">Manage and track support requests</div>
+        <h2 class="mb-1 tickets-title">Tickets</h2>
+        <div class="text-muted tickets-subtitle">Manage and track support requests</div>
     </div>
 
     <AuthorizeView Roles="User,Agent,Admin">
         <Authorized>
             <div class="d-flex gap-2 flex-wrap justify-content-end">
                 <NavLink class="btn btn-primary px-3" href="tickets/create">
-                    + New ticket
+                    Create new ticket
                 </NavLink>
                 <NavLink class="btn btn-outline-secondary px-3" href="exports">
                     Export history
@@ -90,8 +93,8 @@ else if (_result is null)
 }
 else
 {
-    <div class="mb-2 text-muted">
-        Total: @_result.TotalCount
+    <div class="ticket-list-meta">
+        @GetTicketCountLabel(_result.TotalCount)
     </div>
 
     @if (!_result.Items.Any())
@@ -101,12 +104,11 @@ else
     }
     else
     {
-        <div class="table-responsive">
-            <table class="table table-striped align-middle">
+        <div class="table-responsive ticket-table-shell">
+            <table class="table table-hover align-middle ticket-table">
                 <thead>
                     <tr>
-                        <th>Nr</th>
-                        <th>Title</th>
+                        <th>Ticket</th>
                         <th>Status</th>
                         <th>Priority</th>
                         <AuthorizeView Roles="Admin">
@@ -115,7 +117,7 @@ else
                             </Authorized>
                         </AuthorizeView>
                         <th>Assigned to</th>
-                        <th>Created</th>
+                        <th>Created at</th>
                         <th class="text-end">Actions</th>
                     </tr>
                 </thead>
@@ -124,20 +126,25 @@ else
                     @foreach (var item in _result.Items)
                     {
                         <tr>
-                            <td>@item.Number</td>
-
                             <td>
-                                <a href="@($"/tickets/{item.Id}")">
+                                <a class="ticket-title-link" href="@($"/tickets/{item.Id}")">
                                     @item.Title
                                 </a>
+                                <div class="ticket-number" title="@item.Number">
+                                    @GetShortTicketNumber(item.Number)
+                                </div>
                             </td>
 
                             <td>
-                                <StatusBadge Status="@item.Status" />
+                                <span class="ticket-badge @GetStatusCssClass(item.Status)">
+                                    <StatusBadge Status="@item.Status" />
+                                </span>
                             </td>
 
                             <td>
-                                <PriorityBadge Priority="@item.Priority" />
+                                <span class="ticket-badge @GetPriorityCssClass(item.Priority)">
+                                    <PriorityBadge Priority="@item.Priority" />
+                                </span>
                             </td>
 
                             <AuthorizeView Roles="Admin">
@@ -155,10 +162,10 @@ else
                             </td>
 
                             <td class="text-end">
-                                <div class="d-inline-flex gap-1">
-                                    <button class="btn btn-outline-secondary"
+                                <div class="d-inline-flex align-items-center gap-1">
+                                    <button class="ticket-view-action"
                                             @onclick='() => Navigation.NavigateTo($"/tickets/{item.Id}")'>
-                                        Details
+                                        View <span aria-hidden="true">→</span>
                                     </button>
 
                                     @if (item.CanEdit)
@@ -228,218 +235,4 @@ else
                      Message="@_deleteMessage"
                      OnConfirm="DeleteAsync"
                      OnCancel="CancelDelete" />
-
-@code {
-    private TicketQueryDto _query = new();
-    private PagedResultDto<TicketDto>? _result;
-
-    private bool _loading;
-    private bool _deleteBusy;
-    private bool _showDeleteDialog;
-
-
-    private bool _toastVisible;
-    private string _toastType = "success";
-    private string _toastTitle = "";
-    private string? _toastMessage;
-    private long _toastVersion;
-    
-
-    private int? _ticketIdToDelete;
-    private readonly HashSet<int> _lifecycleBusyTicketIds = [];
-    private string? _error;
-    private string _deleteMessage = "Are you sure you want to delete this ticket?";
-
-    protected override async Task OnInitializedAsync()
-    {
-        Realtime.OnTicketChanged += HandleTicketChangedAsync;
-        await ReloadAsync();
-        await StartRealtimeAsync();
-    }
-
-    private void ShowToast(string type, string title, string? message = null)
-    {
-        _toastType = type;
-        _toastTitle = title;
-        _toastMessage = message;
-        _toastVersion++;
-        _toastVisible = true;
-    }
-    private async Task ReloadAsync()
-    {
-        _loading = true;
-        _error = null;
-
-        try
-        {
-            _result = await TicketApi.GetPageAsync(_query);
-        }
-        catch
-        {
-            _error = "Failed to load the ticket list.";
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private async Task StartRealtimeAsync()
-    {
-        try
-        {
-            await Realtime.StartAsync();
-        }
-        catch
-        {
-            _error ??= "Failed to connect to live updates.";
-        }
-    }
-
-    private async Task HandleTicketChangedAsync(TicketLiveUpdateDto update)
-    {
-        await InvokeAsync(async () =>
-        {
-            await ReloadAsync();
-            StateHasChanged();
-        });
-    }
-
-    private async Task PrevAsync()
-    {
-        if (_query.PageNumber <= 1)
-            return;
-
-        _query.PageNumber--;
-        await ReloadAsync();
-    }
-
-    private async Task NextAsync()
-    {
-        _query.PageNumber++;
-        await ReloadAsync();
-    }
-
-    private void AskDelete(TicketDto ticket)
-    {
-        _ticketIdToDelete = ticket.Id;
-        _deleteMessage = $"Are you sure you want to delete ticket {ticket.Number}?";
-        _showDeleteDialog = true;
-    }
-
-    private void CancelDelete()
-    {
-        _showDeleteDialog = false;
-        _ticketIdToDelete = null;
-    }
-
-    private async Task DeleteAsync()
-    {
-        if (_ticketIdToDelete is null)
-            return;
-
-        _deleteBusy = true;
-        _error = null;
-
-        try
-        {
-            var response = await TicketApi.DeleteAsync(_ticketIdToDelete.Value);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _error = "Failed to delete the ticket.";
-                return;
-            }
-
-            _showDeleteDialog = false;
-            _ticketIdToDelete = null;
-
-            ShowToast("success", "Ticket deleted", "The ticket was moved to the recycle bin.");
-
-            await ReloadAsync();
-        }
-        catch
-        {
-            _error = "An error occurred while deleting the ticket.";
-        }
-        finally
-        {
-            _deleteBusy = false;
-        }
-    }
-
-    private bool IsLifecycleBusy(int ticketId) => _lifecycleBusyTicketIds.Contains(ticketId);
-
-    private async Task ChangeStatusAsync(TicketDto ticket, LifecycleAction action)
-    {
-        if (!_lifecycleBusyTicketIds.Add(ticket.Id))
-            return;
-
-        _error = null;
-
-        try
-        {
-            var request = new TicketLifecycleRequestDto
-            {
-                RowVersionBase64 = ticket.RowVersionBase64
-            };
-            var response = action.Action switch
-            {
-                "start" => await TicketApi.StartAsync(ticket.Id, request),
-                "resolve" => await TicketApi.ResolveAsync(ticket.Id, request),
-                "close" => await TicketApi.CloseAsync(ticket.Id, request),
-                "reopen" => await TicketApi.ReopenAsync(ticket.Id, request),
-                _ => throw new InvalidOperationException("Unknown lifecycle action.")
-            };
-
-            if (response.IsSuccessStatusCode)
-            {
-                ShowToast("success", "Ticket updated", $"Ticket status changed to {action.TargetStatus}.");
-                await ReloadAsync();
-                return;
-            }
-
-            if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
-            {
-                await ReloadAsync();
-                _error = "This ticket was modified by another user. The latest version has been loaded.";
-                return;
-            }
-
-            _error = await ApiErrorMapper.ToMessageAsync(response, "Could not update the ticket status.");
-        }
-        catch
-        {
-            _error = "Could not update the ticket status.";
-        }
-        finally
-        {
-            _lifecycleBusyTicketIds.Remove(ticket.Id);
-        }
-    }
-
-    private static IReadOnlyList<LifecycleAction> GetLifecycleActions(TicketDto ticket)
-    {
-        var actions = new List<LifecycleAction>();
-
-        if (ticket.CanStart)
-            actions.Add(new("Start work", "start", "InProgress"));
-        if (ticket.CanResolve)
-            actions.Add(new("Resolve", "resolve", "Resolved"));
-        if (ticket.CanClose)
-            actions.Add(new("Close", "close", "Closed"));
-        if (ticket.CanReopen)
-            actions.Add(new("Reopen", "reopen", "InProgress"));
-
-        return actions;
-    }
-
-    private sealed record LifecycleAction(string Label, string Action, string TargetStatus);
-
-
-    public ValueTask DisposeAsync()
-    {
-        Realtime.OnTicketChanged -= HandleTicketChangedAsync;
-        return ValueTask.CompletedTask;
-    }
-}
+</div>
