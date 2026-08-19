@@ -1,16 +1,23 @@
+.sidebar-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
 .sidebar-header {
-    min-height: 64px;
-    padding: 1rem 1.25rem;
+    min-height: 58px;
+    padding: 0.85rem 1rem;
     display: flex;
     align-items: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .sidebar-brand {
     color: white;
     text-decoration: none;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     font-weight: 700;
+    letter-spacing: -0.01em;
 }
 
 .sidebar-brand:hover {
@@ -19,17 +26,18 @@
 }
 
 .sidebar-nav {
-    padding: 1rem 0.75rem;
+    flex: 1;
+    padding: 0.75rem 0.65rem;
 }
 
 .nav-section-title {
-    margin: 1rem 0 0.5rem;
-    padding: 0 0.5rem;
-    font-size: 0.72rem;
-    font-weight: 700;
-    letter-spacing: 0.08em;
+    margin: 0.9rem 0 0.35rem;
+    padding: 0 0.65rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.38);
 }
 
 .nav-section-title:first-child {
@@ -37,37 +45,87 @@
 }
 
 .nav-item {
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.15rem;
 }
 
 .nav-item ::deep .nav-link {
-    min-height: 2.75rem;
-    padding: 0.65rem 0.75rem;
-    border-radius: 0.5rem;
-    color: rgba(255, 255, 255, 0.82);
+    min-height: 2.4rem;
+    padding: 0.5rem 0.65rem;
+    border-radius: 0.4rem;
+    color: rgba(255, 255, 255, 0.74);
     display: flex;
     align-items: center;
     text-decoration: none;
+    font-size: 0.92rem;
     font-weight: 500;
+    transition:
+        background-color 120ms ease,
+        color 120ms ease;
 }
 
 .nav-item ::deep .nav-link:hover {
-    color: white;
-    background-color: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.96);
+    background-color: rgba(255, 255, 255, 0.06);
 }
 
 .nav-item ::deep .nav-link.active {
     color: white;
-    background-color: rgba(255, 255, 255, 0.22);
+    background-color: rgba(255, 255, 255, 0.10);
+}
+
+.sidebar-footer {
+    margin-top: auto;
+    padding: 0.7rem 0.65rem 0.9rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.footer-section-title {
+    margin-top: 0;
+}
+
+.sidebar-profile {
+    padding: 0.15rem 0.65rem 0.7rem;
+    line-height: 1.25;
+}
+
+.sidebar-profile-name {
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 0.9rem;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sidebar-profile-role {
+    margin-top: 0.15rem;
+    color: rgba(255, 255, 255, 0.45);
+    font-size: 0.76rem;
+}
+
+.nav-item ::deep .logout-link {
+    color: rgba(255, 255, 255, 0.62);
+}
+
+.nav-item ::deep .logout-link:hover {
+    color: white;
 }
 
 @media (max-width: 768px) {
+    .sidebar-shell {
+        min-height: auto;
+    }
+
     .sidebar-header {
         min-height: auto;
         padding: 0.75rem 1rem;
     }
 
     .sidebar-nav {
-        padding: 0.75rem;
+        padding: 0.65rem 0.75rem;
+    }
+
+    .sidebar-footer {
+        padding: 0.65rem 0.75rem 0.75rem;
     }
 }

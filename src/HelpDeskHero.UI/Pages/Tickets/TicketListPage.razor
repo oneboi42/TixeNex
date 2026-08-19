@@ -16,24 +16,24 @@
 
 <PageTitle>Tickets</PageTitle>
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex justify-content-between align-items-start gap-3 mb-4">
     <div>
-        <h3 class="mb-0">Tickets</h3>
-        <div class="text-muted">Tickets in HelpDeskHero</div>
+        <h2 class="mb-1 fw-semibold">Tickets</h2>
+        <div class="text-muted">Manage and track support requests</div>
     </div>
+
     <AuthorizeView Roles="User,Agent,Admin">
         <Authorized>
             <div class="d-flex gap-2 flex-wrap justify-content-end">
-                <NavLink class="btn btn-outline-secondary" href="tickets/create">
-                    New ticket
+                <NavLink class="btn btn-primary px-3" href="tickets/create">
+                    + New ticket
                 </NavLink>
-                <NavLink class="btn btn-outline-secondary" href="exports">
+                <NavLink class="btn btn-outline-secondary px-3" href="exports">
                     Export history
                 </NavLink>
             </div>
         </Authorized>
     </AuthorizeView>
-
 </div>
 
 <ErrorBanner Message="@_error" />

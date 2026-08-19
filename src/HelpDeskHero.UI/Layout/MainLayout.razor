@@ -17,39 +17,6 @@
     </aside>
 
     <div class="app-main">
-        <header class="app-topbar">
-            <div>
-                <div class="app-title">HelpDeskHero</div>
-                <div class="app-subtitle">Ticket support dashboard</div>
-            </div>
-
-            <AuthorizeView Context="topbarAuth">
-                <Authorized>
-                    <div class="user-panel">
-                        <div class="user-info">
-                            <div class="user-name">
-                                @GetDisplayName(topbarAuth.User)
-                            </div>
-
-                            <div class="user-role">
-                                @GetRole(topbarAuth.User)
-                            </div>
-                        </div>
-
-                        <NavLink class="btn btn-outline-danger btn-sm" href="logout">
-                            Sign out
-                        </NavLink>
-                    </div>
-                </Authorized>
-
-                <NotAuthorized>
-                    <NavLink class="btn btn-outline-primary btn-sm" href="login">
-                        Sign in
-                    </NavLink>
-                </NotAuthorized>
-            </AuthorizeView>
-        </header>
-
         @if (_isDemoSession && !IsHomePage)
         {
             <div class="alert alert-warning rounded-0 border-start-0 border-end-0 mb-0 py-2 px-3">
@@ -257,23 +224,6 @@
             ?? user.FindFirst("unique_name")?.Value
             ?? user.FindFirst("sub")?.Value
             ?? "User";
-    }
-
-    private static string GetRole(ClaimsPrincipal user)
-    {
-        if (user.IsInRole("Admin"))
-            return "Admin";
-
-        if (user.IsInRole("Agent"))
-            return "Agent";
-
-        if (user.IsInRole("User"))
-            return "User";
-
-        return user.FindFirst(ClaimTypes.Role)?.Value
-            ?? user.FindFirst("role")?.Value
-            ?? user.FindFirst("roles")?.Value
-            ?? "No role";
     }
 
     private static string? GetUserId(ClaimsPrincipal user)
