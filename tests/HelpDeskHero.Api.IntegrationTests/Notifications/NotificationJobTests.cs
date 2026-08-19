@@ -10,6 +10,8 @@ namespace HelpDeskHero.Api.IntegrationTests.Notifications;
 [Collection("ApiIntegration")]
 public sealed class NotificationJobTests
 {
+    private const string TicketNumber = "HDH-20260819183419-5A630D";
+    private const string DisplayTicketId = "#5A630D";
     [Fact]
     public async Task TicketCreation_NotifiesOnlyRequester()
     {
@@ -22,8 +24,8 @@ public sealed class NotificationJobTests
 
         dispatcher.Messages.Should().ContainSingle();
         dispatcher.Messages[0].UserId.Should().Be("requester");
-        dispatcher.Messages[0].Subject.Should().Be("New ticket: HDH-1");
-        dispatcher.Messages[0].Body.Should().Be("Ticket HDH-1 was created - Test ticket");
+        dispatcher.Messages[0].Subject.Should().Be("New ticket: #5A630D");
+        dispatcher.Messages[0].Body.Should().Be("Ticket #5A630D was created - Test ticket");
         dispatcher.RecipientIds.Should().NotContain(["other-user", "admin", "other-agent", "assigned-agent"]);
     }
 
@@ -39,7 +41,7 @@ public sealed class NotificationJobTests
 
         dispatcher.Messages.Should().ContainSingle();
         dispatcher.Messages[0].UserId.Should().Be("assigned-agent");
-        dispatcher.Messages[0].Subject.Should().Be("Ticket assigned: HDH-1");
+        dispatcher.Messages[0].Subject.Should().Be("Ticket assigned: #5A630D");
         dispatcher.RecipientIds.Should().NotContain(["requester", "other-agent"]);
     }
 
@@ -55,9 +57,9 @@ public sealed class NotificationJobTests
 
         dispatcher.Messages.Should().ContainSingle();
         dispatcher.Messages[0].UserId.Should().Be("requester");
-        dispatcher.Messages[0].Subject.Should().Be("Ticket created and assigned: HDH-1");
+        dispatcher.Messages[0].Subject.Should().Be("Ticket created and assigned: #5A630D");
         dispatcher.Messages[0].Body.Should().Be(
-            "Ticket HDH-1 - Test ticket was created and assigned to you.");
+            "Ticket #5A630D - Test ticket was created and assigned to you.");
     }
 
     [Fact]
@@ -96,6 +98,9 @@ public sealed class NotificationJobTests
             .SendTicketCommentNotificationsAsync(1, "user");
 
         dispatcher.RecipientIds.Should().BeEquivalentTo(["agent", "admin"]);
+        dispatcher.Messages.Should().OnlyContain(x =>
+            x.Subject == $"New reply on ticket {DisplayTicketId}" &&
+            x.Body == $"A new reply was added to ticket {DisplayTicketId} - Test ticket");
     }
 
     [Fact]
@@ -125,8 +130,8 @@ public sealed class NotificationJobTests
     }
 
     [Theory]
-    [InlineData(false, "Ticket assigned: HDH-1")]
-    [InlineData(true, "Ticket reassigned: HDH-1")]
+    [InlineData(false, "Ticket assigned: #5A630D")]
+    [InlineData(true, "Ticket reassigned: #5A630D")]
     public async Task Assignment_NotifiesOnlyNewAssignee(bool isReassignment, string expectedSubject)
     {
         await using var db = CreateContext();
@@ -140,7 +145,7 @@ public sealed class NotificationJobTests
         dispatcher.Messages[0].UserId.Should().Be("agent");
         dispatcher.RecipientIds.Should().NotContain("previous-agent");
         dispatcher.Messages[0].Subject.Should().Be(expectedSubject);
-        dispatcher.Messages[0].Body.Should().Be("Ticket HDH-1 - Test ticket has been assigned to you.");
+        dispatcher.Messages[0].Body.Should().Be("Ticket #5A630D - Test ticket has been assigned to you.");
     }
 
     [Fact]
@@ -174,7 +179,7 @@ public sealed class NotificationJobTests
         db.Tickets.Add(new Ticket
         {
             Id = 1,
-            Number = "HDH-1",
+            Number = TicketNumber,
             Title = "Test ticket",
             Description = "Test",
             AssignedToUserId = "agent"
@@ -215,7 +220,7 @@ public sealed class NotificationJobTests
         db.Tickets.Add(new Ticket
         {
             Id = 1,
-            Number = "HDH-1",
+            Number = TicketNumber,
             Title = "Test ticket",
             Description = "Test",
             RequesterUserId = requesterUserId,
