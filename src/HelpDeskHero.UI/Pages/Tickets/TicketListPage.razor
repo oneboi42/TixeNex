@@ -29,7 +29,7 @@
         <Authorized>
             <div class="d-flex gap-2 flex-wrap justify-content-end">
                 <NavLink class="btn btn-primary px-3" href="tickets/create">
-                    Create new ticket
+                    New ticket
                 </NavLink>
                 <NavLink class="btn btn-outline-secondary px-3" href="exports">
                     Export history
@@ -41,45 +41,38 @@
 
 <ErrorBanner Message="@_error" />
 
-<div class="card mb-3">
-    <div class="card-body">
-        <div class="row g-2">
-            <div class="col-md-4">
-                <InputText class="form-control"
-                           @bind-Value="_query.Search"
-                           placeholder="Search..." />
-            </div>
-
-            <div class="col-md-2">
-                <InputSelect class="form-select" @bind-Value="_query.Status">
-                    <option value="">All statuses</option>
-                    <option value="New">New</option>
-                    <option value="InProgress">InProgress</option>
-                    <option value="Resolved">Resolved</option>
-                    <option value="Closed">Closed</option>
-                </InputSelect>
-            </div>
-
-            <div class="col-md-2">
-                <InputSelect class="form-select" @bind-Value="_query.Priority">
-                    <option value="">All priorities</option>
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                    <option value="Critical">Critical</option>
-                </InputSelect>
-            </div>
-
-            <div class="col-md-2 ms-md-auto">
-                <button class="btn btn-primary w-100"
-                        disabled="@_loading"
-                        @onclick="ReloadAsync">
-                    Filter
-                </button>
-            </div>
-
-        </div>
+<div class="ticket-filters mb-3">
+    <div class="ticket-filter-search">
+        <InputText class="form-control"
+                   @bind-Value="_query.Search"
+                   placeholder="Search tickets..." />
     </div>
+
+    <div class="ticket-filter-select">
+        <InputSelect class="form-select" @bind-Value="_query.Status">
+            <option value="">All statuses</option>
+            <option value="New">New</option>
+            <option value="InProgress">In progress</option>
+            <option value="Resolved">Resolved</option>
+            <option value="Closed">Closed</option>
+        </InputSelect>
+    </div>
+
+    <div class="ticket-filter-select">
+        <InputSelect class="form-select" @bind-Value="_query.Priority">
+            <option value="">All priorities</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
+        </InputSelect>
+    </div>
+
+    <button class="btn btn-outline-secondary ticket-filter-button"
+            disabled="@_loading"
+            @onclick="ApplyFiltersAsync">
+        Filter
+    </button>
 </div>
 
 @if (_loading)

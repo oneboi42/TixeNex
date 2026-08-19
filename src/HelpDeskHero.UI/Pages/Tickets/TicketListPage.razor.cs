@@ -61,6 +61,12 @@ public partial class TicketListPage
         }
     }
 
+    private async Task ApplyFiltersAsync()
+    {
+        _query.PageNumber = 1;
+        await ReloadAsync();
+    }
+
     private async Task StartRealtimeAsync()
     {
         try
