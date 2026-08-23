@@ -442,6 +442,95 @@ public sealed class TicketVisibilityTests
         demoAdminResponse.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
+    [Theory]
+    [InlineData("user", "User123!", "User")]
+    [InlineData("agent", "Agent123!", "Agent")]
+    public async Task RecycleBinManagement_AsNonAdmin_ReturnsForbidden(
+        string userName,
+        string password,
+        string role)
+    {
+        var actorId = await GetUserIdAsync(userName);
+        var marker = $"recycle-auth-{role}-{Guid.NewGuid():N}";
+
+        var activeTicket = (await SeedTicketsAsync(
+            new TicketSeed(
+                $"{marker}-active",
+                role == "User" ? actorId : null,
+                role == "Agent" ? actorId : null)))
+            .Single();
+
+        var deletedTicket = (await SeedTicketsAsync(
+            new TicketSeed(
+                $"{marker}-deleted",
+                role == "User" ? actorId : null,
+                role == "Agent" ? actorId : null,
+                IsDeleted: true)))
+            .Single();
+
+        await LoginAsync(userName, password);
+
+        var deletedListResponse =
+            await _client.GetAsync("/api/tickets/deleted");
+
+        var deleteResponse =
+            await _client.DeleteAsync($"/api/tickets/{activeTicket.Id}");
+
+        var restoreResponse =
+            await _client.PostAsync(
+                $"/api/tickets/{deletedTicket.Id}/restore",
+                null);
+
+        deletedListResponse.StatusCode.Should()
+            .Be(HttpStatusCode.Forbidden);
+
+        deleteResponse.StatusCode.Should()
+            .Be(HttpStatusCode.Forbidden);
+
+        restoreResponse.StatusCode.Should()
+            .Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task RecycleBinManagement_AsAdmin_IsAllowed()
+    {
+        var marker = $"recycle-admin-{Guid.NewGuid():N}";
+
+        var activeTicket = (await SeedTicketsAsync(
+            new TicketSeed($"{marker}-active", null, null)))
+            .Single();
+
+        var deletedTicket = (await SeedTicketsAsync(
+            new TicketSeed(
+                $"{marker}-deleted",
+                null,
+                null,
+                IsDeleted: true)))
+            .Single();
+
+        await LoginAsync("admin", "Admin1234");
+
+        var deletedListResponse =
+            await _client.GetAsync("/api/tickets/deleted");
+
+        var deleteResponse =
+            await _client.DeleteAsync($"/api/tickets/{activeTicket.Id}");
+
+        var restoreResponse =
+            await _client.PostAsync(
+                $"/api/tickets/{deletedTicket.Id}/restore",
+                null);
+
+        deletedListResponse.StatusCode.Should()
+            .Be(HttpStatusCode.OK);
+
+        deleteResponse.StatusCode.Should()
+            .Be(HttpStatusCode.NoContent);
+
+        restoreResponse.StatusCode.Should()
+            .Be(HttpStatusCode.NoContent);
+    }
+
     [Fact]
     public async Task Restore_CannotCrossWorkspaceInEitherDirection()
     {

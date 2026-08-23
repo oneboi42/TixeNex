@@ -13,7 +13,12 @@ namespace HelpDeskHero.Api.IntegrationTests.Infrastructure;
 
 public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
-    private readonly string _databaseName = $"HelpDeskHeroTestsDb-{Guid.NewGuid():N}";
+    public const string AdminPassword = "Admin1234";
+    public const string AgentPassword = "Agent123!";
+    public const string UserPassword = "User123!";
+
+    private readonly string _databaseName =
+        $"HelpDeskHeroTestsDb-{Guid.NewGuid():N}";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
@@ -25,14 +30,19 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
             {
                 ["Jwt:Issuer"] = "HelpDeskHero.Tests",
                 ["Jwt:Audience"] = "HelpDeskHero.Tests",
-                ["Jwt:Key"] = "HelpDeskHero.Tests.Super.Secret.Key.For.Jwt.Token.Signing.123456789",
+                ["Jwt:Key"] =
+                    "HelpDeskHero.Tests.Super.Secret.Key.For.Jwt.Token.Signing.123456789",
                 ["Jwt:AccessTokenMinutes"] = "60",
                 ["Jwt:RefreshTokenDays"] = "7",
                 ["Demo:Enabled"] = "true",
-                ["SeedUsers:Admin:Password"] = "Admin1234",
-                ["SeedUsers:Agent:Password"] = "Agent123!",
-                ["SeedUsers:User:Password"] = "User123!",
+                ["RateLimiting:Login:PermitLimit"] = "1000",
+
+                ["SeedUsers:Admin:Password"] = AdminPassword,
+                ["SeedUsers:Agent:Password"] = AgentPassword,
+                ["SeedUsers:User:Password"] = UserPassword,
+
                 ["SeedUsers:ResetPasswords"] = "false",
+
                 ["Minio:Endpoint"] = "localhost:9000",
                 ["Minio:AccessKey"] = "test-access-key",
                 ["Minio:SecretKey"] = "test-secret-key",
@@ -45,8 +55,6 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
 
         builder.ConfigureServices(services =>
         {
-            // AddDbContext registers both the context and its options. Remove all
-            //production registrations before adding the InMemory-only test context.
             services.RemoveAll<DbContextOptions<AppDbContext>>();
             services.RemoveAll<AppDbContext>();
             services.RemoveAll<IDbContextOptionsConfiguration<AppDbContext>>();

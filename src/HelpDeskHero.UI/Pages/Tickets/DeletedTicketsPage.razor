@@ -1,5 +1,5 @@
 @page "/tickets/deleted"
-@attribute [Authorize(Policy = "CanManageTickets")]
+@attribute [Authorize(Roles = "Admin")]
 
 @using HelpDeskHero.Shared.Contracts.Tickets
 @using HelpDeskHero.UI.Services.Api

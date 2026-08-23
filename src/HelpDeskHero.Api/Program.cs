@@ -1,4 +1,6 @@
+using System.Net;
 using System.Text;
+using System.Threading.RateLimiting;
 using Hangfire;
 using Hangfire.SqlServer;
 using HelpDeskHero.Api.Application.Interfaces;
@@ -16,7 +18,9 @@ using HelpDeskHero.Api.Infrastructure.Storage;
 using HelpDeskHero.Api.Hubs;
 using HelpDeskHero.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -29,6 +33,7 @@ var builder = WebApplication.CreateBuilder(args);
 var isTesting = builder.Environment.IsEnvironment("Testing");
 
 const string CorsPolicyName = "BlazorUi";
+const string LoginRateLimitPolicyName = "login";
 
 builder.Services.AddCors(options =>
 {
@@ -48,6 +53,45 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
 builder.Services.AddEndpointsApiExplorer();
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders =
+        ForwardedHeaders.XForwardedFor |
+        ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+
+    options.KnownIPNetworks.Add(
+        new System.Net.IPNetwork(IPAddress.Parse("10.0.0.0"), 8));
+    options.KnownIPNetworks.Add(
+        new System.Net.IPNetwork(IPAddress.Parse("172.16.0.0"), 12));
+    options.KnownIPNetworks.Add(
+        new System.Net.IPNetwork(IPAddress.Parse("192.168.0.0"), 16));
+});
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy(LoginRateLimitPolicyName, httpContext =>
+    {
+        var permitLimit = httpContext.RequestServices
+            .GetRequiredService<IConfiguration>()
+            .GetValue("RateLimiting:Login:PermitLimit", 5);
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey:
+                httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true
+            });
+    });
+});
 
 builder.Services.AddSwaggerGen(options =>
 {
@@ -257,6 +301,8 @@ var app = builder.Build();
 // Apply EF Core migrations and seed database on startup.
 await DbSeeder.SeedAsync(app.Services);
 
+app.UseForwardedHeaders();
+
 // Global exception handling middleware
 app.UseMiddleware<GlobalExceptionMiddleware>();
 
@@ -272,6 +318,7 @@ if (builder.Configuration.GetValue("UseHttpsRedirection", true))
 }
 
 app.UseCors(CorsPolicyName);
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

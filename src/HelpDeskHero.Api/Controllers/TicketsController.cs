@@ -162,7 +162,7 @@ public sealed class TicketsController : ControllerBase
     }
 
     [HttpGet("deleted")]
-    [Authorize(Policy = "CanManageTickets")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<ActionResult<List<TicketDto>>> GetDeleted(CancellationToken ct)
     {
         var accessError = ResolveTicketVisibility(out var visibilityContext);
@@ -193,7 +193,7 @@ public sealed class TicketsController : ControllerBase
     }
 
     [HttpPost("{id:int}/restore")]
-    [Authorize(Policy = "CanManageTickets")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> Restore(int id, CancellationToken ct)
     {
         var accessError = ResolveTicketVisibility(out var visibilityContext);
@@ -589,7 +589,7 @@ public sealed class TicketsController : ControllerBase
         TransitionAsync(id, dto, "Resolved", "InProgress", "Reopened", TicketPermissions.CanManageAsRequester, ct);
 
     [HttpDelete("{id:int}")]
-    [Authorize(Policy = "CanManageTickets")]
+    [Authorize(Policy = "AdminOnly")]
     public async Task<IActionResult> SoftDelete(int id, CancellationToken ct)
     {
         var accessError = ResolveTicketVisibility(out var visibilityContext);
