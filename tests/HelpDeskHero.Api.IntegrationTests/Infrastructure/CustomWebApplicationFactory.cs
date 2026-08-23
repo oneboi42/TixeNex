@@ -35,6 +35,7 @@ public sealed class CustomWebApplicationFactory : WebApplicationFactory<Program>
                 ["Jwt:AccessTokenMinutes"] = "60",
                 ["Jwt:RefreshTokenDays"] = "7",
                 ["Demo:Enabled"] = "true",
+                ["RateLimiting:Login:PermitLimit"] = "1000",
 
                 ["SeedUsers:Admin:Password"] = AdminPassword,
                 ["SeedUsers:Agent:Password"] = AgentPassword,
