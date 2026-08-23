@@ -5,13 +5,15 @@
 }
 
 .app-sidebar {
-    width: 260px;
+    width: 236px;
+    height: 100vh;
     min-height: 100vh;
     flex-shrink: 0;
-    background: linear-gradient(180deg, #052767 0%, #3a0647 100%);
+    background: #172033;
     color: white;
     position: sticky;
     top: 0;
+    overflow-y: auto;
 }
 
 .app-main {
@@ -19,47 +21,6 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-}
-
-.app-topbar {
-    min-height: 64px;
-    padding: 0.75rem 1.5rem;
-    background-color: white;
-    border-bottom: 1px solid #dee2e6;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    position: sticky;
-    top: 0;
-    z-index: 10;
-}
-
-.app-title {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: #212529;
-}
-
-.app-subtitle {
-    font-size: 0.85rem;
-    color: #6c757d;
-}
-
-.user-box {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    text-align: right;
-}
-
-.user-name {
-    font-weight: 600;
-    color: #212529;
-}
-
-.user-role {
-    white-space: nowrap;
 }
 
 .app-content {
@@ -74,55 +35,13 @@
 
     .app-sidebar {
         width: 100%;
+        height: auto;
         min-height: auto;
         position: static;
-    }
-
-    .app-topbar {
-        position: static;
-        align-items: flex-start;
-        flex-direction: column;
-    }
-
-    .user-box {
-        text-align: left;
+        overflow-y: visible;
     }
 
     .app-content {
         padding: 1rem;
-    }
-
-    .user-panel {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    }
-
-    .user-info {
-        text-align: right;
-        line-height: 1.2;
-    }
-
-    .user-name {
-        font-weight: 700;
-        color: #212529;
-    }
-
-    .user-role {
-        margin-top: 0.15rem;
-        font-size: 0.8rem;
-        color: #6c757d;
-    }
-
-    @media (max-width: 768px) {
-        .user-panel {
-            align-items: flex-start;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
-
-        .user-info {
-            text-align: left;
-        }
     }
 }

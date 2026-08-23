@@ -37,16 +37,17 @@ public sealed class NotificationJob : INotificationJob
             return;
 
         var requesterIsAssignee = ticket.RequesterUserId == ticket.AssignedToUserId;
+        var displayId = GetDisplayTicketId(ticket.Number);
 
         await _dispatcher.DispatchAsync(new NotificationMessage
         {
             Channel = NotificationChannel.InApp,
             Subject = requesterIsAssignee
-                ? $"Ticket created and assigned: {ticket.Number}"
-                : $"New ticket: {ticket.Number}",
+                ? $"Ticket created and assigned: {displayId}"
+                : $"New ticket: {displayId}",
             Body = requesterIsAssignee
-                ? $"Ticket {ticket.Number} - {ticket.Title} was created and assigned to you."
-                : $"Ticket {ticket.Number} was created - {ticket.Title}",
+                ? $"Ticket {displayId} - {ticket.Title} was created and assigned to you."
+                : $"Ticket {displayId} was created - {ticket.Title}",
             UserId = ticket.RequesterUserId
         }, ct);
     }
@@ -86,11 +87,13 @@ public sealed class NotificationJob : INotificationJob
         if (ticket is null)
             return;
 
+        var displayId = GetDisplayTicketId(ticket.Number);
+
         await _dispatcher.DispatchAsync(new NotificationMessage
         {
             Channel = NotificationChannel.InApp,
-            Subject = $"Ticket {(isReassignment ? "reassigned" : "assigned")}: {ticket.Number}",
-            Body = $"Ticket {ticket.Number} - {ticket.Title} has been assigned to you.",
+            Subject = $"Ticket {(isReassignment ? "reassigned" : "assigned")}: {displayId}",
+            Body = $"Ticket {displayId} - {ticket.Title} has been assigned to you.",
             UserId = assignedToUserId
         }, ct);
     }
@@ -109,6 +112,7 @@ public sealed class NotificationJob : INotificationJob
         if (ticket is null)
             return;
 
+        var displayId = GetDisplayTicketId(ticket.Number);
         var recipientUserIds = new HashSet<string>(StringComparer.Ordinal);
 
         // Audit data already records the ticket creator, so no extra ownership column is needed.
@@ -158,8 +162,8 @@ public sealed class NotificationJob : INotificationJob
             await _dispatcher.DispatchAsync(new NotificationMessage
             {
                 Channel = NotificationChannel.InApp,
-                Subject = $"New reply on ticket {ticket.Number}",
-                Body = $"A new reply was added to ticket {ticket.Number} - {ticket.Title}",
+                Subject = $"New reply on ticket {displayId}",
+                Body = $"A new reply was added to ticket {displayId} - {ticket.Title}",
                 UserId = userId
             }, ct);
         }
@@ -169,6 +173,18 @@ public sealed class NotificationJob : INotificationJob
             if (!string.IsNullOrWhiteSpace(userId))
                 recipientUserIds.Add(userId);
         }
+    }
+
+    private static string GetDisplayTicketId(string? number)
+    {
+        if (string.IsNullOrWhiteSpace(number))
+            return "#------";
+
+        var suffix = number.Length <= 6
+            ? number
+            : number[^6..];
+
+        return $"#{suffix}";
     }
 
     private async Task<IReadOnlyList<string>> GetUserIdsInRolesAsync(string[] roleNames, CancellationToken ct)

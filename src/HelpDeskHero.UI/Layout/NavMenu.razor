@@ -1,3 +1,4 @@
+@using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.AspNetCore.Components.Authorization
 @using HelpDeskHero.UI.Services.Api
@@ -5,122 +6,156 @@
 
 @inject NotificationApiClient NotificationApi
 
-<div class="sidebar-header">
-    <a class="sidebar-brand" href="">
-        HelpDeskHero
-    </a>
-</div>
-
-<nav class="sidebar-nav">
-    <div class="nav-section-title">Menu</div>
-
-    <div class="nav-item">
-        <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-            Home
-        </NavLink>
+<div class="sidebar-shell">
+    <div class="sidebar-header">
+        <a class="sidebar-brand" href="">
+            HelpDeskHero
+        </a>
     </div>
 
-    <AuthorizeView Context="mainAuth">
-        <Authorized>
-            <div class="nav-item">
-                <NavLink class="nav-link" href="tickets">
-                    Tickets
-                </NavLink>
-            </div>
+    <nav class="sidebar-nav">
+        <div class="nav-section-title">Menu</div>
 
-            <div class="nav-item">
-                <NavLink class="nav-link" href="exports">
-                    Exports
-                </NavLink>
-            </div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                Home
+            </NavLink>
+        </div>
 
-            <div class="nav-item">
-                <NavLink class="nav-link" href="dashboard">
-                    Dashboard
-                </NavLink>
-            </div>
-
-            <div class="nav-item">
-                <NavLink class="nav-link d-flex justify-content-between align-items-center" href="notifications">
-                    <span>Notifications</span>
-                    @if (_unreadCount > 0)
-                    {
-                        <span class="badge bg-primary">@_unreadCount</span>
-                    }
-                </NavLink>
-            </div>
-
-            <AuthorizeView Roles="Admin,Agent,User" Context="createAuth">
-                <Authorized>
-                    <div class="nav-item">
-                        <NavLink class="nav-link" href="tickets/create">
-                            New Ticket
-                        </NavLink>
-                    </div>
-                </Authorized>
-            </AuthorizeView>
-
-            <AuthorizeView Roles="Admin" Context="adminAuth">
-                <Authorized>
-                    <div class="nav-section-title">Administration</div>
-
-                    <div class="nav-item">
-                        <NavLink class="nav-link" href="admin">
-                            Admin
-                        </NavLink>
-                    </div>
-
-                    <div class="nav-item">
-                        <NavLink class="nav-link" href="admin/audit">
-                            Audit Log
-                        </NavLink>
-                    </div>
-
-                    <div class="nav-item">
-                        <NavLink class="nav-link" href="tickets/deleted">
-                            Deleted tickets
-                        </NavLink>
-                    </div>
-                </Authorized>
-            </AuthorizeView>
-
-            <div class="nav-section-title">Account</div>
-
-            @if (!IsDemoUser(mainAuth.User))
-            {
+        <AuthorizeView Context="mainAuth">
+            <Authorized>
                 <div class="nav-item">
-                    <NavLink class="nav-link" href="account/settings">
-                        Account Settings
+                    <NavLink class="nav-link" href="tickets">
+                        Tickets
                     </NavLink>
                 </div>
-            }
 
-            <div class="nav-item">
-                <NavLink class="nav-link" href="logout">
-                    Logout
-                </NavLink>
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="exports">
+                        Exports
+                    </NavLink>
+                </div>
+
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="dashboard">
+                        Dashboard
+                    </NavLink>
+                </div>
+
+                <div class="nav-item">
+                    <NavLink class="nav-link d-flex justify-content-between align-items-center" href="notifications">
+                        <span>Notifications</span>
+                        @if (_unreadCount > 0)
+                        {
+                            <span class="badge bg-primary">@_unreadCount</span>
+                        }
+                    </NavLink>
+                </div>
+
+                <AuthorizeView Roles="Admin" Context="adminAuth">
+                    <Authorized>
+                        <div class="nav-section-title">Administration</div>
+
+                        <div class="nav-item">
+                            <NavLink class="nav-link" href="admin">
+                                Admin
+                            </NavLink>
+                        </div>
+
+                        <div class="nav-item">
+                            <NavLink class="nav-link" href="admin/audit">
+                                Audit Log
+                            </NavLink>
+                        </div>
+
+                        <div class="nav-item">
+                            <NavLink class="nav-link" href="tickets/deleted">
+                                Deleted tickets
+                            </NavLink>
+                        </div>
+                    </Authorized>
+                </AuthorizeView>
+
+                <div class="nav-section-title">Account</div>
+
+                @if (!IsDemoUser(mainAuth.User))
+                {
+                    <div class="nav-item">
+                        <NavLink class="nav-link" href="account/settings">
+                            Account Settings
+                        </NavLink>
+                    </div>
+                }
+
+                <div class="nav-item">
+                    <NavLink class="nav-link logout-link" href="logout">
+                        Sign out
+                    </NavLink>
+                </div>
+            </Authorized>
+
+            <NotAuthorized>
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="login">
+                        Sign in
+                    </NavLink>
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </nav>
+
+    <AuthorizeView Context="accountAuth">
+        <Authorized>
+            <div class="sidebar-footer">
+                <div class="sidebar-profile">
+                    <div class="sidebar-profile-name">
+                        @GetDisplayName(accountAuth.User)
+                    </div>
+                    <div class="sidebar-profile-role">
+                        @GetRole(accountAuth.User)
+                    </div>
+                </div>
             </div>
         </Authorized>
-
-        <NotAuthorized>
-            <div class="nav-item">
-                <NavLink class="nav-link" href="login">
-                    Login
-                </NavLink>
-            </div>
-        </NotAuthorized>
     </AuthorizeView>
-</nav>
+</div>
 
 @code {
     private int _unreadCount;
 
-    private static bool IsDemoUser(System.Security.Claims.ClaimsPrincipal user) =>
+    private static bool IsDemoUser(ClaimsPrincipal user) =>
         string.Equals(
             user.FindFirst("is_demo")?.Value,
             "true",
             StringComparison.OrdinalIgnoreCase);
 
+    private static string GetDisplayName(ClaimsPrincipal user)
+    {
+        return user.FindFirst("display_name")?.Value
+            ?? user.Identity?.Name
+            ?? user.FindFirst("name")?.Value
+            ?? user.FindFirst(ClaimTypes.Name)?.Value
+            ?? user.FindFirst("unique_name")?.Value
+            ?? user.FindFirst("sub")?.Value
+            ?? "User";
+    }
+
+    private static string GetRole(ClaimsPrincipal user)
+    {
+        if (user.IsInRole("Admin"))
+            return "Admin";
+
+        if (user.IsInRole("Agent"))
+            return "Agent";
+
+        if (user.IsInRole("User"))
+            return "User";
+
+        return user.FindFirst(ClaimTypes.Role)?.Value
+            ?? user.FindFirst("role")?.Value
+            ?? user.FindFirst("roles")?.Value
+            ?? "No role";
+    }
 
     protected override void OnInitialized()
     {

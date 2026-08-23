@@ -1,11 +1,138 @@
 @page "/admin"
 @attribute [Authorize(Roles = "Admin")]
 
-<PageTitle>Panel Administratora</PageTitle>
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
 
-<div class="container mt-4">
-    <div class="alert alert-success">
-        <h4>Strefa Administratora</h4>
-        <p>If you can see this page, route protection is working and your account has the <strong>Admin</strong> role.</p>
-    </div>
-</div>
+<PageTitle>Administration</PageTitle>
+
+<AuthorizeView Context="adminAuth">
+    <Authorized>
+        @if (IsDemoUser(adminAuth.User))
+        {
+            <div class="mb-4">
+                <h3 class="mb-1">Administration</h3>
+                <p class="text-muted mb-0">
+                    Administrative configuration is limited in the public demo.
+                </p>
+            </div>
+
+            <div class="card">
+                <div class="card-body p-4">
+                    <h5 class="card-title mb-2">
+                        Demo administration
+                    </h5>
+
+                    <p class="card-text text-muted mb-3">
+                        Your demo account has the Admin role so you can explore
+                        administrator-level ticket permissions and review audit activity.
+                        System configuration is intentionally excluded from the public demo.
+                    </p>
+
+                    <div class="d-flex gap-2 flex-wrap">
+                        <NavLink class="btn btn-primary"
+                                href="/admin/audit">
+                            Open audit log
+                        </NavLink>
+
+                        <NavLink class="btn btn-outline-primary"
+                                href="/tickets">
+                            View tickets
+                        </NavLink>
+
+                        <NavLink class="btn btn-outline-secondary"
+                                href="/dashboard">
+                            Open dashboard
+                        </NavLink>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="mb-4">
+                <h3 class="mb-1">Administration</h3>
+                <p class="text-muted mb-0">
+                    Review system activity and manage administrative ticket operations.
+                </p>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Audit log</h5>
+                            <p class="card-text text-muted">
+                                Review recent ticket actions, assignments,
+                                lifecycle changes, and other audited operations.
+                            </p>
+
+                            <NavLink class="btn btn-primary"
+                                     href="/admin/audit">
+                                Open audit log
+                            </NavLink>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Recycle bin</h5>
+                            <p class="card-text text-muted">
+                                Review deleted tickets and restore them when needed.
+                            </p>
+
+                            <NavLink class="btn btn-outline-primary"
+                                     href="/tickets/deleted">
+                                Open recycle bin
+                            </NavLink>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Dashboard</h5>
+                            <p class="card-text text-muted">
+                                View ticket activity, workload metrics,
+                                and recent workspace activity.
+                            </p>
+
+                            <NavLink class="btn btn-outline-secondary"
+                                     href="/dashboard">
+                                Open dashboard
+                            </NavLink>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">Exports</h5>
+                            <p class="card-text text-muted">
+                                Create and download ticket exports generated
+                                by the background Worker.
+                            </p>
+
+                            <NavLink class="btn btn-outline-secondary"
+                                     href="/exports">
+                                Open exports
+                            </NavLink>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private static bool IsDemoUser(ClaimsPrincipal user) =>
+        string.Equals(
+            user.FindFirst("is_demo")?.Value,
+            "true",
+            StringComparison.OrdinalIgnoreCase);
+}
