@@ -70,22 +70,17 @@ public sealed class AuthController : ControllerBase
         RefreshRequestDto dto,
         CancellationToken ct)
     {
-        var refresh =
+        var now = DateTime.UtcNow;
+
+        var user =
             await _refreshTokenService
-                .GetActiveByRawTokenAsync(
+                .TryConsumeAsync(
                     dto.RefreshToken,
+                    now,
                     ct);
 
-        if (refresh is null ||
-            refresh.User is null ||
-            !refresh.IsActive ||
-            !refresh.User.IsActive)
-        {
+        if (user is null)
             return Unauthorized();
-        }
-
-        var user = refresh.User;
-        var now = DateTime.UtcNow;
 
         if (user.IsDemoUser)
         {
@@ -94,7 +89,6 @@ public sealed class AuthController : ControllerBase
                 user.DemoExpiresAtUtc <= now ||
                 user.DemoAbsoluteExpiresAtUtc <= now)
             {
-                refresh.RevokedAtUtc = now;
                 user.IsActive = false;
 
                 await _db.SaveChangesAsync(ct);
@@ -114,8 +108,6 @@ public sealed class AuthController : ControllerBase
 
             user.LastActivityAtUtc = now;
         }
-
-        refresh.RevokedAtUtc = now;
 
         await _db.SaveChangesAsync(ct);
 

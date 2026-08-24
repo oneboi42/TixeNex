@@ -3,6 +3,7 @@ using HelpDeskHero.Api.BackgroundJobs;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Notifications;
 using HelpDeskHero.Api.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 
 namespace HelpDeskHero.Api.IntegrationTests.Notifications;
@@ -160,6 +161,50 @@ public sealed class NotificationJobTests
         dispatcher.Messages.Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task DailySummary_UsesEachAdminRecipientsWorkspaceCount()
+    {
+        await using var db = CreateContext();
+        await SeedDailySummaryWorkspacesAsync(db);
+
+        var initialDispatcher = new CollectingDispatcher();
+        await new NotificationJob(db, initialDispatcher)
+            .SendDailySummaryAsync();
+
+        GetDailySummaryBody(initialDispatcher, "normal-admin")
+            .Should().Be("Open tickets: 2");
+        GetDailySummaryBody(initialDispatcher, "demo-admin")
+            .Should().Be("Open tickets: 3");
+
+        db.Tickets.Add(CreateSummaryTicket(
+            id: 6,
+            isDemoWorkspace: true));
+        await db.SaveChangesAsync();
+
+        var afterDemoTicketDispatcher = new CollectingDispatcher();
+        await new NotificationJob(db, afterDemoTicketDispatcher)
+            .SendDailySummaryAsync();
+
+        GetDailySummaryBody(afterDemoTicketDispatcher, "normal-admin")
+            .Should().Be("Open tickets: 2");
+        GetDailySummaryBody(afterDemoTicketDispatcher, "demo-admin")
+            .Should().Be("Open tickets: 4");
+
+        db.Tickets.Add(CreateSummaryTicket(
+            id: 7,
+            isDemoWorkspace: false));
+        await db.SaveChangesAsync();
+
+        var afterNormalTicketDispatcher = new CollectingDispatcher();
+        await new NotificationJob(db, afterNormalTicketDispatcher)
+            .SendDailySummaryAsync();
+
+        GetDailySummaryBody(afterNormalTicketDispatcher, "normal-admin")
+            .Should().Be("Open tickets: 3");
+        GetDailySummaryBody(afterNormalTicketDispatcher, "demo-admin")
+            .Should().Be("Open tickets: 4");
+    }
+
     private static AppDbContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<AppDbContext>()
@@ -203,6 +248,79 @@ public sealed class NotificationJobTests
 
         await db.SaveChangesAsync();
     }
+
+    private static async Task SeedDailySummaryWorkspacesAsync(
+        AppDbContext db)
+    {
+        db.Roles.Add(new IdentityRole
+        {
+            Id = "admin-role",
+            Name = "Admin",
+            NormalizedName = "ADMIN"
+        });
+
+        db.Users.AddRange(
+            new ApplicationUser
+            {
+                Id = "normal-admin",
+                UserName = "normal-admin",
+                DisplayName = "Normal Admin",
+                IsActive = true,
+                IsDemoWorkspace = false
+            },
+            new ApplicationUser
+            {
+                Id = "demo-admin",
+                UserName = "demo-admin",
+                DisplayName = "Demo Admin",
+                IsActive = true,
+                IsDemoWorkspace = true
+            });
+
+        db.UserRoles.AddRange(
+            new IdentityUserRole<string>
+            {
+                RoleId = "admin-role",
+                UserId = "normal-admin"
+            },
+            new IdentityUserRole<string>
+            {
+                RoleId = "admin-role",
+                UserId = "demo-admin"
+            });
+
+        db.Tickets.AddRange(
+            CreateSummaryTicket(1, isDemoWorkspace: false),
+            CreateSummaryTicket(2, isDemoWorkspace: false),
+            CreateSummaryTicket(3, isDemoWorkspace: true),
+            CreateSummaryTicket(4, isDemoWorkspace: true),
+            CreateSummaryTicket(5, isDemoWorkspace: true));
+
+        await db.SaveChangesAsync();
+    }
+
+    private static Ticket CreateSummaryTicket(
+        int id,
+        bool isDemoWorkspace) =>
+        new()
+        {
+            Id = id,
+            Number = $"SUMMARY-{id}",
+            Title = $"Summary ticket {id}",
+            Description = "Summary test",
+            Status = "New",
+            CreatedAtUtc = DateTime.UtcNow,
+            DemoExpiresAtUtc = isDemoWorkspace
+                ? DateTime.UtcNow.AddHours(1)
+                : null
+        };
+
+    private static string GetDailySummaryBody(
+        CollectingDispatcher dispatcher,
+        string userId) =>
+        dispatcher.Messages
+            .Single(message => message.UserId == userId)
+            .Body;
 
     private static async Task SeedTicketAsync(
         AppDbContext db,

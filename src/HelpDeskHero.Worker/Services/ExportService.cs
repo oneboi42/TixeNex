@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using CsvHelper;
+using CsvHelper.TypeConversion;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using HelpDeskHero.Worker.Models;
@@ -235,7 +236,7 @@ public sealed class ExportService : IExportService
         return null;
     }
 
-    private static async Task WriteCsvAsync(
+    internal static async Task WriteCsvAsync(
         Stream targetStream,
         IEnumerable<TicketExportRow> rows,
         CancellationToken cancellationToken)
@@ -251,10 +252,40 @@ public sealed class ExportService : IExportService
             writer,
             CultureInfo.InvariantCulture);
 
+        csv.Context.TypeConverterCache.AddConverter<string>(
+            new SpreadsheetSafeStringConverter());
+
         await csv.WriteRecordsAsync(
             rows,
             cancellationToken);
 
         await writer.FlushAsync(cancellationToken);
+    }
+}
+
+internal sealed class SpreadsheetSafeStringConverter : DefaultTypeConverter
+{
+    public override string? ConvertToString(
+        object? value,
+        IWriterRow row,
+        CsvHelper.Configuration.MemberMapData memberMapData)
+    {
+        var text = value as string ??
+            base.ConvertToString(value, row, memberMapData);
+
+        return CsvCellNeutralizer.Neutralize(text);
+    }
+}
+
+internal static class CsvCellNeutralizer
+{
+    public static string? Neutralize(string? value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return value;
+
+        return value[0] is '=' or '+' or '-' or '@'
+            ? $"'{value}"
+            : value;
     }
 }
