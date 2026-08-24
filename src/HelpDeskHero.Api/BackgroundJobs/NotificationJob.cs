@@ -1,4 +1,5 @@
 using HelpDeskHero.Api.BackgroundJobs.Contracts;
+using HelpDeskHero.Api.Application.TicketVisibility;
 using HelpDeskHero.Api.Infrastructure.Notifications;
 using HelpDeskHero.Api.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -54,20 +55,32 @@ public sealed class NotificationJob : INotificationJob
 
     public async Task SendDailySummaryAsync(CancellationToken ct = default)
     {
-        var openCount = await _db.Tickets
+        var openTickets = _db.Tickets
             .AsNoTracking()
-            .CountAsync(x => !x.IsDeleted && x.Status != "Closed", ct);
+            .Where(ticket => !ticket.IsDeleted && ticket.Status != "Closed");
 
-        var recipientUserIds = await GetUserIdsInRolesAsync(["Admin"], ct);
+        var normalOpenCount = await openTickets
+            .ApplyWorkspace(isDemoWorkspace: false)
+            .CountAsync(ct);
 
-        foreach (var userId in recipientUserIds)
+        var demoOpenCount = await openTickets
+            .ApplyWorkspace(isDemoWorkspace: true)
+            .CountAsync(ct);
+
+        var recipients = await GetUsersInRolesAsync(["Admin"], ct);
+
+        foreach (var recipient in recipients)
         {
+            var openCount = recipient.IsDemoWorkspace
+                ? demoOpenCount
+                : normalOpenCount;
+
             await _dispatcher.DispatchAsync(new NotificationMessage
             {
                 Channel = NotificationChannel.InApp,
                 Subject = "HelpDeskHero - daily summary",
                 Body = $"Open tickets: {openCount}",
-                UserId = userId
+                UserId = recipient.UserId
             }, ct);
         }
     }
@@ -187,7 +200,9 @@ public sealed class NotificationJob : INotificationJob
         return $"#{suffix}";
     }
 
-    private async Task<IReadOnlyList<string>> GetUserIdsInRolesAsync(string[] roleNames, CancellationToken ct)
+    private async Task<IReadOnlyList<NotificationRecipient>> GetUsersInRolesAsync(
+        string[] roleNames,
+        CancellationToken ct)
     {
         var normalizedRoleNames = roleNames
             .Select(x => x.Trim().ToUpperInvariant())
@@ -200,8 +215,14 @@ public sealed class NotificationJob : INotificationJob
             where role.NormalizedName != null
                 && normalizedRoleNames.Contains(role.NormalizedName)
                 && user.IsActive
-            select user.Id)
+            select new NotificationRecipient(
+                user.Id,
+                user.IsDemoWorkspace))
             .Distinct()
             .ToListAsync(ct);
     }
+
+    private sealed record NotificationRecipient(
+        string UserId,
+        bool IsDemoWorkspace);
 }

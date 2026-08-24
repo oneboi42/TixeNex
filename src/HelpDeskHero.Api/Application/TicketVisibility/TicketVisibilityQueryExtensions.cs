@@ -8,7 +8,14 @@ public static class TicketVisibilityQueryExtensions
         this IQueryable<Ticket> query,
         TicketVisibilityContext context)
     {
-        return context.IsDemoWorkspace
+        return query.ApplyWorkspace(context.IsDemoWorkspace);
+    }
+
+    public static IQueryable<Ticket> ApplyWorkspace(
+        this IQueryable<Ticket> query,
+        bool isDemoWorkspace)
+    {
+        return isDemoWorkspace
             ? query.Where(ticket => ticket.DemoExpiresAtUtc != null)
             : query.Where(ticket => ticket.DemoExpiresAtUtc == null);
     }

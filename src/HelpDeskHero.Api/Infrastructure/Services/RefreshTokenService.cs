@@ -8,6 +8,9 @@ namespace HelpDeskHero.Api.Infrastructure.Services;
 
 public sealed class RefreshTokenService
 {
+    private static readonly SemaphoreSlim NonRelationalConsumptionGate =
+        new(1, 1);
+
     private readonly AppDbContext _db;
     private readonly IConfiguration _configuration;
 
@@ -71,6 +74,81 @@ public sealed class RefreshTokenService
         return await _db.RefreshTokens
             .Include(x => x.User)
             .FirstOrDefaultAsync(x => x.TokenHash == hash && x.RevokedAtUtc == null, ct);
+    }
+
+    public async Task<ApplicationUser?> TryConsumeAsync(
+        string rawToken,
+        DateTime consumedAtUtc,
+        CancellationToken ct = default)
+    {
+        var hash = ComputeSha256(rawToken);
+
+        if (!_db.Database.IsRelational())
+        {
+            await NonRelationalConsumptionGate.WaitAsync(ct);
+
+            try
+            {
+                var refreshToken = await _db.RefreshTokens
+                    .Include(token => token.User)
+                    .FirstOrDefaultAsync(
+                        token =>
+                            token.TokenHash == hash &&
+                            token.RevokedAtUtc == null &&
+                            token.ExpiresAtUtc > consumedAtUtc &&
+                            token.User != null &&
+                            token.User.IsActive,
+                        ct);
+
+                if (refreshToken?.User is null)
+                    return null;
+
+                refreshToken.RevokedAtUtc = consumedAtUtc;
+                await _db.SaveChangesAsync(ct);
+
+                return refreshToken.User;
+            }
+            finally
+            {
+                NonRelationalConsumptionGate.Release();
+            }
+        }
+
+        var candidate = await _db.RefreshTokens
+            .AsNoTracking()
+            .Where(token =>
+                token.TokenHash == hash &&
+                token.RevokedAtUtc == null &&
+                token.ExpiresAtUtc > consumedAtUtc &&
+                token.User != null &&
+                token.User.IsActive)
+            .Select(token => new
+            {
+                token.Id,
+                token.UserId
+            })
+            .SingleOrDefaultAsync(ct);
+
+        if (candidate is null)
+            return null;
+
+        var consumedRows = await _db.RefreshTokens
+            .Where(token =>
+                token.Id == candidate.Id &&
+                token.RevokedAtUtc == null &&
+                token.ExpiresAtUtc > consumedAtUtc)
+            .ExecuteUpdateAsync(
+                setters => setters.SetProperty(
+                    token => token.RevokedAtUtc,
+                    consumedAtUtc),
+                ct);
+
+        if (consumedRows != 1)
+            return null;
+
+        return await _db.Users.SingleOrDefaultAsync(
+            user => user.Id == candidate.UserId && user.IsActive,
+            ct);
     }
 
     public async Task RevokeAsync(RefreshToken refreshToken, CancellationToken ct = default)
