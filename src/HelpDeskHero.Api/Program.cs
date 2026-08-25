@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 using Hangfire;
@@ -219,6 +220,34 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
 
         options.Events = new JwtBearerEvents
         {
+            OnTokenValidated = async context =>
+            {
+                var userId = context.Principal?
+                    .FindFirstValue(ClaimTypes.NameIdentifier);
+                var userManager = context.HttpContext.RequestServices
+                    .GetRequiredService<UserManager<ApplicationUser>>();
+                var user = string.IsNullOrWhiteSpace(userId)
+                    ? null
+                    : await userManager.FindByIdAsync(userId);
+
+                if (user is null || !user.IsActive ||
+                    context.Principal?.Identity is not ClaimsIdentity identity)
+                {
+                    context.Fail("The user account is unavailable.");
+                    return;
+                }
+
+                foreach (var roleClaim in
+                    identity.FindAll(ClaimTypes.Role).ToArray())
+                {
+                    identity.RemoveClaim(roleClaim);
+                }
+
+                var currentRoles = await userManager.GetRolesAsync(user);
+                identity.AddClaims(
+                    currentRoles.Select(
+                        role => new Claim(ClaimTypes.Role, role)));
+            },
             OnMessageReceived = context =>
             {
                 var accessToken = context.Request.Query["access_token"];

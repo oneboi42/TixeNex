@@ -1,32 +1,25 @@
-using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Json;
-using System.Security.Claims;
-using System.Text;
 using System.Threading.Channels;
 using FluentAssertions;
 using HelpDeskHero.Api.Application.Interfaces;
 using HelpDeskHero.Api.Domain;
 using HelpDeskHero.Api.Infrastructure.Persistence;
+using HelpDeskHero.Api.Infrastructure.Services;
 using HelpDeskHero.Api.IntegrationTests.Infrastructure;
 using HelpDeskHero.Shared.Contracts.Auth;
 using HelpDeskHero.Shared.Contracts.Tickets;
 using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.IdentityModel.Tokens;
 
 namespace HelpDeskHero.Api.IntegrationTests.Realtime;
 
 [Collection("ApiIntegration")]
 public sealed class TicketsHubAuthorizationTests
 {
-    private const string JwtIssuer = "HelpDeskHero.Tests";
-    private const string JwtAudience = "HelpDeskHero.Tests";
-    private const string JwtKey =
-        "HelpDeskHero.Tests.Super.Secret.Key.For.Jwt.Token.Signing.123456789";
-
     private readonly CustomWebApplicationFactory _factory;
     private readonly HttpClient _client;
 
@@ -80,7 +73,7 @@ public sealed class TicketsHubAuthorizationTests
                 ? null
                 : DateTime.UtcNow.AddHours(1));
         var token = adminIsDemoWorkspace
-            ? CreateWorkspaceToken("demo-admin", "Admin", isDemoWorkspace: true)
+            ? await GetDemoAdminTokenAsync()
             : await LoginAsync("admin", CustomWebApplicationFactory.AdminPassword);
 
         await using var connection = await ConnectAsync(token);
@@ -120,7 +113,7 @@ public sealed class TicketsHubAuthorizationTests
             await LoginAsync("admin", CustomWebApplicationFactory.AdminPassword),
             normalAdminTicket);
         await AssertCanJoinAndReceiveAsync(
-            CreateWorkspaceToken("demo-admin", "Admin", isDemoWorkspace: true),
+            await GetDemoAdminTokenAsync(),
             demoAdminTicket);
     }
 
@@ -220,7 +213,7 @@ public sealed class TicketsHubAuthorizationTests
             await LoginAsync("admin", CustomWebApplicationFactory.AdminPassword),
             normalUpdates.Writer);
         await using var demoConnection = await ConnectAsync(
-            CreateWorkspaceToken("demo-admin", "Admin", isDemoWorkspace: true),
+            await GetDemoAdminTokenAsync(),
             demoUpdates.Writer);
 
         await normalConnection.InvokeAsync("JoinDashboard");
@@ -285,31 +278,33 @@ public sealed class TicketsHubAuthorizationTests
         return token!.AccessToken;
     }
 
-    private static string CreateWorkspaceToken(
-        string userId,
-        string role,
-        bool isDemoWorkspace)
+    private async Task<string> GetDemoAdminTokenAsync()
     {
-        var credentials = new SigningCredentials(
-            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JwtKey)),
-            SecurityAlgorithms.HmacSha256);
-        var token = new JwtSecurityToken(
-            issuer: JwtIssuer,
-            audience: JwtAudience,
-            claims:
-            [
-                new Claim(ClaimTypes.NameIdentifier, userId),
-                new Claim(ClaimTypes.Role, role),
-                new Claim(
-                    "is_demo_workspace",
-                    isDemoWorkspace ? "true" : "false"),
-                new Claim("is_demo", isDemoWorkspace ? "true" : "false")
-            ],
-            notBefore: DateTime.UtcNow.AddMinutes(-1),
-            expires: DateTime.UtcNow.AddMinutes(10),
-            signingCredentials: credentials);
+        using var scope = _factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider
+            .GetRequiredService<UserManager<ApplicationUser>>();
+        var user = await userManager.FindByIdAsync("demo-admin");
 
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        if (user is null)
+        {
+            user = new ApplicationUser
+            {
+                Id = "demo-admin",
+                UserName = "demo-admin",
+                DisplayName = "Demo Admin",
+                IsActive = true,
+                IsDemoWorkspace = true,
+                IsDemoUser = true,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            (await userManager.CreateAsync(user)).Succeeded.Should().BeTrue();
+            (await userManager.AddToRoleAsync(user, "Admin"))
+                .Succeeded.Should().BeTrue();
+        }
+
+        var tokenService = scope.ServiceProvider
+            .GetRequiredService<TokenService>();
+        return (await tokenService.CreateAccessTokenAsync(user)).token;
     }
 
     private async Task<string> GetUserIdAsync(string userName)
