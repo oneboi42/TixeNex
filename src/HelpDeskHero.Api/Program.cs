@@ -35,6 +35,7 @@ var isTesting = builder.Environment.IsEnvironment("Testing");
 
 const string CorsPolicyName = "BlazorUi";
 const string LoginRateLimitPolicyName = "login";
+const string DemoSessionRateLimitPolicyName = "demo-session";
 
 builder.Services.AddCors(options =>
 {
@@ -78,6 +79,25 @@ builder.Services.AddRateLimiter(options =>
         var permitLimit = httpContext.RequestServices
             .GetRequiredService<IConfiguration>()
             .GetValue("RateLimiting:Login:PermitLimit", 5);
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey:
+                httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true
+            });
+    });
+    options.AddPolicy(DemoSessionRateLimitPolicyName, httpContext =>
+    {
+        var permitLimit = httpContext.RequestServices
+            .GetRequiredService<IConfiguration>()
+            .GetValue("RateLimiting:DemoSession:PermitLimit", 3);
 
         return RateLimitPartition.GetFixedWindowLimiter(
             partitionKey:

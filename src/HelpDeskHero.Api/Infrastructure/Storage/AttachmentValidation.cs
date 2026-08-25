@@ -3,6 +3,8 @@ namespace HelpDeskHero.Api.Infrastructure.Storage;
 public static class AttachmentValidation
 {
     public const long MaxSizeBytes = 10 * 1024 * 1024;
+    public const int MaxAttachmentsPerUser = 20;
+    public const long MaxTotalSizeBytesPerUser = 100 * 1024 * 1024;
 
     private static readonly string[] AllowedExtensions =
     [

@@ -92,6 +92,33 @@ public sealed class ExportAuthorizationTests
         details.Extensions["code"].Should().Be("validation_error");
     }
 
+    [Fact]
+    public async Task CreateExport_WhenActiveExportLimitIsReached_DoesNotCreateOrPublishJob()
+    {
+        await using var db = CreateDbContext();
+        db.ExportJobs.AddRange(Enumerable.Range(1, 3).Select(_ => new ExportJob
+        {
+            Id = Guid.NewGuid(),
+            UserId = "caller",
+            Status = ExportStatus.Pending,
+            CreatedAt = DateTime.UtcNow,
+            ResourceType = ExportResourceType.Tickets,
+            Format = ExportFormat.Csv,
+            Scope = ExportScope.Own
+        }));
+        await db.SaveChangesAsync();
+
+        var publisher = new RecordingPublisher();
+        var controller = CreateController(db, publisher, "caller", "User");
+
+        var result = await controller.CreateExport(Request("Own"), CancellationToken.None);
+
+        var rejected = result.Result.Should().BeOfType<ObjectResult>().Subject;
+        rejected.StatusCode.Should().Be(StatusCodes.Status429TooManyRequests);
+        (await db.ExportJobs.CountAsync()).Should().Be(3);
+        publisher.Message.Should().BeNull();
+    }
+
     [Theory]
     [InlineData("User", "Own")]
     [InlineData("Agent", "Own,Assigned")]

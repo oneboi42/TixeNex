@@ -14,6 +14,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using HelpDeskHero.Api.IntegrationTests.Infrastructure;
+using Microsoft.AspNetCore.Identity;
 
 namespace HelpDeskHero.Api.IntegrationTests.Tickets;
 
@@ -282,8 +283,11 @@ public sealed class TicketVisibilityTests
     [Fact]
     public async Task GetTickets_WithUnsupportedRole_ReturnsForbidden()
     {
+        var userId = await CreateUserWithRoleAsync(
+            "unsupported-user",
+            "Manager");
         SetToken(
-            new Claim(ClaimTypes.NameIdentifier, "unsupported-user"),
+            new Claim(ClaimTypes.NameIdentifier, userId),
             new Claim(ClaimTypes.Role, "Manager"));
 
         var response = await _client.GetAsync("/api/tickets");
@@ -410,8 +414,11 @@ public sealed class TicketVisibilityTests
             null,
             null,
             DemoExpiresAtUtc: DateTime.UtcNow.AddHours(1)))).Single();
+        var userId = await CreateUserWithRoleAsync(
+            "legacy-demo-admin",
+            "Admin");
         SetToken(
-            new Claim(ClaimTypes.NameIdentifier, "legacy-demo-admin"),
+            new Claim(ClaimTypes.NameIdentifier, userId),
             new Claim(ClaimTypes.Role, "Admin"),
             new Claim("is_demo", "true"));
 
@@ -623,6 +630,39 @@ public sealed class TicketVisibilityTests
             .Where(x => x.UserName == userName)
             .Select(x => x.DisplayName)
             .SingleAsync();
+    }
+
+    private async Task<string> CreateUserWithRoleAsync(
+        string userName,
+        string role)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var userManager = scope.ServiceProvider
+            .GetRequiredService<UserManager<ApplicationUser>>();
+        var roleManager = scope.ServiceProvider
+            .GetRequiredService<RoleManager<IdentityRole>>();
+
+        if (!await roleManager.RoleExistsAsync(role))
+        {
+            var roleResult = await roleManager.CreateAsync(new IdentityRole(role));
+            roleResult.Succeeded.Should().BeTrue();
+        }
+
+        var user = new ApplicationUser
+        {
+            UserName = userName,
+            Email = $"{userName}@tests.local",
+            DisplayName = userName,
+            IsActive = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        var createResult = await userManager.CreateAsync(user);
+        createResult.Succeeded.Should().BeTrue();
+
+        var addRoleResult = await userManager.AddToRoleAsync(user, role);
+        addRoleResult.Succeeded.Should().BeTrue();
+
+        return user.Id;
     }
 
     private async Task<List<Ticket>> SeedTicketsAsync(params TicketSeed[] seeds)
