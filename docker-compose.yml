@@ -1,7 +1,7 @@
 services:
   db:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: helpdeskhero-db
+    container_name: tixenex-db
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
@@ -22,7 +22,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:4-management
-    container_name: helpdeskhero-rabbitmq
+    container_name: tixenex-rabbitmq
     environment:
       RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER}"
       RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD}"
@@ -45,7 +45,7 @@ services:
 
   minio:
     image: quay.io/minio/minio:latest
-    container_name: helpdeskhero-minio
+    container_name: tixenex-minio
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: "${MINIO_ROOT_USER}"
@@ -61,7 +61,7 @@ services:
     build:
       context: .
       dockerfile: ./docker/Dockerfile.api
-    container_name: helpdeskhero-api
+    container_name: tixenex-api
 
     depends_on:
       db:
@@ -80,10 +80,10 @@ services:
       Logging__LogLevel__Microsoft.Hosting.Lifetime: Information
       Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: Warning
 
-      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=HelpDeskHero;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=TixeNex;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
 
-      Jwt__Issuer: "HelpDeskHero"
-      Jwt__Audience: "HelpDeskHero"
+      Jwt__Issuer: "TixeNex"
+      Jwt__Audience: "TixeNex.UI"
       Jwt__Key: "${JWT_KEY}"
       Jwt__AccessTokenMinutes: "60"
 
@@ -123,7 +123,7 @@ services:
     build:
       context: .
       dockerfile: ./docker/Dockerfile.worker
-    container_name: helpdeskhero-worker
+    container_name: tixenex-worker
 
     depends_on:
       db:
@@ -140,7 +140,7 @@ services:
       Logging__LogLevel__Microsoft: Warning
       Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: Warning
 
-      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=HelpDeskHero;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=TixeNex;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
 
       RabbitMQ__Host: "rabbitmq"
       RabbitMQ__UserName: "${RABBITMQ_USER}"
@@ -158,7 +158,7 @@ services:
     build:
       context: .
       dockerfile: ./docker/Dockerfile.ui
-    container_name: helpdeskhero-ui
+    container_name: tixenex-ui
 
     depends_on:
       api:

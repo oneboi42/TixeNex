@@ -1,0 +1,294 @@
+@using TixeNex.Shared.Contracts.Tickets
+@using TixeNex.UI.Services.Api
+@using System.Text.Json
+
+@inject TicketAttachmentApiClient AttachmentApi
+@inject IJSRuntime JS
+
+<section class="mt-4">
+    <h4>Attachments</h4>
+
+    <ErrorBanner Message="@_error" />
+
+    @if (_loading)
+    {
+        <LoadingSpinner Text="Loading attachments..." />
+    }
+    else if (_attachments.Count == 0)
+    {
+        <EmptyState Title="No attachments" Message="This ticket does not have any files yet." />
+    }
+    else
+    {
+        <div class="list-group mb-3">
+            @foreach (var item in _attachments)
+            {
+                <div class="list-group-item d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                        <div class="fw-semibold">@item.OriginalFileName</div>
+                        <small class="text-muted">
+                            @FormatFileSize(item.SizeBytes) · @item.UploadedAtUtc.ToLocalTime().ToString("g")
+                        </small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-primary btn-sm"
+                                type="button"
+                                disabled="@(_downloadingAttachmentId == item.Id)"
+                                @onclick="() => HandleDownloadAsync(item)">
+                            @(_downloadingAttachmentId == item.Id ? "Downloading..." : "Download")
+                        </button>
+
+                        <AuthorizeView Roles="Admin">
+                            <Authorized>
+                                <button class="btn btn-outline-danger btn-sm"
+                                        type="button"
+                                        disabled="@(_deletingAttachmentId == item.Id)"
+                                        @onclick="() => AskDelete(item)">
+                                    Delete
+                                </button>
+                            </Authorized>
+                        </AuthorizeView>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <div class="mb-2">
+        <label class="form-label" for="@_fileInputId">Upload attachment</label>
+        <InputFile id="@_fileInputId"
+                   class="form-control"
+                   OnChange="HandleUploadAsync"
+                   disabled="@_uploading" />
+    </div>
+
+    @if (_uploading)
+    {
+        <div class="text-muted">Uploading file...</div>
+    }
+
+    <AppToast @bind-Visible="_toastVisible"
+              Title="@_toastTitle"
+              Message="@_toastMessage" />
+
+    <ConfirmDeleteDialog Visible="@(_attachmentToDelete is not null)"
+                         Busy="@(_deletingAttachmentId is not null)"
+                         Title="Delete attachment"
+                         Message="@DeleteConfirmationMessage"
+                         OnConfirm="ConfirmDeleteAsync"
+                         OnCancel="CancelDelete" />
+</section>
+
+@code {
+    private const long MaxFileSize = 10 * 1024 * 1024;
+
+    private static readonly string[] AllowedExtensions =
+    [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".pdf",
+        ".txt",
+        ".docx",
+        ".xlsx"
+    ];
+
+    [Parameter]
+    public int TicketId { get; set; }
+
+    private readonly string _fileInputId = $"attachment-file-{Guid.NewGuid():N}";
+    private List<TicketAttachmentDto> _attachments = [];
+    private string? _error;
+    private bool _loading;
+    private bool _uploading;
+    private bool _toastVisible;
+    private int? _downloadingAttachmentId;
+    private int? _deletingAttachmentId;
+    private TicketAttachmentDto? _attachmentToDelete;
+    private string _toastTitle = "Attachment added";
+    private string _toastMessage = "The file has been uploaded.";
+
+    private string DeleteConfirmationMessage =>
+        _attachmentToDelete is null
+            ? "Delete this attachment?"
+            : $"Delete '{_attachmentToDelete.OriginalFileName}'?";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAttachmentsAsync();
+    }
+
+    private async Task LoadAttachmentsAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _attachments = (await AttachmentApi.GetAllAsync(TicketId)).ToList();
+        }
+        catch
+        {
+            _error = "Could not load attachments.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task HandleUploadAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        _error = ValidateFile(file);
+        _toastVisible = false;
+
+        if (_error is not null)
+            return;
+
+        _uploading = true;
+
+        try
+        {
+            var response = await AttachmentApi.UploadAsync(TicketId, file, MaxFileSize);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = "Could not upload the attachment. Check the file type and size.";
+                return;
+            }
+
+            var created = await response.Content.ReadFromJsonAsync<TicketAttachmentDto>();
+            if (created is not null)
+            {
+                _attachments.Insert(0, created);
+            }
+
+            _toastTitle = "Attachment added";
+            _toastMessage = "The file has been uploaded.";
+            _toastVisible = true;
+        }
+        catch (IOException)
+        {
+            _error = "The file is too large. Maximum size is 10 MB.";
+        }
+        catch
+        {
+            _error = "Could not upload the attachment.";
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private void AskDelete(TicketAttachmentDto attachment)
+    {
+        _error = null;
+        _toastVisible = false;
+        _attachmentToDelete = attachment;
+    }
+
+    private void CancelDelete()
+    {
+        if (_deletingAttachmentId is null)
+        {
+            _attachmentToDelete = null;
+        }
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_attachmentToDelete is null)
+            return;
+
+        _error = null;
+        _deletingAttachmentId = _attachmentToDelete.Id;
+
+        try
+        {
+            var response = await AttachmentApi.DeleteAsync(TicketId, _attachmentToDelete.Id);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await ApiErrorMapper.ToMessageAsync(
+                    response,
+                    "Could not delete the attachment.");
+                return;
+            }
+
+            _attachmentToDelete = null;
+            await LoadAttachmentsAsync();
+
+            _toastTitle = "Attachment deleted";
+            _toastMessage = "The attachment has been removed.";
+            _toastVisible = true;
+        }
+        catch
+        {
+            _error = "Could not delete the attachment.";
+        }
+        finally
+        {
+            _deletingAttachmentId = null;
+        }
+    }
+
+    private async Task HandleDownloadAsync(TicketAttachmentDto attachment)
+    {
+        _error = null;
+        _downloadingAttachmentId = attachment.Id;
+
+        try
+        {
+            var downloaded = await AttachmentApi.DownloadAsync(TicketId, attachment.Id);
+            var base64 = Convert.ToBase64String(downloaded.Content);
+            var fileName = JsonSerializer.Serialize(downloaded.FileName);
+            var script = "(() => { "
+                + "const link = document.createElement('a'); "
+                + $"link.href = 'data:{downloaded.ContentType};base64,{base64}'; "
+                + $"link.download = {fileName}; "
+                + "document.body.appendChild(link); "
+                + "link.click(); "
+                + "link.remove(); "
+                + "})()";
+
+            await JS.InvokeVoidAsync("eval", script);
+        }
+        catch
+        {
+            _error = "Could not download the attachment.";
+        }
+        finally
+        {
+            _downloadingAttachmentId = null;
+        }
+    }
+
+    private static string? ValidateFile(IBrowserFile file)
+    {
+        if (file.Size <= 0)
+            return "The file cannot be empty.";
+
+        if (file.Size > MaxFileSize)
+            return "The file is too large. Maximum size is 10 MB.";
+
+        var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(extension) || !AllowedExtensions.Contains(extension))
+        {
+            return "Unsupported file type. Allowed: PNG, JPG, JPEG, PDF, TXT, DOCX, XLSX.";
+        }
+
+        return null;
+    }
+
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+            return $"{bytes} B";
+
+        if (bytes < 1024 * 1024)
+            return $"{bytes / 1024d:0.#} KB";
+
+        return $"{bytes / 1024d / 1024d:0.#} MB";
+    }
+}

@@ -1,0 +1,181 @@
+@page "/tickets/edit/{Id:int}"
+@attribute [Authorize(Roles = "Admin,Agent")]
+
+@using TixeNex.Shared.Contracts.Tickets
+@using TixeNex.UI.Services.Api
+@using Microsoft.AspNetCore.Authorization
+
+@inject TixeNex.UI.Services.Api.ITicketApiClient TicketApi
+@inject NavigationManager Nav
+
+<PageTitle>Edit ticket</PageTitle>
+
+<h3>Edit ticket</h3>
+
+<ErrorBanner Message="@_error" />
+
+@if (_loading)
+{
+    <LoadingSpinner Text="Loading ticket..." />
+}
+else if (_model is not null)
+{
+    <EditForm Model="_model" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div class="card">
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Title</label>
+                    <InputText class="form-control" @bind-Value="_model.Title" />
+                    <ValidationMessage For="@(() => _model.Title)" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Description</label>
+                    <InputTextArea class="form-control" rows="5" @bind-Value="_model.Description" />
+                    <ValidationMessage For="@(() => _model.Description)" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Priority</label>
+                    <InputSelect class="form-select" @bind-Value="_model.Priority">
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Critical">Critical</option>
+                    </InputSelect>
+                    <ValidationMessage For="@(() => _model.Priority)" />
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary"
+                            type="submit"
+                            disabled="@_saving">
+                        @(_saving ? "Saving..." : "Save")
+                    </button>
+
+                    <button class="btn btn-outline-secondary"
+                            type="button"
+                            disabled="@_saving"
+                            @onclick="ReloadAsync">
+                        Refresh
+                    </button>
+
+                    <button class="btn btn-secondary"
+                            type="button"
+                            disabled="@_saving"
+                            @onclick='() => Nav.NavigateTo($"/tickets/{Id}")'>
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </div>
+    </EditForm>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private UpdateTicketDto? _model;
+    private string? _error;
+    private bool _loading;
+    private bool _saving;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAsync();
+    }
+
+    private Task ReloadAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            var dto = await TicketApi.GetByIdAsync(Id);
+
+            if (dto is null)
+            {
+                _model = null;
+                _error = "Ticket not found.";
+                return;
+            }
+
+            if (!dto.CanEdit)
+            {
+                _model = null;
+                _error = "You do not have permission to edit this ticket.";
+                return;
+            }
+
+            _model = new UpdateTicketDto
+            {
+                Title = dto.Title,
+                Description = dto.Description,
+                Status = dto.Status,
+                Priority = dto.Priority,
+                RowVersionBase64 = dto.RowVersionBase64
+            };
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+        {
+            _error = "Your session has expired. Please sign in again.";
+            Nav.NavigateTo("/login");
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
+        {
+            _error = "You do not have permission to edit this ticket.";
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            _model = null;
+            _error = "Ticket not found.";
+        }
+        catch
+        {
+            _error = "Failed to load the ticket.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_model is null || _saving)
+            return;
+
+        _saving = true;
+        _error = null;
+
+        try
+        {
+            var response = await TicketApi.UpdateAsync(Id, _model);
+
+            if (response.IsSuccessStatusCode)
+            {
+                Nav.NavigateTo($"/tickets/{Id}");
+                return;
+            }
+
+            _error = await ApiErrorMapper.ToMessageAsync(
+                response,
+                "Failed to save the changes.");
+        }
+        catch
+        {
+            _error = "An error occurred while saving.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

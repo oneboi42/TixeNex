@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TixeNex.Api/TixeNex.Api.csproj" />
+    <Project Path="src/TixeNex.Shared/TixeNex.Shared.csproj" />
+    <Project Path="src/TixeNex.UI/TixeNex.UI.csproj" />
+    <Project Path="src/TixeNex.Worker/TixeNex.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TixeNex.Api.IntegrationTests/TixeNex.Api.IntegrationTests.csproj" />
+    <Project Path="tests/TixeNex.UI.Tests/TixeNex.UI.Tests.csproj" />
+    <Project Path="tests/TixeNex.Worker.Tests/TixeNex.Worker.Tests.csproj" />
+  </Folder>
+</Solution>

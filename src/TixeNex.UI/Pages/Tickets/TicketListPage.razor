@@ -1,0 +1,231 @@
+@page "/tickets"
+@attribute [Authorize]
+@implements IAsyncDisposable
+@namespace TixeNex.UI.Pages.Tickets
+
+@using TixeNex.Shared.Contracts.Common
+@using TixeNex.Shared.Contracts.Tickets
+@using TixeNex.UI.Services.Api
+@using TixeNex.UI.Services.Realtime
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+
+@inject TixeNex.UI.Services.Api.ITicketApiClient TicketApi
+@inject NavigationManager Navigation
+@inject ITicketsRealtimeClient Realtime
+
+
+<PageTitle>Tickets</PageTitle>
+
+<div class="tickets-page">
+
+<div class="d-flex justify-content-between align-items-start gap-3 mb-4 tickets-page-header">
+    <div>
+        <h2 class="mb-1 tickets-title">Tickets</h2>
+        <div class="text-muted tickets-subtitle">Manage and track support requests</div>
+    </div>
+
+    <AuthorizeView Roles="User,Agent,Admin">
+        <Authorized>
+            <div class="d-flex gap-2 flex-wrap justify-content-end">
+                <NavLink class="btn btn-primary px-3" href="tickets/create">
+                    New ticket
+                </NavLink>
+                <NavLink class="btn btn-outline-secondary px-3" href="exports">
+                    Export history
+                </NavLink>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+<ErrorBanner Message="@_error" />
+
+<div class="ticket-filters mb-3">
+    <div class="ticket-filter-search">
+        <InputText class="form-control"
+                   @bind-Value="_query.Search"
+                   placeholder="Search tickets..." />
+    </div>
+
+    <div class="ticket-filter-select">
+        <InputSelect class="form-select" @bind-Value="_query.Status">
+            <option value="">All statuses</option>
+            <option value="New">New</option>
+            <option value="InProgress">In progress</option>
+            <option value="Resolved">Resolved</option>
+            <option value="Closed">Closed</option>
+        </InputSelect>
+    </div>
+
+    <div class="ticket-filter-select">
+        <InputSelect class="form-select" @bind-Value="_query.Priority">
+            <option value="">All priorities</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            <option value="Critical">Critical</option>
+        </InputSelect>
+    </div>
+
+    <button class="btn btn-outline-secondary ticket-filter-button"
+            disabled="@_loading"
+            @onclick="ApplyFiltersAsync">
+        Filter
+    </button>
+</div>
+
+@if (_loading)
+{
+    <LoadingSpinner Text="Loading tickets..." />
+}
+else if (_result is null)
+{
+    <EmptyState Title="No data"
+        Message="The ticket list could not be displayed." />
+}
+else
+{
+    <div class="ticket-list-meta">
+        @GetTicketCountLabel(_result.TotalCount)
+    </div>
+
+    @if (!_result.Items.Any())
+    {
+        <EmptyState Title="No tickets found"
+            Message="Adjust the filters or create a new ticket." />
+    }
+    else
+    {
+        <div class="table-responsive ticket-table-shell">
+            <table class="table table-hover align-middle ticket-table">
+                <thead>
+                    <tr>
+                        <th>Ticket</th>
+                        <th>Status</th>
+                        <th>Priority</th>
+                        <AuthorizeView Roles="Admin">
+                            <Authorized>
+                                <th>Requester</th>
+                            </Authorized>
+                        </AuthorizeView>
+                        <th>Assigned to</th>
+                        <th>Created at</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach (var item in _result.Items)
+                    {
+                        <tr>
+                            <td>
+                                <a class="ticket-title-link" href="@($"/tickets/{item.Id}")">
+                                    @item.Title
+                                </a>
+                                <div class="ticket-number" title="@item.Number">
+                                    @GetShortTicketNumber(item.Number)
+                                </div>
+                            </td>
+
+                            <td>
+                                <span class="ticket-badge @GetStatusCssClass(item.Status)">
+                                    <StatusBadge Status="@item.Status" />
+                                </span>
+                            </td>
+
+                            <td>
+                                <span class="ticket-badge @GetPriorityCssClass(item.Priority)">
+                                    <PriorityBadge Priority="@item.Priority" />
+                                </span>
+                            </td>
+
+                            <AuthorizeView Roles="Admin">
+                                <Authorized>
+                                    <td>@(item.RequesterDisplayName ?? "Unknown")</td>
+                                </Authorized>
+                            </AuthorizeView>
+
+                            <td>
+                                @(item.AssignedToDisplayName ?? "Unassigned")
+                            </td>
+
+                            <td>
+                                @item.CreatedAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")
+                            </td>
+
+                            <td class="text-end">
+                                <div class="d-inline-flex align-items-center gap-1">
+                                    <button class="ticket-view-action"
+                                            @onclick='() => Navigation.NavigateTo($"/tickets/{item.Id}")'>
+                                        View <span aria-hidden="true">→</span>
+                                    </button>
+
+                                    @if (item.CanEdit)
+                                    {
+                                        <button class="btn btn-outline-primary"
+                                                disabled="@IsLifecycleBusy(item.Id)"
+                                                @onclick='() => Navigation.NavigateTo($"/tickets/edit/{item.Id}")'>
+                                            Edit
+                                        </button>
+                                    }
+
+                                    @foreach (var action in GetLifecycleActions(item))
+                                    {
+                                        <button class="btn btn-outline-success"
+                                                disabled="@IsLifecycleBusy(item.Id)"
+                                                @onclick="() => ChangeStatusAsync(item, action)">
+                                            @(IsLifecycleBusy(item.Id) ? "Saving..." : action.Label)
+                                        </button>
+                                    }
+                                </div>
+
+                                <AuthorizeView Roles="Admin">
+                                    <Authorized>
+                                        <span class="ms-2">
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    @onclick="() => AskDelete(item)">
+                                                Delete
+                                            </button>
+                                        </span>
+                                    </Authorized>
+                                </AuthorizeView>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-outline-secondary"
+                disabled="@(_query.PageNumber <= 1 || _loading)"
+                @onclick="PrevAsync">
+            Previous
+        </button>
+
+        <span>Page @_query.PageNumber</span>
+
+        <button class="btn btn-outline-secondary"
+                disabled="@((_query.PageNumber * _query.PageSize) >= _result.TotalCount || _loading)"
+                @onclick="NextAsync">
+            Next
+        </button>
+    </div>
+}
+
+<AppToast @bind-Visible="_toastVisible"
+          Type="@_toastType"
+          Title="@_toastTitle"
+          Message="@_toastMessage"
+          AutoHide="true"
+          ToastVersion="@_toastVersion" />
+
+<ConfirmDeleteDialog Visible="@_showDeleteDialog"
+                     Busy="@_deleteBusy"
+                     Title="Delete ticket"
+                     Message="@_deleteMessage"
+                     OnConfirm="DeleteAsync"
+                     OnCancel="CancelDelete" />
+</div>

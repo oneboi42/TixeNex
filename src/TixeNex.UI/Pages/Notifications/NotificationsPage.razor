@@ -1,0 +1,180 @@
+@page "/notifications"
+@attribute [Authorize]
+
+@using TixeNex.Shared.Contracts.Notifications
+@using TixeNex.UI.Services.Api
+@using TixeNex.UI.Services.Realtime
+@using Microsoft.AspNetCore.Authorization
+
+@inject NotificationApiClient NotificationApi
+@inject NotificationRealtimeCoordinator NotificationRealtime
+@implements IDisposable
+
+<PageTitle>Notifications</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center gap-3 mb-3">
+    <h3 class="mb-0">Notifications</h3>
+    <div class="d-flex gap-2">
+        <button class="btn btn-outline-primary"
+                type="button"
+                disabled="@(_loading || _markingAllRead || !_notifications.Any(x => !x.IsRead))"
+                @onclick="MarkAllAsReadAsync">
+            @(_markingAllRead ? "Saving..." : "Read all")
+        </button>
+    </div>
+</div>
+
+<ErrorBanner Message="@_error" />
+
+@if (_loading)
+{
+    <LoadingSpinner Text="Loading notifications..." />
+}
+else if (_notifications.Count == 0)
+{
+    <EmptyState Title="No notifications" Message="You do not have any notifications yet." />
+}
+else
+{
+    <div class="list-group">
+        @foreach (var item in _notifications)
+        {
+            <div class="list-group-item d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="fw-semibold">
+                        @item.Subject
+                        @if (!item.IsRead)
+                        {
+                            <span class="badge bg-primary ms-2">Unread</span>
+                        }
+                    </div>
+                    <div class="mt-1">@item.Body</div>
+                    <small class="text-muted">@item.CreatedAtUtc.ToLocalTime().ToString("g")</small>
+                </div>
+
+                @if (!item.IsRead)
+                {
+                    <button class="btn btn-outline-primary btn-sm"
+                            type="button"
+                            disabled="@(_markingReadId == item.Id)"
+                            @onclick="() => MarkAsReadAsync(item)">
+                        @(_markingReadId == item.Id ? "Saving..." : "Mark as read")
+                    </button>
+                }
+            </div>
+        }
+    </div>
+}
+
+<AppToast @bind-Visible="_toastVisible"
+          Title="Notifications updated"
+          Message="Notifications were marked as read." />
+
+@code {
+    private List<UserNotificationDto> _notifications = [];
+    private string? _error;
+    private bool _loading;
+    private bool _toastVisible;
+    private bool _markingAllRead;
+    private int? _markingReadId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        NotificationRealtime.NotificationsChanged += HandleNotificationsChangedAsync;
+        await LoadNotificationsAsync();
+    }
+
+    private async Task LoadNotificationsAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _notifications = (await NotificationApi.GetMineAndUpdateUnreadCountAsync()).ToList();
+        }
+        catch
+        {
+            _error = "Could not load notifications.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task MarkAsReadAsync(UserNotificationDto item)
+    {
+        var session = NotificationApi.CurrentSession;
+        _error = null;
+        _toastVisible = false;
+        _markingReadId = item.Id;
+
+        try
+        {
+            var response = await NotificationApi.MarkAsReadAsync(item.Id);
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = await ApiErrorMapper.ToMessageAsync(
+                    response,
+                    "Could not mark notification as read.");
+                return;
+            }
+
+            item.IsRead = true;
+            NotificationApi.UpdateUnreadCount(_notifications, session);
+            _toastVisible = true;
+        }
+        catch
+        {
+            _error = "Could not mark notification as read.";
+        }
+        finally
+        {
+            _markingReadId = null;
+        }
+    }
+
+    private async Task HandleNotificationsChangedAsync(IReadOnlyList<UserNotificationDto> notifications)
+    {
+        _notifications = notifications.ToList();
+        _loading = false;
+        _error = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task MarkAllAsReadAsync()
+    {
+        _error = null;
+        _toastVisible = false;
+        _markingAllRead = true;
+
+        try
+        {
+            var failedResponse = await NotificationApi.MarkAllAsReadAsync(_notifications);
+            if (failedResponse is not null)
+            {
+                _error = await ApiErrorMapper.ToMessageAsync(
+                    failedResponse,
+                    "Could not mark notifications as read.");
+                return;
+            }
+
+            await LoadNotificationsAsync();
+            _toastVisible = true;
+        }
+        catch
+        {
+            _error = "Could not mark notifications as read.";
+        }
+        finally
+        {
+            _markingAllRead = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        NotificationRealtime.NotificationsChanged -= HandleNotificationsChangedAsync;
+    }
+}

@@ -1,0 +1,101 @@
+@page "/account/settings"
+@attribute [Authorize]
+
+@using Microsoft.AspNetCore.Authorization
+@inject TixeNex.UI.Services.Api.AuthApiClient AuthApiClient
+@inject NavigationManager Navigation
+
+<PageTitle>Ustawienia konta</PageTitle>
+
+<div class="account-page">
+    <h1>Ustawienia konta</h1>
+
+    <section class="security-card">
+        <h2>Security</h2>
+
+        <p class="security-description">
+            This option signs you out on every device by revoking all active refresh tokens.
+        </p>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <div class="alert alert-danger">
+                @_error
+            </div>
+        }
+
+        <button class="btn btn-danger"
+                disabled="@_isLoading"
+                @onclick="ShowConfirm">
+            Sign out on all devices
+        </button>
+    </section>
+</div>
+
+@if (_showConfirm)
+{
+    <div class="confirm-backdrop">
+        <div class="confirm-dialog">
+            <h3>Potwierdzenie</h3>
+
+            <p>
+                Are you sure you want to sign out on all devices?
+                You will be redirected to the sign-in page.
+            </p>
+
+            <div class="confirm-actions">
+                <button class="btn btn-secondary"
+                        disabled="@_isLoading"
+                        @onclick="HideConfirm">
+                    Cancel
+                </button>
+
+                <button class="btn btn-danger"
+                        disabled="@_isLoading"
+                        @onclick="RevokeAllSessions">
+                    Yes, sign out
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _showConfirm;
+    private bool _isLoading;
+    private string? _error;
+
+    private void ShowConfirm()
+    {
+        _error = null;
+        _showConfirm = true;
+    }
+
+    private void HideConfirm()
+    {
+        _showConfirm = false;
+    }
+
+    private async Task RevokeAllSessions()
+    {
+        _isLoading = true;
+        _error = null;
+
+        try
+        {
+            await AuthApiClient.RevokeAllSessionsAsync();
+            await AuthApiClient.LogoutAsync();
+
+            Navigation.NavigateTo("/login", replace: true);
+        }
+        catch
+        {
+            _error = "Failed to sign out on all devices.";
+            _showConfirm = false;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+}

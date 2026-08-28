@@ -6,8 +6,8 @@
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build-all",
-      "program": "${workspaceFolder}/src/HelpDeskHero.Api/bin/Debug/net10.0/HelpDeskHero.Api.dll",
-      "cwd": "${workspaceFolder}/src/HelpDeskHero.Api",
+      "program": "${workspaceFolder}/src/TixeNex.Api/bin/Debug/net10.0/TixeNex.Api.dll",
+      "cwd": "${workspaceFolder}/src/TixeNex.Api",
       "stopAtEntry": false
     },
     {
@@ -15,8 +15,8 @@
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "build-all",
-      "program": "${workspaceFolder}/src/HelpDeskHero.UI/bin/Debug/net10.0/HelpDeskHero.UI.dll",
-      "cwd": "${workspaceFolder}/src/HelpDeskHero.UI",
+      "program": "${workspaceFolder}/src/TixeNex.UI/bin/Debug/net10.0/TixeNex.UI.dll",
+      "cwd": "${workspaceFolder}/src/TixeNex.UI",
       "stopAtEntry": false
     }
   ]

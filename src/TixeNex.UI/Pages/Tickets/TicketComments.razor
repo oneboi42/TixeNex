@@ -1,0 +1,144 @@
+@using TixeNex.Shared.Contracts.Tickets
+@using TixeNex.UI.Services.Api
+
+@inject TicketCommentApiClient CommentApi
+
+<section class="mt-4">
+    <h4>Comments</h4>
+
+    <ErrorBanner Message="@_error" />
+
+    @if (_loading)
+    {
+        <LoadingSpinner Text="Loading comments..." />
+    }
+    else if (_comments.Count == 0)
+    {
+        <EmptyState Title="No comments" Message="This ticket does not have any comments yet." />
+    }
+    else
+    {
+        <div class="list-group mb-3">
+            @foreach (var comment in _comments)
+            {
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between gap-3">
+                        <strong>@comment.CreatedByDisplayName</strong>
+                        <small class="text-muted">@comment.CreatedAtUtc.ToLocalTime().ToString("g")</small>
+                    </div>
+                    <div class="mt-2">@comment.Body</div>
+                </div>
+            }
+        </div>
+    }
+
+    <EditForm Model="_newComment" OnValidSubmit="HandleCreateAsync">
+        <DataAnnotationsValidator />
+
+        <div class="mb-2">
+            <label class="form-label" for="@_bodyInputId">New comment</label>
+            <InputTextArea id="@_bodyInputId"
+                           class="form-control"
+                           rows="4"
+                           maxlength="4000"
+                           disabled="@_saving"
+                           @bind-Value="_newComment.Body" />
+        </div>
+
+        <button class="btn btn-primary" type="submit" disabled="@_saving">
+            @(_saving ? "Saving..." : "Add comment")
+        </button>
+    </EditForm>
+
+    <AppToast @bind-Visible="_toastVisible"
+              Title="Comment added"
+              Message="The comment has been saved." />
+</section>
+
+@code {
+    [Parameter]
+    public int TicketId { get; set; }
+
+    private readonly string _bodyInputId = $"comment-body-{Guid.NewGuid():N}";
+    private List<TicketCommentDto> _comments = [];
+    private CreateTicketCommentDto _newComment = new();
+    private string? _error;
+    private bool _loading;
+    private bool _saving;
+    private bool _toastVisible;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadCommentsAsync();
+    }
+
+    private async Task LoadCommentsAsync()
+    {
+        _loading = true;
+        _error = null;
+
+        try
+        {
+            _comments = (await CommentApi.GetAllAsync(TicketId)).ToList();
+        }
+        catch
+        {
+            _error = "Failed to load comments.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task HandleCreateAsync()
+    {
+        var body = _newComment.Body.Trim();
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            _error = "The comment cannot be empty.";
+            return;
+        }
+
+        if (body.Length > 4000)
+        {
+            _error = "The comment cannot exceed 4,000 characters.";
+            return;
+        }
+
+        _saving = true;
+        _error = null;
+        _toastVisible = false;
+
+        try
+        {
+            var response = await CommentApi.CreateAsync(TicketId, new CreateTicketCommentDto
+            {
+                Body = body
+            });
+
+            if (!response.IsSuccessStatusCode)
+            {
+                _error = "Failed to add the comment.";
+                return;
+            }
+
+            var created = await response.Content.ReadFromJsonAsync<TicketCommentDto>();
+            if (created is not null)
+            {
+                _comments.Add(created);
+            }
+
+            _newComment = new CreateTicketCommentDto();
+            _toastVisible = true;
+        }
+        catch
+        {
+            _error = "Failed to add the comment.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

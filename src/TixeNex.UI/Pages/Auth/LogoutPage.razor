@@ -1,0 +1,19 @@
+@page "/logout"
+@attribute [Authorize]
+
+@using TixeNex.UI.Services.Api
+@using Microsoft.AspNetCore.Authorization
+
+@inject AuthApiClient AuthApi
+@inject NavigationManager Navigation
+
+<p>Wylogowywanie...</p>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await AuthApi.LogoutAsync();
+
+        Navigation.NavigateTo("/login", replace: true);
+    }
+}

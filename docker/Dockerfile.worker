@@ -2,17 +2,17 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 
 WORKDIR /src
 
-COPY HelpDeskHero.slnx ./
+COPY TixeNex.slnx ./
 
-COPY src/HelpDeskHero.Shared/HelpDeskHero.Shared.csproj src/HelpDeskHero.Shared/
-COPY src/HelpDeskHero.Api/HelpDeskHero.Api.csproj src/HelpDeskHero.Api/
-COPY src/HelpDeskHero.Worker/HelpDeskHero.Worker.csproj src/HelpDeskHero.Worker/
+COPY src/TixeNex.Shared/TixeNex.Shared.csproj src/TixeNex.Shared/
+COPY src/TixeNex.Api/TixeNex.Api.csproj src/TixeNex.Api/
+COPY src/TixeNex.Worker/TixeNex.Worker.csproj src/TixeNex.Worker/
 
-RUN dotnet restore src/HelpDeskHero.Worker/HelpDeskHero.Worker.csproj
+RUN dotnet restore src/TixeNex.Worker/TixeNex.Worker.csproj
 
 COPY . .
 
-RUN dotnet publish src/HelpDeskHero.Worker/HelpDeskHero.Worker.csproj \
+RUN dotnet publish src/TixeNex.Worker/TixeNex.Worker.csproj \
     -c Release \
     -o /app/publish \
     --no-restore \
@@ -26,4 +26,4 @@ WORKDIR /app
 
 COPY --from=build /app/publish .
 
-ENTRYPOINT ["dotnet", "HelpDeskHero.Worker.dll"]
+ENTRYPOINT ["dotnet", "TixeNex.Worker.dll"]

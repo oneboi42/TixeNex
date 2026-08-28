@@ -20,13 +20,13 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Restore
-        run: dotnet restore .\HelpDeskHero.slnx
+        run: dotnet restore .\TixeNex.slnx
 
       - name: Build
-        run: dotnet build .\HelpDeskHero.slnx --configuration Release --no-restore
+        run: dotnet build .\TixeNex.slnx --configuration Release --no-restore
 
       - name: Test UI
-        run: dotnet test .\tests\HelpDeskHero.UI.Tests\HelpDeskHero.UI.Tests.csproj --configuration Release --no-build
+        run: dotnet test .\tests\TixeNex.UI.Tests\TixeNex.UI.Tests.csproj --configuration Release --no-build
 
       - name: Test API Integration
-        run: dotnet test .\tests\HelpDeskHero.Api.IntegrationTests\HelpDeskHero.Api.IntegrationTests.csproj --configuration Release --no-build
+        run: dotnet test .\tests\TixeNex.Api.IntegrationTests\TixeNex.Api.IntegrationTests.csproj --configuration Release --no-build

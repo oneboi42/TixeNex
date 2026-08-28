@@ -1,0 +1,72 @@
+@if (Visible)
+{
+    <div class="modal-backdrop fade show"></div>
+
+    <div class="modal d-block" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+
+                <div class="modal-header">
+                    <h5 class="modal-title">@Title</h5>
+
+                    <button type="button"
+                            class="btn-close"
+                            aria-label="Close"
+                            @onclick="CancelAsync">
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    <p class="mb-0">@Message</p>
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-secondary"
+                            type="button"
+                            disabled="@Busy"
+                            @onclick="CancelAsync">
+                        Cancel
+                    </button>
+
+                    <button class="btn btn-danger"
+                            type="button"
+                            disabled="@Busy"
+                            @onclick="ConfirmAsync">
+                        @(Busy ? "Deleting..." : "Delete")
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool Visible { get; set; }
+
+    [Parameter]
+    public bool Busy { get; set; }
+
+    [Parameter]
+    public string Title { get; set; } = "Confirm deletion";
+
+    [Parameter]
+    public string Message { get; set; } = "Are you sure you want to delete this item?";
+
+    [Parameter]
+    public EventCallback OnConfirm { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private async Task ConfirmAsync()
+    {
+        await OnConfirm.InvokeAsync();
+    }
+
+    private async Task CancelAsync()
+    {
+        await OnCancel.InvokeAsync();
+    }
+}

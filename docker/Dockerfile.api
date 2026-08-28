@@ -1,16 +1,16 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY HelpDeskHero.slnx ./
+COPY TixeNex.slnx ./
 
-COPY src/HelpDeskHero.Shared/HelpDeskHero.Shared.csproj src/HelpDeskHero.Shared/
-COPY src/HelpDeskHero.Api/HelpDeskHero.Api.csproj src/HelpDeskHero.Api/
+COPY src/TixeNex.Shared/TixeNex.Shared.csproj src/TixeNex.Shared/
+COPY src/TixeNex.Api/TixeNex.Api.csproj src/TixeNex.Api/
 
-RUN dotnet restore src/HelpDeskHero.Api/HelpDeskHero.Api.csproj
+RUN dotnet restore src/TixeNex.Api/TixeNex.Api.csproj
 
 COPY . .
 
-RUN dotnet publish src/HelpDeskHero.Api/HelpDeskHero.Api.csproj \
+RUN dotnet publish src/TixeNex.Api/TixeNex.Api.csproj \
     -c Release \
     -o /app/publish \
     --no-restore \
@@ -25,4 +25,4 @@ RUN mkdir -p /app/App_Data/attachments
 
 EXPOSE 8080
 
-ENTRYPOINT ["dotnet", "HelpDeskHero.Api.dll"]
+ENTRYPOINT ["dotnet", "TixeNex.Api.dll"]

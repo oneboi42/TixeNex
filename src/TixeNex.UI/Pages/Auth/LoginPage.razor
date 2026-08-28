@@ -1,0 +1,177 @@
+@page "/login"
+@attribute [AllowAnonymous]
+
+@using TixeNex.Shared.Contracts.Auth
+@using TixeNex.UI.Services.Api
+@using Microsoft.AspNetCore.Authorization
+
+@inject NavigationManager Nav
+@inject AuthApiClient AuthApi
+
+<PageTitle>Login</PageTitle>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h3 class="card-title">Sign in</h3>
+                <p class="text-muted">
+                    Use a regular TixeNex account.
+                </p>
+
+                @if (!string.IsNullOrWhiteSpace(_error))
+                {
+                    <div class="alert alert-danger">@_error</div>
+                }
+
+                <EditForm Model="_model" OnValidSubmit="HandleLoginAsync">
+                    <DataAnnotationsValidator />
+                    <ValidationSummary />
+
+                    <div class="mb-3">
+                        <label class="form-label">Login</label>
+                        <InputText class="form-control" @bind-Value="_model.UserName" />
+                        <ValidationMessage For="@(() => _model.UserName)" />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <InputText class="form-control" type="password" @bind-Value="_model.Password" />
+                        <ValidationMessage For="@(() => _model.Password)" />
+                    </div>
+
+                    <button class="btn btn-primary"
+                            type="submit"
+                            disabled="@IsAnyLoginBusy">
+                        @(_regularLoginBusy ? "Signing in..." : "Sign in")
+                    </button>
+                </EditForm>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card h-100 border-primary">
+            <div class="card-body">
+                <h3 class="card-title">Public Demo Workspace</h3>
+
+                <p>
+                    Start a temporary account without entering credentials.
+                    Demo visitors share the same demo tickets, so you may see
+                    changes made by other visitors.
+                </p>
+
+                <p class="text-muted">
+                    Roles keep their normal permissions. Demo data and temporary
+                    accounts are removed automatically after their demo lifetime.
+                </p>
+
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-primary"
+                            disabled="@IsAnyLoginBusy"
+                            @onclick='() => HandleDemoLoginAsync("User")'>
+                        @DemoButtonText("User", "Explore as User")
+                    </button>
+
+                    <button class="btn btn-outline-primary"
+                            disabled="@IsAnyLoginBusy"
+                            @onclick='() => HandleDemoLoginAsync("Agent")'>
+                        @DemoButtonText("Agent", "Explore as Agent")
+                    </button>
+
+                    <button class="btn btn-outline-primary"
+                            disabled="@IsAnyLoginBusy"
+                            @onclick='() => HandleDemoLoginAsync("Admin")'>
+                        @DemoButtonText("Admin", "Explore as Admin")
+                    </button>
+                </div>
+
+                <div class="alert alert-info mt-3 mb-0">
+                    Demo accounts are temporary. Do not enter personal or sensitive
+                    information into demo tickets.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginRequestDto _model = new()
+    {
+        DeviceName = Environment.MachineName
+    };
+
+    private bool _regularLoginBusy;
+    private string? _demoBusyRole;
+    private string? _error;
+
+    private bool IsAnyLoginBusy =>
+        _regularLoginBusy || _demoBusyRole is not null;
+
+    private async Task HandleLoginAsync()
+    {
+        if (IsAnyLoginBusy)
+            return;
+
+        _regularLoginBusy = true;
+        _error = null;
+
+        try
+        {
+            var ok = await AuthApi.LoginAsync(_model);
+
+            if (!ok)
+            {
+                _error = "Invalid username or password.";
+                return;
+            }
+
+            Nav.NavigateTo("/tickets");
+        }
+        catch (Exception ex)
+        {
+            _error = $"Sign-in error: {ex.Message}";
+        }
+        finally
+        {
+            _regularLoginBusy = false;
+        }
+    }
+
+    private async Task HandleDemoLoginAsync(string role)
+    {
+        if (IsAnyLoginBusy)
+            return;
+
+        _demoBusyRole = role;
+        _error = null;
+
+        try
+        {
+            var ok = await AuthApi.StartDemoSessionAsync(
+                role,
+                "Demo browser");
+
+            if (!ok)
+            {
+                _error = "Could not start the demo session. The demo may be temporarily unavailable or at capacity.";
+                return;
+            }
+
+            Nav.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not start the demo session: {ex.Message}";
+        }
+        finally
+        {
+            _demoBusyRole = null;
+        }
+    }
+
+    private string DemoButtonText(string role, string defaultText) =>
+        _demoBusyRole == role
+            ? "Starting demo..."
+            : defaultText;
+}

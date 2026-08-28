@@ -1,0 +1,44 @@
+@if (ErrorMessages.Count > 0)
+{
+    <div class="alert alert-danger" role="alert">
+        @if (!string.IsNullOrWhiteSpace(Title))
+        {
+            <div class="fw-bold mb-1">@Title</div>
+        }
+
+        @if (ErrorMessages.Count == 1)
+        {
+            <div>@ErrorMessages[0]</div>
+        }
+        else
+        {
+            <ul class="mb-0">
+                @foreach (var message in ErrorMessages)
+                {
+                    <li>@message</li>
+                }
+            </ul>
+        }
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string? Message { get; set; }
+
+    [Parameter]
+    public string Title { get; set; } = "An error occurred";
+
+    private List<string> ErrorMessages
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(Message))
+                return [];
+
+            return Message
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .ToList();
+        }
+    }
+}
