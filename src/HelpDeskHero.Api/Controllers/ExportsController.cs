@@ -15,6 +15,8 @@ namespace HelpDeskHero.Api.Controllers;
 [Authorize]
 public class ExportsController : ControllerBase
 {
+    private const int MaxActiveExportsPerUser = 3;
+
     private readonly AppDbContext _db;
     private readonly IMessagePublisher _publisher;
     private readonly IExportObjectStorage _exportObjectStorage;
@@ -50,6 +52,16 @@ public class ExportsController : ControllerBase
 
         if (!IsScopeAllowed(callerRole, scope))
             return Forbid();
+
+        var activeExportCount = await _db.ExportJobs.CountAsync(
+            exportJob =>
+                exportJob.UserId == userId &&
+                (exportJob.Status == ExportStatus.Pending ||
+                 exportJob.Status == ExportStatus.Running),
+            cancellationToken);
+
+        if (activeExportCount >= MaxActiveExportsPerUser)
+            return ActiveExportLimitReached();
 
         var job = new ExportJob
         {
@@ -273,6 +285,21 @@ public class ExportsController : ControllerBase
 
         details.Extensions["code"] = "validation_error";
         return BadRequest(details);
+    }
+
+    private ObjectResult ActiveExportLimitReached()
+    {
+        var problem = new ProblemDetails
+        {
+            Status = StatusCodes.Status429TooManyRequests,
+            Title = "Active export limit reached",
+            Detail = "Wait for an existing export to finish before creating another.",
+            Type = "https://httpstatuses.com/429",
+            Instance = HttpContext.Request.Path
+        };
+
+        problem.Extensions["code"] = "active_export_limit_reached";
+        return StatusCode(StatusCodes.Status429TooManyRequests, problem);
     }
 
     private enum ExportCallerRole

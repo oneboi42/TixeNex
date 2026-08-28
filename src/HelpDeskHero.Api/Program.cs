@@ -1,4 +1,5 @@
 using System.Net;
+using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 using Hangfire;
@@ -34,6 +35,7 @@ var isTesting = builder.Environment.IsEnvironment("Testing");
 
 const string CorsPolicyName = "BlazorUi";
 const string LoginRateLimitPolicyName = "login";
+const string DemoSessionRateLimitPolicyName = "demo-session";
 
 builder.Services.AddCors(options =>
 {
@@ -77,6 +79,25 @@ builder.Services.AddRateLimiter(options =>
         var permitLimit = httpContext.RequestServices
             .GetRequiredService<IConfiguration>()
             .GetValue("RateLimiting:Login:PermitLimit", 5);
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey:
+                httpContext.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = permitLimit,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                AutoReplenishment = true
+            });
+    });
+    options.AddPolicy(DemoSessionRateLimitPolicyName, httpContext =>
+    {
+        var permitLimit = httpContext.RequestServices
+            .GetRequiredService<IConfiguration>()
+            .GetValue("RateLimiting:DemoSession:PermitLimit", 3);
 
         return RateLimitPartition.GetFixedWindowLimiter(
             partitionKey:
@@ -219,6 +240,34 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
 
         options.Events = new JwtBearerEvents
         {
+            OnTokenValidated = async context =>
+            {
+                var userId = context.Principal?
+                    .FindFirstValue(ClaimTypes.NameIdentifier);
+                var userManager = context.HttpContext.RequestServices
+                    .GetRequiredService<UserManager<ApplicationUser>>();
+                var user = string.IsNullOrWhiteSpace(userId)
+                    ? null
+                    : await userManager.FindByIdAsync(userId);
+
+                if (user is null || !user.IsActive ||
+                    context.Principal?.Identity is not ClaimsIdentity identity)
+                {
+                    context.Fail("The user account is unavailable.");
+                    return;
+                }
+
+                foreach (var roleClaim in
+                    identity.FindAll(ClaimTypes.Role).ToArray())
+                {
+                    identity.RemoveClaim(roleClaim);
+                }
+
+                var currentRoles = await userManager.GetRolesAsync(user);
+                identity.AddClaims(
+                    currentRoles.Select(
+                        role => new Claim(ClaimTypes.Role, role)));
+            },
             OnMessageReceived = context =>
             {
                 var accessToken = context.Request.Query["access_token"];

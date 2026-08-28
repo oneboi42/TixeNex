@@ -84,6 +84,18 @@ public sealed class TicketAttachmentsController : ControllerBase
         if (string.IsNullOrWhiteSpace(userId))
             return UnauthorizedProblem();
 
+        var attachmentCount = await _db.TicketAttachments
+            .CountAsync(x => x.UploadedByUserId == userId, ct);
+        var totalSizeBytes = await _db.TicketAttachments
+            .Where(x => x.UploadedByUserId == userId)
+            .SumAsync(x => (long?)x.SizeBytes, ct) ?? 0;
+
+        if (attachmentCount >= AttachmentValidation.MaxAttachmentsPerUser ||
+            totalSizeBytes > AttachmentValidation.MaxTotalSizeBytesPerUser - file!.Length)
+        {
+            return AttachmentQuotaExceeded();
+        }
+
         var stored = await _storage.SaveAsync(file!, ct);
 
         var entity = new TicketAttachment
@@ -220,6 +232,22 @@ public sealed class TicketAttachmentsController : ControllerBase
         problem.Extensions["code"] = "attachment_not_found";
 
         return StatusCode(StatusCodes.Status404NotFound, problem);
+    }
+
+    private ObjectResult AttachmentQuotaExceeded()
+    {
+        var problem = new ProblemDetails
+        {
+            Status = StatusCodes.Status413PayloadTooLarge,
+            Title = "Attachment quota exceeded",
+            Detail = "Uploading this file would exceed your attachment quota.",
+            Type = "https://httpstatuses.com/413",
+            Instance = HttpContext.Request.Path
+        };
+
+        problem.Extensions["code"] = "attachment_quota_exceeded";
+
+        return StatusCode(StatusCodes.Status413PayloadTooLarge, problem);
     }
 
     private ObjectResult UnauthorizedProblem()

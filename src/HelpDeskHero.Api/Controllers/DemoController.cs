@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace HelpDeskHero.Api.Controllers;
 
@@ -46,6 +47,7 @@ public sealed class DemoController : ControllerBase
 
     [HttpPost("sessions")]
     [AllowAnonymous]
+    [EnableRateLimiting("demo-session")]
     public async Task<ActionResult<TokenResponseDto>> CreateSession(
         CreateDemoSessionRequestDto dto,
         CancellationToken ct)

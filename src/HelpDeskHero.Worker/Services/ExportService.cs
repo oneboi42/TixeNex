@@ -36,19 +36,23 @@ public sealed class ExportService : IExportService
         Guid jobId,
         CancellationToken cancellationToken)
     {
-        var job = await _db.ExportJobs
-            .FirstOrDefaultAsync(
-                exportJob => exportJob.Id == jobId,
-                cancellationToken);
+        var claimed = await ClaimPendingJobAsync(
+            _db,
+            jobId,
+            cancellationToken);
 
-        if (job is null)
+        if (!claimed)
         {
-            _logger.LogWarning(
-                "Export job {JobId} was not found.",
+            _logger.LogInformation(
+                "Export job {JobId} was not found or is no longer Pending.",
                 jobId);
 
             return;
         }
+
+        var job = await _db.ExportJobs.SingleAsync(
+            exportJob => exportJob.Id == jobId,
+            cancellationToken);
 
         var metadataError = ValidateMetadata(job);
 
@@ -71,14 +75,6 @@ public sealed class ExportService : IExportService
 
         try
         {
-            job.Status = ExportStatus.Running;
-            job.CompletedAt = null;
-            job.FileName = null;
-            job.StorageObjectName = null;
-            job.ErrorMessage = null;
-
-            await _db.SaveChangesAsync(cancellationToken);
-
             _logger.LogInformation(
                 "Export job {JobId} changed to Running.",
                 jobId);
@@ -216,6 +212,27 @@ public sealed class ExportService : IExportService
                     jobId);
             }
         }
+    }
+
+    internal static async Task<bool> ClaimPendingJobAsync(
+        AppDbContext db,
+        Guid jobId,
+        CancellationToken cancellationToken)
+    {
+        var updated = await db.ExportJobs
+            .Where(job =>
+                job.Id == jobId &&
+                job.Status == ExportStatus.Pending)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(job => job.Status, ExportStatus.Running)
+                    .SetProperty(job => job.CompletedAt, (DateTime?)null)
+                    .SetProperty(job => job.FileName, (string?)null)
+                    .SetProperty(job => job.StorageObjectName, (string?)null)
+                    .SetProperty(job => job.ErrorMessage, (string?)null),
+                cancellationToken);
+
+        return updated == 1;
     }
 
     private static string? ValidateMetadata(ExportJob job)

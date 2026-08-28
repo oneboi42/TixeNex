@@ -1,4 +1,3 @@
-using System.Text;
 using System.Text.Json;
 using HelpDeskHero.Worker.Services;
 using Microsoft.Extensions.Configuration;
@@ -64,46 +63,28 @@ public class RabbitMqConsumer : BackgroundService
         
         consumer.ReceivedAsync += async (model, ea) =>
         {
-            var body = ea.Body.ToArray();
-            var json = Encoding.UTF8.GetString(body);
-
-            _logger.LogInformation("RECEIVED MESSAGE FROM RABBITMQ: {Json}", json);
-
-            try
-            {
-                using var doc = JsonDocument.Parse(json);
-
-                if (doc.RootElement.TryGetProperty("ExportJobId", out var idProp) ||
-                    doc.RootElement.TryGetProperty("id", out idProp) ||
-                    doc.RootElement.TryGetProperty("jobId", out idProp) ||
-                    doc.RootElement.TryGetProperty("JobId", out idProp))
+            await ExportMessageHandler.HandleAsync(
+                ea.Body,
+                async jobId =>
                 {
-                    var rawVal = idProp.GetString();
-                    if (Guid.TryParse(rawVal, out var jobId))
-                    {
-                        _logger.LogInformation("Processing export job {JobId}...", jobId);
+                    using var scope = _scopeFactory.CreateScope();
+                    var exportService = scope.ServiceProvider
+                        .GetRequiredService<IExportService>();
 
-                        using var scope = _scopeFactory.CreateScope();
-                        var exportService = scope.ServiceProvider.GetRequiredService<IExportService>();
-
-                        await exportService.ProcessExportAsync(jobId, stoppingToken);
-                    }
-                    else
-                    {
-                        _logger.LogWarning("Could not parse Guid from property value: {Value}", rawVal);
-                    }
-                }
-                else
-                {
-                    _logger.LogWarning("Target Id property not found in JSON payload");
-                }
-
-                await channel.BasicAckAsync(deliveryTag: ea.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error processing RabbitMQ message");
-            }
+                    await exportService.ProcessExportAsync(
+                        jobId,
+                        stoppingToken);
+                },
+                acknowledge: () => channel.BasicAckAsync(
+                    deliveryTag: ea.DeliveryTag,
+                    multiple: false,
+                    cancellationToken: CancellationToken.None).AsTask(),
+                retry: () => channel.BasicNackAsync(
+                    deliveryTag: ea.DeliveryTag,
+                    multiple: false,
+                    requeue: true,
+                    cancellationToken: CancellationToken.None).AsTask(),
+                _logger);
         };
 
         await channel.BasicConsumeAsync(
@@ -117,4 +98,79 @@ public class RabbitMqConsumer : BackgroundService
             await Task.Delay(1000, stoppingToken);
         }
     }
+}
+
+internal static class ExportMessageHandler
+{
+    internal static async Task HandleAsync(
+        ReadOnlyMemory<byte> body,
+        Func<Guid, Task> process,
+        Func<Task> acknowledge,
+        Func<Task> retry,
+        ILogger logger)
+    {
+        if (!TryParseJobId(body, out var jobId))
+        {
+            logger.LogWarning(
+                "Discarding unusable export message and acknowledging it.");
+            await acknowledge();
+            return;
+        }
+
+        try
+        {
+            logger.LogInformation(
+                "Processing export job {JobId}...",
+                jobId);
+            await process(jobId);
+        }
+        catch (Exception exception)
+        {
+            logger.LogError(
+                exception,
+                "Error processing export job {JobId}; message will be retried.",
+                jobId);
+            await retry();
+            return;
+        }
+
+        await acknowledge();
+    }
+
+    internal static bool TryParseJobId(
+        ReadOnlyMemory<byte> body,
+        out Guid jobId)
+    {
+        jobId = default;
+
+        if (body.IsEmpty)
+            return false;
+
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            var root = document.RootElement;
+
+            if (root.ValueKind != JsonValueKind.Object ||
+                !TryGetIdProperty(root, out var idProperty) ||
+                idProperty.ValueKind != JsonValueKind.String)
+            {
+                return false;
+            }
+
+            return Guid.TryParse(idProperty.GetString(), out jobId);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryGetIdProperty(
+        JsonElement root,
+        out JsonElement idProperty) =>
+        root.TryGetProperty("ExportJobId", out idProperty) ||
+        root.TryGetProperty("id", out idProperty) ||
+        root.TryGetProperty("jobId", out idProperty) ||
+        root.TryGetProperty("JobId", out idProperty);
 }
