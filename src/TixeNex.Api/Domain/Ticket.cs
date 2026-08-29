@@ -1,5 +1,12 @@
 namespace TixeNex.Api.Domain;
 
+public enum TicketOrigin
+{
+    Normal = 0,
+    DemoSeed = 1,
+    DemoUser = 2
+}
+
 public sealed class Ticket
 {
     public int Id { get; set; }
@@ -8,6 +15,7 @@ public sealed class Ticket
     public string Description { get; set; } = string.Empty;
     public string Status { get; set; } = "New";
     public string Priority { get; set; } = "Medium";
+    public TicketOrigin Origin { get; set; }
 
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? UpdatedAtUtc { get; set; }

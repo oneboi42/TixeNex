@@ -35,6 +35,7 @@ public sealed class DemoCleanupJobTests
                 Description = "Should be physically removed",
                 Status = "New",
                 Priority = "Medium",
+                Origin = TicketOrigin.DemoUser,
                 CreatedAtUtc = now.AddHours(-1),
                 RequesterUserId = requester.Id,
                 DemoExpiresAtUtc = now.AddMinutes(-1)
@@ -47,9 +48,23 @@ public sealed class DemoCleanupJobTests
                 Description = "Must survive cleanup",
                 Status = "New",
                 Priority = "Medium",
+                Origin = TicketOrigin.Normal,
                 CreatedAtUtc = now.AddHours(-1),
                 RequesterUserId = requester.Id,
                 DemoExpiresAtUtc = null
+            },
+            new Ticket
+            {
+                Id = 3,
+                Number = "HDH-DEMO-SEED-1",
+                Title = "Seeded demo ticket",
+                Description = "Must survive cleanup even when expired",
+                Status = "New",
+                Priority = "Medium",
+                Origin = TicketOrigin.DemoSeed,
+                CreatedAtUtc = now.AddHours(-1),
+                RequesterUserId = requester.Id,
+                DemoExpiresAtUtc = now.AddMinutes(-1)
             });
 
         db.TicketComments.Add(new TicketComment
@@ -99,6 +114,11 @@ public sealed class DemoCleanupJobTests
         (await db.Tickets
                 .IgnoreQueryFilters()
                 .AnyAsync(x => x.Id == 2))
+            .Should().BeTrue();
+
+        (await db.Tickets
+                .IgnoreQueryFilters()
+                .AnyAsync(x => x.Id == 3))
             .Should().BeTrue();
 
         fileStorage.DeletedPaths.Should()
@@ -233,6 +253,7 @@ public sealed class DemoCleanupJobTests
                 Description = "Must survive cleanup",
                 Status = "New",
                 Priority = "Medium",
+                Origin = TicketOrigin.DemoUser,
                 CreatedAtUtc = now,
                 RequesterUserId = activeDemoUser.Id,
                 DemoExpiresAtUtc = now.AddHours(1)
@@ -245,6 +266,7 @@ public sealed class DemoCleanupJobTests
                 Description = "Must survive cleanup",
                 Status = "New",
                 Priority = "Medium",
+                Origin = TicketOrigin.Normal,
                 CreatedAtUtc = now,
                 RequesterUserId = normalUser.Id
             });
@@ -301,6 +323,7 @@ public sealed class DemoCleanupJobTests
             Description = "Assignee expires before this ticket",
             Status = "New",
             Priority = "Medium",
+            Origin = TicketOrigin.DemoUser,
             CreatedAtUtc = now,
             RequesterUserId = activeRequester.Id,
             AssignedToUserId = expiredAgent.Id,
@@ -347,6 +370,7 @@ public sealed class DemoCleanupJobTests
             Description = "Should only delete external objects once",
             Status = "New",
             Priority = "Medium",
+            Origin = TicketOrigin.DemoUser,
             CreatedAtUtc = now.AddMinutes(-10),
             RequesterUserId = expiredUser.Id,
             DemoExpiresAtUtc = now.AddMinutes(-1)

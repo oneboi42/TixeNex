@@ -59,6 +59,7 @@ public static class DbSeeder
         await CreateUserIfMissingAsync(userManager, "demo-agent-2", "demo-agent-2@demo.Tixenex.local", "Demo Agent 2", agentPassword, resetPasswords, ["Agent"], isDemoWorkspace: true);
 
         await SeedSlaPoliciesAsync(db, ct);
+        await SeedDemoTicketsAsync(db, userManager, ct);
     }
 
     private static bool IsSeedPasswordResetEnabled(IConfiguration configuration)
@@ -221,5 +222,58 @@ public static class DbSeeder
             ResolveMinutes = resolveMinutes,
             IsActive = true
         });
+    }
+
+    private static async Task SeedDemoTicketsAsync(
+        AppDbContext db,
+        UserManager<ApplicationUser> userManager,
+        CancellationToken ct)
+    {
+        var hasDemoTickets = await db.Tickets
+            .IgnoreQueryFilters()
+            .AnyAsync(x => x.Origin == TicketOrigin.DemoSeed, ct);
+
+        if (hasDemoTickets)
+            return;
+
+        var demoAgent1 = await userManager.FindByNameAsync("demo-agent-1");
+        var demoAgent2 = await userManager.FindByNameAsync("demo-agent-2");
+
+        if (demoAgent1 is null || demoAgent2 is null)
+            return;
+
+        var now = DateTime.UtcNow;
+        var tickets = new List<Ticket>();
+
+        string[] priorities = ["Low", "Medium", "High", "Critical"];
+        string[] statuses = ["New", "InProgress", "Resolved", "Closed"];
+
+        for (int i = 1; i <= 6; i++)
+        {
+            var numberSuffix = Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
+            
+            var requesterAgent = i <= 3 ? demoAgent1 : demoAgent2;
+
+            string? assignedUserId = (i == 1 || i == 2) ? null : requesterAgent.Id;
+
+            var ticket = new Ticket
+            {
+                Number = $"HDH-SEED-{now:yyyyMMdd}-{i:D2}-{numberSuffix}",
+                Title = $"Sample Seeded Ticket {i}",
+                Description = $"This is a seeded demo ticket for exploration. Created at {now:f}.",
+                Priority = priorities[i % priorities.Length],
+                Status = statuses[i % statuses.Length],
+                Origin = TicketOrigin.DemoSeed,
+                CreatedAtUtc = now.AddDays(-i),
+                RequesterUserId = requesterAgent.Id,
+                AssignedToUserId = assignedUserId,
+                DemoExpiresAtUtc = null
+            };
+
+            tickets.Add(ticket);
+        }
+
+        db.Tickets.AddRange(tickets);
+        await db.SaveChangesAsync(ct);
     }
 }

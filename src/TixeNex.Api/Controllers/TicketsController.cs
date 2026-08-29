@@ -125,7 +125,7 @@ public sealed class TicketsController : ControllerBase
                 IsRequesterCurrentUser =
                     x.RequesterUserId == visibilityContext.UserId,
                 IsDemoTicket =
-                    x.DemoExpiresAtUtc != null,
+                    x.Origin != TicketOrigin.Normal,
                 DemoExpiresAtUtc =
                     x.DemoExpiresAtUtc,
                 AssignedToUserId = x.AssignedToUserId,
@@ -317,6 +317,7 @@ public sealed class TicketsController : ControllerBase
             Description = dto.Description.Trim(),
             Priority = dto.Priority,
             Status = "New",
+            Origin = currentUser.IsDemoUser ? TicketOrigin.DemoUser : TicketOrigin.Normal,
             CreatedAtUtc = now,
             RequesterUserId = currentUserId,
             DemoExpiresAtUtc = currentUser.IsDemoWorkspace
@@ -895,7 +896,7 @@ public sealed class TicketsController : ControllerBase
         UpdatedAtUtc = entity.UpdatedAtUtc,
         RequesterDisplayName = requesterDisplayName,
         IsRequesterCurrentUser = entity.RequesterUserId == context.UserId,
-        IsDemoTicket = entity.DemoExpiresAtUtc != null,
+        IsDemoTicket = entity.Origin != TicketOrigin.Normal,
         DemoExpiresAtUtc = entity.DemoExpiresAtUtc,
         AssignedToUserId = entity.AssignedToUserId,
         AssignedToDisplayName = entity.AssignedToUserId is null
