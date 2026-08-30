@@ -1,5 +1,6 @@
 using TixeNex.Api.Application.Interfaces;
 using TixeNex.Api.BackgroundJobs.Contracts;
+using TixeNex.Api.Domain;
 using TixeNex.Api.Infrastructure.Persistence;
 using TixeNex.Api.Infrastructure.Storage;
 using Microsoft.EntityFrameworkCore;
@@ -34,6 +35,7 @@ public sealed class DemoCleanupJob : IDemoCleanupJob
             .IgnoreQueryFilters()
             .AsNoTracking()
             .Where(ticket =>
+                ticket.Origin == TicketOrigin.DemoUser &&
                 ticket.DemoExpiresAtUtc != null &&
                 ticket.DemoExpiresAtUtc <= now)
             .Select(ticket => ticket.Id)

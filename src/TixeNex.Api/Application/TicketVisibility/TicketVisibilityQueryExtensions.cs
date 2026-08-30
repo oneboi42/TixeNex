@@ -16,8 +16,8 @@ public static class TicketVisibilityQueryExtensions
         bool isDemoWorkspace)
     {
         return isDemoWorkspace
-            ? query.Where(ticket => ticket.DemoExpiresAtUtc != null)
-            : query.Where(ticket => ticket.DemoExpiresAtUtc == null);
+            ? query.Where(ticket => ticket.DemoExpiresAtUtc != null || ticket.Origin == TicketOrigin.DemoSeed || ticket.Origin == TicketOrigin.DemoUser)
+            : query.Where(ticket => ticket.DemoExpiresAtUtc == null && ticket.Origin == TicketOrigin.Normal);
     }
 
     public static IQueryable<Ticket> ApplyVisibility(
