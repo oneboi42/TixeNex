@@ -3,6 +3,7 @@ using System.Text;
 using CsvHelper;
 using CsvHelper.TypeConversion;
 using TixeNex.Api.Domain;
+using TixeNex.Api.Application.TicketVisibility;
 using TixeNex.Api.Infrastructure.Persistence;
 using TixeNex.Worker.Models;
 using Microsoft.EntityFrameworkCore;
@@ -94,24 +95,10 @@ public sealed class ExportService : IExportService
                     $"Export owner {job.UserId} was not found.");
             }
 
-            var ticketQuery = _db.Tickets
-                .AsNoTracking()
-                .Where(ticket => !ticket.IsDeleted);
-
-            ticketQuery = exportOwner.IsDemoWorkspace
-                ? ticketQuery.Where(ticket => ticket.DemoExpiresAtUtc != null)
-                : ticketQuery.Where(ticket => ticket.DemoExpiresAtUtc == null);
-
-            ticketQuery = job.Scope switch
-            {
-                ExportScope.Own => ticketQuery.Where(
-                    ticket => ticket.RequesterUserId == job.UserId),
-                ExportScope.Assigned => ticketQuery.Where(
-                    ticket => ticket.AssignedToUserId == job.UserId),
-                ExportScope.All => ticketQuery,
-                _ => throw new InvalidOperationException(
-                    "Export scope was validated before query construction.")
-            };
+            var ticketQuery = ApplyTicketFilters(
+                _db.Tickets.AsNoTracking(),
+                job,
+                exportOwner.IsDemoWorkspace);
 
             var rows = await ticketQuery
                 .OrderByDescending(ticket => ticket.CreatedAtUtc)
@@ -139,6 +126,7 @@ public sealed class ExportService : IExportService
                     DueResolveAtUtc = ticket.DueResolveAtUtc
                 })
                 .ToListAsync(cancellationToken);
+
             var fileName =
                 $"tickets_{DateTime.UtcNow:yyyyMMdd_HHmmss}.csv";
 
@@ -161,7 +149,6 @@ public sealed class ExportService : IExportService
                 objectName: objectName,
                 contentType: "text/csv",
                 cancellationToken: cancellationToken);
-
 
             job.Status = ExportStatus.Completed;
             job.CompletedAt = DateTime.UtcNow;
@@ -212,6 +199,30 @@ public sealed class ExportService : IExportService
                     jobId);
             }
         }
+    }
+
+    internal static IQueryable<Ticket> ApplyTicketFilters(
+        IQueryable<Ticket> ticketQuery,
+        ExportJob job,
+        bool isDemoWorkspace)
+    {
+        ticketQuery = ticketQuery
+            .Where(ticket => !ticket.IsDeleted)
+            .ApplyWorkspace(isDemoWorkspace);
+
+        return job.Scope switch
+        {
+            ExportScope.Own => ticketQuery.Where(
+                ticket => ticket.RequesterUserId == job.UserId),
+
+            ExportScope.Assigned => ticketQuery.Where(
+                ticket => ticket.AssignedToUserId == job.UserId),
+
+            ExportScope.All => ticketQuery,
+
+            _ => throw new InvalidOperationException(
+                "Export scope was validated before query construction.")
+        };
     }
 
     internal static async Task<bool> ClaimPendingJobAsync(
