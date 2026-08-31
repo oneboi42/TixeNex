@@ -13,6 +13,136 @@ namespace TixeNex.Api.IntegrationTests.BackgroundJobs;
 public sealed class DemoCleanupJobTests
 {
     [Fact]
+    public async Task ResetSeededDemoTickets_RestoresCanonicalTicketStateInPlace()
+    {
+        await using var db = CreateContext();
+        var now = DateTime.UtcNow;
+        var demoAgent1 = User(
+            id: "demo-agent-1",
+            isDemoWorkspace: true,
+            isDemoUser: false,
+            absoluteExpiry: null);
+        var demoAgent2 = User(
+            id: "demo-agent-2",
+            isDemoWorkspace: true,
+            isDemoUser: false,
+            absoluteExpiry: null);
+        var createdAt = now.AddDays(-20);
+
+        db.Users.AddRange(demoAgent1, demoAgent2);
+        db.Tickets.Add(new Ticket
+        {
+            Id = 50,
+            Number = "HDH-SEED-20260831-05-ABCDEF",
+            Title = "Visitor changed title",
+            Description = "Visitor changed description",
+            Status = "Closed",
+            Priority = "Critical",
+            Origin = TicketOrigin.DemoSeed,
+            CreatedAtUtc = createdAt,
+            UpdatedAtUtc = now,
+            DueFirstResponseAtUtc = now.AddHours(1),
+            DueResolveAtUtc = now.AddHours(2),
+            FirstRespondedAtUtc = now.AddMinutes(-20),
+            ResolvedAtUtc = now.AddMinutes(-10),
+            RequesterUserId = demoAgent1.Id,
+            AssignedToUserId = demoAgent1.Id,
+            DemoExpiresAtUtc = now.AddMinutes(-1),
+            EscalationLevel = 3,
+            LastNotifiedAtUtc = now,
+            IsDeleted = true,
+            DeletedAtUtc = now,
+            DeletedByUserId = demoAgent1.Id
+        });
+
+        await db.SaveChangesAsync();
+
+        await CreateJob(
+                db,
+                new RecordingFileStorage(),
+                new RecordingExportObjectStorage())
+            .ResetSeededDemoTicketsAsync();
+
+        var restored = await db.Tickets
+            .IgnoreQueryFilters()
+            .SingleAsync(ticket => ticket.Id == 50);
+
+        restored.Number.Should().Be("HDH-SEED-20260831-05-ABCDEF");
+        restored.Title.Should().Be("Sample Seeded Ticket 5");
+        restored.Description.Should().Be("This is a seeded demo ticket for exploration.");
+        restored.Status.Should().Be("InProgress");
+        restored.Priority.Should().Be("Medium");
+        restored.Origin.Should().Be(TicketOrigin.DemoSeed);
+        restored.CreatedAtUtc.Should().Be(createdAt);
+        restored.UpdatedAtUtc.Should().BeNull();
+        restored.DueFirstResponseAtUtc.Should().BeNull();
+        restored.DueResolveAtUtc.Should().BeNull();
+        restored.FirstRespondedAtUtc.Should().BeNull();
+        restored.ResolvedAtUtc.Should().BeNull();
+        restored.RequesterUserId.Should().Be(demoAgent2.Id);
+        restored.AssignedToUserId.Should().Be(demoAgent2.Id);
+        restored.DemoExpiresAtUtc.Should().BeNull();
+        restored.EscalationLevel.Should().Be(0);
+        restored.LastNotifiedAtUtc.Should().BeNull();
+        restored.IsDeleted.Should().BeFalse();
+        restored.DeletedAtUtc.Should().BeNull();
+        restored.DeletedByUserId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ResetSeededDemoTickets_CanRunRepeatedlyWithoutCreatingDuplicates()
+    {
+        await using var db = CreateContext();
+        var demoAgent1 = User(
+            id: "demo-agent-1",
+            isDemoWorkspace: true,
+            isDemoUser: false,
+            absoluteExpiry: null);
+        var demoAgent2 = User(
+            id: "demo-agent-2",
+            isDemoWorkspace: true,
+            isDemoUser: false,
+            absoluteExpiry: null);
+
+        db.Users.AddRange(demoAgent1, demoAgent2);
+        db.Tickets.Add(new Ticket
+        {
+            Id = 51,
+            Number = "HDH-SEED-20260831-01-ABCDEF",
+            Title = "Changed",
+            Description = "Changed",
+            Status = "Resolved",
+            Priority = "Critical",
+            Origin = TicketOrigin.DemoSeed,
+            CreatedAtUtc = DateTime.UtcNow.AddDays(-1),
+            AssignedToUserId = demoAgent2.Id
+        });
+
+        await db.SaveChangesAsync();
+
+        var job = CreateJob(
+            db,
+            new RecordingFileStorage(),
+            new RecordingExportObjectStorage());
+
+        await job.ResetSeededDemoTicketsAsync();
+        await job.ResetSeededDemoTicketsAsync();
+
+        var tickets = await db.Tickets
+            .IgnoreQueryFilters()
+            .Where(ticket => ticket.Origin == TicketOrigin.DemoSeed)
+            .ToListAsync();
+
+        tickets.Should().ContainSingle();
+        tickets[0].Id.Should().Be(51);
+        tickets[0].Number.Should().Be("HDH-SEED-20260831-01-ABCDEF");
+        tickets[0].Status.Should().Be("InProgress");
+        tickets[0].Priority.Should().Be("Medium");
+        tickets[0].RequesterUserId.Should().Be(demoAgent1.Id);
+        tickets[0].AssignedToUserId.Should().BeNull();
+    }
+
+    [Fact]
     public async Task CleanupExpiredDemoData_DeletesExpiredTicketGraphAndAttachmentFile()
     {
         await using var db = CreateContext();

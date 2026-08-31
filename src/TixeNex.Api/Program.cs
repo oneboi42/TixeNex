@@ -400,11 +400,20 @@ if (!app.Environment.IsEnvironment("Testing"))
                 job.CleanupExpiredDemoDataAsync(
                     default),
             "*/10 * * * *");
+
+        recurringJobManager.AddOrUpdate<IDemoCleanupJob>(
+            "demo-seed-reset",
+            job =>
+                job.ResetSeededDemoTicketsAsync(
+                    default),
+            "0 0 * * *");
     }
     else
     {
         recurringJobManager.RemoveIfExists(
             "demo-cleanup");
+        recurringJobManager.RemoveIfExists(
+            "demo-seed-reset");
     }
 }
 

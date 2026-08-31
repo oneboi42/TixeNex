@@ -242,36 +242,16 @@ public static class DbSeeder
         if (demoAgent1 is null || demoAgent2 is null)
             return;
 
-        var now = DateTime.UtcNow;
-        var tickets = new List<Ticket>();
-
-        string[] priorities = ["Low", "Medium", "High", "Critical"];
-        string[] statuses = ["New", "InProgress", "Resolved", "Closed"];
-
-        for (int i = 1; i <= 6; i++)
+        var userIdsByName = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase)
         {
-            var numberSuffix = Guid.NewGuid().ToString("N")[..6].ToUpperInvariant();
-            
-            var requesterAgent = i <= 3 ? demoAgent1 : demoAgent2;
+            [demoAgent1.UserName!] = demoAgent1.Id,
+            [demoAgent2.UserName!] = demoAgent2.Id
+        };
 
-            string? assignedUserId = (i == 1 || i == 2) ? null : requesterAgent.Id;
-
-            var ticket = new Ticket
-            {
-                Number = $"HDH-SEED-{now:yyyyMMdd}-{i:D2}-{numberSuffix}",
-                Title = $"Sample Seeded Ticket {i}",
-                Description = $"This is a seeded demo ticket for exploration. Created at {now:f}.",
-                Priority = priorities[i % priorities.Length],
-                Status = statuses[i % statuses.Length],
-                Origin = TicketOrigin.DemoSeed,
-                CreatedAtUtc = now.AddDays(-i),
-                RequesterUserId = requesterAgent.Id,
-                AssignedToUserId = assignedUserId,
-                DemoExpiresAtUtc = null
-            };
-
-            tickets.Add(ticket);
-        }
+        var tickets = DemoSeedTicketCatalog.CreateTickets(
+            DateTime.UtcNow,
+            userIdsByName);
 
         db.Tickets.AddRange(tickets);
         await db.SaveChangesAsync(ct);
