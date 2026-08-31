@@ -28,5 +28,8 @@ jobs:
       - name: Test UI
         run: dotnet test .\tests\TixeNex.UI.Tests\TixeNex.UI.Tests.csproj --configuration Release --no-build
 
+      - name: Test Worker
+        run: dotnet test .\tests\TixeNex.Worker.Tests\TixeNex.Worker.Tests.csproj --configuration Release --no-build
+
       - name: Test API Integration
         run: dotnet test .\tests\TixeNex.Api.IntegrationTests\TixeNex.Api.IntegrationTests.csproj --configuration Release --no-build

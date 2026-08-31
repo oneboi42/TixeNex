@@ -4,7 +4,7 @@ services:
     container_name: tixenex-db
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD must be set}"
       MSSQL_PID: "Express"
     volumes:
       - sql_data:/var/opt/mssql
@@ -24,8 +24,8 @@ services:
     image: rabbitmq:4-management
     container_name: tixenex-rabbitmq
     environment:
-      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER}"
-      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD}"
+      RABBITMQ_DEFAULT_USER: "${RABBITMQ_USER:?RABBITMQ_USER must be set}"
+      RABBITMQ_DEFAULT_PASS: "${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD must be set}"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     ports:
@@ -48,8 +48,8 @@ services:
     container_name: tixenex-minio
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: "${MINIO_ROOT_USER}"
-      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD}"
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}"
     volumes:
       - minio_data:/data
     ports:
@@ -80,24 +80,24 @@ services:
       Logging__LogLevel__Microsoft.Hosting.Lifetime: Information
       Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: Warning
 
-      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=TixeNex;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=TixeNex;User Id=sa;Password=${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD must be set};Encrypt=True;TrustServerCertificate=True"
 
       Jwt__Issuer: "TixeNex"
       Jwt__Audience: "TixeNex.UI"
-      Jwt__Key: "${JWT_KEY}"
+      Jwt__Key: "${JWT_KEY:?JWT_KEY must be set}"
       Jwt__AccessTokenMinutes: "60"
 
-      SeedUsers__Admin__Password: "${SEED_ADMIN_PASSWORD}"
-      SeedUsers__Agent__Password: "${SEED_AGENT_PASSWORD}"
-      SeedUsers__User__Password: "${SEED_USER_PASSWORD}"
+      SeedUsers__Admin__Password: "${SEED_ADMIN_PASSWORD:?SEED_ADMIN_PASSWORD must be set}"
+      SeedUsers__Agent__Password: "${SEED_AGENT_PASSWORD:?SEED_AGENT_PASSWORD must be set}"
+      SeedUsers__User__Password: "${SEED_USER_PASSWORD:?SEED_USER_PASSWORD must be set}"
 
       RabbitMQ__Host: "rabbitmq"
-      RabbitMQ__UserName: "${RABBITMQ_USER}"
-      RabbitMQ__Password: "${RABBITMQ_PASSWORD}"
+      RabbitMQ__UserName: "${RABBITMQ_USER:?RABBITMQ_USER must be set}"
+      RabbitMQ__Password: "${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD must be set}"
 
       Minio__Endpoint: "minio:9000"
-      Minio__AccessKey: "${MINIO_ROOT_USER}"
-      Minio__SecretKey: "${MINIO_ROOT_PASSWORD}"
+      Minio__AccessKey: "${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}"
+      Minio__SecretKey: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}"
       Minio__BucketName: "exports"
       Minio__UseSsl: "false"
 
@@ -140,15 +140,15 @@ services:
       Logging__LogLevel__Microsoft: Warning
       Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: Warning
 
-      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=TixeNex;User Id=sa;Password=${MSSQL_SA_PASSWORD};Encrypt=True;TrustServerCertificate=True"
+      ConnectionStrings__DefaultConnection: "Server=db,1433;Database=TixeNex;User Id=sa;Password=${MSSQL_SA_PASSWORD:?MSSQL_SA_PASSWORD must be set};Encrypt=True;TrustServerCertificate=True"
 
       RabbitMQ__Host: "rabbitmq"
-      RabbitMQ__UserName: "${RABBITMQ_USER}"
-      RabbitMQ__Password: "${RABBITMQ_PASSWORD}"
+      RabbitMQ__UserName: "${RABBITMQ_USER:?RABBITMQ_USER must be set}"
+      RabbitMQ__Password: "${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD must be set}"
 
       Minio__Endpoint: "minio:9000"
-      Minio__AccessKey: "${MINIO_ROOT_USER}"
-      Minio__SecretKey: "${MINIO_ROOT_PASSWORD}"
+      Minio__AccessKey: "${MINIO_ROOT_USER:?MINIO_ROOT_USER must be set}"
+      Minio__SecretKey: "${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD must be set}"
       Minio__BucketName: "exports"
       Minio__UseSsl: "false"
 
