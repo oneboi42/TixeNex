@@ -78,6 +78,60 @@ public sealed class DemoCleanupJob : IDemoCleanupJob
             expiredUserIds.Count);
     }
 
+    public async Task ResetSeededDemoTicketsAsync(
+        CancellationToken ct = default)
+    {
+        var userNames = DemoSeedTicketCatalog.UserNames;
+        var demoAgentIds = await _db.Users
+            .AsNoTracking()
+            .Where(user =>
+                user.UserName != null &&
+                userNames.Contains(user.UserName))
+            .Select(user => new
+            {
+                user.UserName,
+                user.Id
+            })
+            .ToDictionaryAsync(
+                user => user.UserName!,
+                user => user.Id,
+                StringComparer.OrdinalIgnoreCase,
+                ct);
+
+        if (demoAgentIds.Count != userNames.Count)
+        {
+            _logger.LogWarning(
+                "Seeded demo ticket reset skipped because one or more persistent demo agents are missing.");
+            return;
+        }
+
+        var tickets = await _db.Tickets
+            .IgnoreQueryFilters()
+            .Where(ticket => ticket.Origin == TicketOrigin.DemoSeed)
+            .ToListAsync(ct);
+
+        var resetCount = 0;
+
+        foreach (var ticket in tickets)
+        {
+            if (DemoSeedTicketCatalog.TryRestore(ticket, demoAgentIds))
+                resetCount++;
+        }
+
+        if (resetCount == 0)
+        {
+            _logger.LogDebug(
+                "Seeded demo ticket reset found no canonical tickets.");
+            return;
+        }
+
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Reset {TicketCount} seeded demo tickets to their canonical state.",
+            resetCount);
+    }
+
     private async Task DeleteAttachmentFilesAsync(
         IReadOnlyCollection<int> expiredTicketIds,
         CancellationToken ct)
