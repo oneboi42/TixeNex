@@ -29,7 +29,7 @@ public sealed class TicketListPageTests : BunitContext
     }
 
     [Fact]
-    public void TicketListPage_ViewIsOutlinedButtonAndEditIsNotRendered()
+    public void TicketListPage_ActionsUseStandardOutlinedButtonsAndEditIsNotRendered()
     {
         var cut = RenderPage(new FakeTicketApiClient(new TicketDto
         {
@@ -47,8 +47,15 @@ public sealed class TicketListPageTests : BunitContext
 
         var viewButton = cut.FindAll("button")
             .Single(button => button.TextContent.Trim() == "View");
+        var deleteButton = cut.FindAll("button")
+            .Single(button => button.TextContent.Trim() == "Delete");
         viewButton.ClassList.Should().Contain("btn");
         viewButton.ClassList.Should().Contain("btn-outline-primary");
+        deleteButton.ClassList.Should().Contain("btn");
+        deleteButton.ClassList.Should().Contain("btn-outline-danger");
+        deleteButton.ClassList.Should().NotContain("btn-sm");
+        deleteButton.ParentElement.Should().BeSameAs(viewButton.ParentElement);
+        deleteButton.ParentElement!.ClassList.Should().Contain("align-items-center");
         cut.FindAll("button").Should().NotContain(button => button.TextContent.Trim() == "Edit");
 
         viewButton.Click();

@@ -169,18 +169,16 @@ else
                                             @(IsLifecycleBusy(item.Id) ? "Saving..." : action.Label)
                                         </button>
                                     }
-                                </div>
 
-                                <AuthorizeView Roles="Admin">
-                                    <Authorized>
-                                        <span class="ms-2">
-                                            <button class="btn btn-sm btn-outline-danger"
+                                    <AuthorizeView Roles="Admin">
+                                        <Authorized>
+                                            <button class="btn btn-outline-danger ms-1"
                                                     @onclick="() => AskDelete(item)">
                                                 Delete
                                             </button>
-                                        </span>
-                                    </Authorized>
-                                </AuthorizeView>
+                                        </Authorized>
+                                    </AuthorizeView>
+                                </div>
                             </td>
                         </tr>
                     }
