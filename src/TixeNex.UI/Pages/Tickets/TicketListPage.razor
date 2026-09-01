@@ -156,19 +156,10 @@ else
 
                             <td class="text-end">
                                 <div class="d-inline-flex align-items-center gap-1">
-                                    <button class="ticket-view-action"
+                                    <button class="btn btn-outline-primary"
                                             @onclick='() => Navigation.NavigateTo($"/tickets/{item.Id}")'>
-                                        View <span aria-hidden="true">→</span>
+                                        View
                                     </button>
-
-                                    @if (item.CanEdit)
-                                    {
-                                        <button class="btn btn-outline-primary"
-                                                disabled="@IsLifecycleBusy(item.Id)"
-                                                @onclick='() => Navigation.NavigateTo($"/tickets/edit/{item.Id}")'>
-                                            Edit
-                                        </button>
-                                    }
 
                                     @foreach (var action in GetLifecycleActions(item))
                                     {
