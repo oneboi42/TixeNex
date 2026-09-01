@@ -66,7 +66,8 @@ public sealed class TicketAssignmentServiceTests : IDisposable
         var demoAgent1 = (await userManager.FindByNameAsync("demo-agent-1"))!;
         var demoAgent2 = (await userManager.FindByNameAsync("demo-agent-2"))!;
 
-        db.Tickets.Add(CreateTicket(isDemoWorkspace: true, assignedToUserId: demoAgent1.Id));
+        db.Tickets.AddRange(Enumerable.Range(0, 10)
+            .Select(_ => CreateTicket(isDemoWorkspace: true, assignedToUserId: demoAgent1.Id)));
         db.Tickets.AddRange(Enumerable.Range(0, 3)
             .Select(_ => CreateTicket(isDemoWorkspace: false, assignedToUserId: demoAgent2.Id)));
         await db.SaveChangesAsync();

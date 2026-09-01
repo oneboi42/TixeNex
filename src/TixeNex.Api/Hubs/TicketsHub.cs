@@ -114,7 +114,7 @@ internal static class TicketRealtimeGroups
         Ticket ticket,
         Func<TicketVisibilityContext, string> groupSelector)
     {
-        var isDemoWorkspace = ticket.DemoExpiresAtUtc is not null;
+        var isDemoWorkspace = ticket.IsDemoWorkspace();
         var groups = new HashSet<string>(StringComparer.Ordinal)
         {
             groupSelector(new TicketVisibilityContext(

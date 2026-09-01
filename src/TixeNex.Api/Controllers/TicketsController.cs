@@ -501,7 +501,7 @@ public sealed class TicketsController : ControllerBase
                 "assignee_must_be_agent");
         }
 
-        var ticketIsDemoWorkspace = entity.DemoExpiresAtUtc is not null;
+        var ticketIsDemoWorkspace = entity.IsDemoWorkspace();
 
         if (assignee.IsDemoWorkspace != ticketIsDemoWorkspace)
         {

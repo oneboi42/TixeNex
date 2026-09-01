@@ -4,6 +4,12 @@ namespace TixeNex.Api.Application.TicketVisibility;
 
 public static class TicketVisibilityQueryExtensions
 {
+    public static bool IsDemoWorkspace(this Ticket ticket)
+    {
+        return ticket.DemoExpiresAtUtc is not null ||
+               ticket.Origin is TicketOrigin.DemoSeed or TicketOrigin.DemoUser;
+    }
+
     public static IQueryable<Ticket> ApplyWorkspace(
         this IQueryable<Ticket> query,
         TicketVisibilityContext context)

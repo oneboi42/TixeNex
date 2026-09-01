@@ -177,6 +177,42 @@ public sealed class TicketAssignmentTests
     }
 
     [Fact]
+    public async Task Assign_DemoSeedTicketToDemoWorkspaceAgent_Succeeds()
+    {
+        var demoAgentId = await GetUserIdAsync("demo-agent-1");
+        var demoAdmin = await CreateDemoSessionAsync("Admin");
+        var ticket = await GetAssignableDemoSeedTicketAsync(4);
+        ticket.Origin.Should().Be(TicketOrigin.DemoSeed);
+        ticket.DemoExpiresAtUtc.Should().BeNull();
+        UseToken(demoAdmin.AccessToken);
+
+        var response = await AssignAsync(ticket, demoAgentId);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        (await GetTicketAsync(ticket.Id)).AssignedToUserId.Should().Be(demoAgentId);
+    }
+
+    [Fact]
+    public async Task Assign_DemoSeedTicketToNormalWorkspaceAgent_IsRejected()
+    {
+        var normalAgentId = await GetUserIdAsync("agent");
+        var demoAdmin = await CreateDemoSessionAsync("Admin");
+        var ticket = await GetAssignableDemoSeedTicketAsync(5);
+        UseToken(demoAdmin.AccessToken);
+
+        var response = await AssignAsync(ticket, normalAgentId);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+        using var problem = JsonDocument.Parse(
+            await response.Content.ReadAsStringAsync());
+        problem.RootElement.GetProperty("code").GetString()
+            .Should().Be("assignee_workspace_mismatch");
+        (await GetTicketAsync(ticket.Id)).AssignedToUserId
+            .Should().Be(ticket.AssignedToUserId);
+        await AssertNoWorkAsync(ticket.Id);
+    }
+
+    [Fact]
     public async Task Assign_RejectsAssigneeFromDifferentWorkspaceInEitherDirection()
     {
         var normalAgentId = await GetUserIdAsync("agent");
@@ -283,6 +319,24 @@ public sealed class TicketAssignmentTests
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
         return await db.Tickets.AsNoTracking().SingleAsync(x => x.Id == id);
+    }
+
+    private async Task<Ticket> GetAssignableDemoSeedTicketAsync(int sampleIndex)
+    {
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var ticket = await db.Tickets.SingleAsync(ticket =>
+            ticket.Origin == TicketOrigin.DemoSeed &&
+            ticket.Title == $"Sample Seeded Ticket {sampleIndex}");
+
+        if (ticket.RowVersion.Length == 0)
+        {
+            ticket.RowVersion = [1];
+            await db.SaveChangesAsync();
+        }
+
+        db.Entry(ticket).State = EntityState.Detached;
+        return ticket;
     }
 
     private async Task AssertNoWorkAsync(int ticketId)

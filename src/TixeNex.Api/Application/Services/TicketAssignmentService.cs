@@ -1,4 +1,5 @@
 using TixeNex.Api.Application.Interfaces;
+using TixeNex.Api.Application.TicketVisibility;
 using TixeNex.Api.Domain;
 using TixeNex.Api.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -20,7 +21,7 @@ public sealed class TicketAssignmentService : ITicketAssignmentService
     public async Task<string?> AssignAsync(Ticket ticket, CancellationToken ct = default)
     {
         var agents = await _userManager.GetUsersInRoleAsync("Agent");
-        var isDemoWorkspace = ticket.DemoExpiresAtUtc is not null;
+        var isDemoWorkspace = ticket.IsDemoWorkspace();
         var eligibleAgents = agents
             .Where(agent =>
                 agent.IsDemoWorkspace == isDemoWorkspace &&
@@ -34,13 +35,12 @@ public sealed class TicketAssignmentService : ITicketAssignmentService
 
         foreach (var agent in eligibleAgents)
         {
-            var activeTicketCount = await _db.Tickets.CountAsync(
-                x => x.AssignedToUserId == agent.Id &&
-                     (x.Status == "New" || x.Status == "InProgress") &&
-                     (isDemoWorkspace
-                         ? x.DemoExpiresAtUtc != null
-                         : x.DemoExpiresAtUtc == null),
-                ct);
+            var activeTicketCount = await _db.Tickets
+                .ApplyWorkspace(isDemoWorkspace)
+                .CountAsync(
+                    x => x.AssignedToUserId == agent.Id &&
+                         (x.Status == "New" || x.Status == "InProgress"),
+                    ct);
 
             agentLoads.Add((agent.Id, activeTicketCount));
         }
