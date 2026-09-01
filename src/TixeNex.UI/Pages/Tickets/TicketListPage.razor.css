@@ -196,26 +196,3 @@
     color: var(--app-text-secondary) !important;
     background-color: #E5E7EB !important;
 }
-
-.ticket-view-action {
-    padding: 0.25rem 0.35rem;
-    border: 0;
-    background: transparent;
-    color: var(--app-primary);
-    font: inherit;
-    font-size: 0.82rem;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.ticket-view-action:hover {
-    color: var(--app-primary-hover);
-    text-decoration: underline;
-    text-underline-offset: 0.16rem;
-}
-
-.ticket-view-action:focus-visible {
-    outline: 2px solid var(--app-primary);
-    outline-offset: 2px;
-    border-radius: 0.25rem;
-}

@@ -29,6 +29,41 @@ public sealed class TicketListPageTests : BunitContext
     }
 
     [Fact]
+    public void TicketListPage_ActionsUseStandardOutlinedButtonsAndEditIsNotRendered()
+    {
+        var cut = RenderPage(new FakeTicketApiClient(new TicketDto
+        {
+            Id = 9,
+            Number = "HDH-0009",
+            Title = "Editable ticket",
+            Status = "New",
+            Priority = "Medium",
+            CanEdit = true,
+            CreatedAtUtc = DateTime.UtcNow
+        }));
+
+        cut.WaitForAssertion(() => cut.FindAll("button")
+            .Should().ContainSingle(button => button.TextContent.Trim() == "View"));
+
+        var viewButton = cut.FindAll("button")
+            .Single(button => button.TextContent.Trim() == "View");
+        var deleteButton = cut.FindAll("button")
+            .Single(button => button.TextContent.Trim() == "Delete");
+        viewButton.ClassList.Should().Contain("btn");
+        viewButton.ClassList.Should().Contain("btn-outline-primary");
+        deleteButton.ClassList.Should().Contain("btn");
+        deleteButton.ClassList.Should().Contain("btn-outline-danger");
+        deleteButton.ClassList.Should().NotContain("btn-sm");
+        deleteButton.ParentElement.Should().BeSameAs(viewButton.ParentElement);
+        deleteButton.ParentElement!.ClassList.Should().Contain("align-items-center");
+        cut.FindAll("button").Should().NotContain(button => button.TextContent.Trim() == "Edit");
+
+        viewButton.Click();
+
+        Services.GetRequiredService<NavigationManager>().Uri.Should().EndWith("/tickets/9");
+    }
+
+    [Fact]
     public void TicketListPage_AsUser_ShouldRenderCreateAndExportHistoryLinks()
     {
         var cut = RenderPage(new FakeTicketApiClient(), "User");
@@ -146,7 +181,7 @@ public sealed class TicketListPageTests : BunitContext
     }
 
     [Fact]
-    public void TicketListPage_ReopenAndEditButtonsFollowCapabilities()
+    public void TicketListPage_ReopenButtonFollowsCapability()
     {
         var api = new FakeTicketApiClient(new TicketDto
         {
@@ -156,14 +191,12 @@ public sealed class TicketListPageTests : BunitContext
             Description = "desc",
             Status = "Resolved",
             Priority = "Medium",
-            CanEdit = false,
             CanReopen = true,
             RowVersionBase64 = Convert.ToBase64String([1])
         });
         var cut = RenderPage(api);
 
         cut.WaitForAssertion(() => cut.Markup.Should().Contain("Reopen"));
-        cut.Markup.Should().NotContain("Edit");
         cut.FindAll("button").Single(x => x.TextContent.Contains("Reopen")).Click();
         cut.WaitForAssertion(() => api.ReopenCalls.Should().Be(1));
     }

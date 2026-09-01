@@ -156,19 +156,10 @@ else
 
                             <td class="text-end">
                                 <div class="d-inline-flex align-items-center gap-1">
-                                    <button class="ticket-view-action"
+                                    <button class="btn btn-outline-primary"
                                             @onclick='() => Navigation.NavigateTo($"/tickets/{item.Id}")'>
-                                        View <span aria-hidden="true">→</span>
+                                        View
                                     </button>
-
-                                    @if (item.CanEdit)
-                                    {
-                                        <button class="btn btn-outline-primary"
-                                                disabled="@IsLifecycleBusy(item.Id)"
-                                                @onclick='() => Navigation.NavigateTo($"/tickets/edit/{item.Id}")'>
-                                            Edit
-                                        </button>
-                                    }
 
                                     @foreach (var action in GetLifecycleActions(item))
                                     {
@@ -178,18 +169,16 @@ else
                                             @(IsLifecycleBusy(item.Id) ? "Saving..." : action.Label)
                                         </button>
                                     }
-                                </div>
 
-                                <AuthorizeView Roles="Admin">
-                                    <Authorized>
-                                        <span class="ms-2">
-                                            <button class="btn btn-sm btn-outline-danger"
+                                    <AuthorizeView Roles="Admin">
+                                        <Authorized>
+                                            <button class="btn btn-outline-danger ms-1"
                                                     @onclick="() => AskDelete(item)">
                                                 Delete
                                             </button>
-                                        </span>
-                                    </Authorized>
-                                </AuthorizeView>
+                                        </Authorized>
+                                    </AuthorizeView>
+                                </div>
                             </td>
                         </tr>
                     }
