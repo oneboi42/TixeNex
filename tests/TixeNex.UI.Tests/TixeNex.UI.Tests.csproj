@@ -26,4 +26,10 @@
     <ProjectReference Include="..\..\src\TixeNex.Shared\TixeNex.Shared.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\docker\nginx.conf"
+             Link="Fixtures\nginx.conf"
+             CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

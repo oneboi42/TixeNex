@@ -11,6 +11,7 @@ using TixeNex.Api.BackgroundJobs;
 using TixeNex.Api.BackgroundJobs.Contracts;
 using TixeNex.Api.Domain;
 using TixeNex.Api.Infrastructure.Background;
+using TixeNex.Api.Infrastructure.Health;
 using TixeNex.Api.Infrastructure.Notifications;
 using TixeNex.Api.Infrastructure.Persistence;
 using TixeNex.Api.Infrastructure.Security;
@@ -20,6 +21,7 @@ using TixeNex.Api.Hubs;
 using TixeNex.Api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.SignalR;
@@ -55,6 +57,14 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services
+    .AddHealthChecks()
+    .AddCheck<SqlServerHealthCheck>(
+        "sql-server",
+        tags: ["ready"])
+    .AddCheck<MinioHealthCheck>(
+        "minio",
+        tags: ["ready"]);
 
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
@@ -347,8 +357,11 @@ builder.Services.AddScoped<
 
 var app = builder.Build();
 
-// Apply EF Core migrations and seed database on startup.
-await DbSeeder.SeedAsync(app.Services);
+// Apply EF Core migrations and seed once SQL Server becomes available.
+await DatabaseStartupInitializer.InitializeAsync(
+    app.Services,
+    app.Lifetime,
+    app.Logger);
 
 app.UseForwardedHeaders();
 
@@ -419,6 +432,21 @@ if (!app.Environment.IsEnvironment("Testing"))
 
 app.MapControllers();
 app.MapHub<TicketsHub>("/hubs/tickets");
+app.MapHealthChecks(
+    "/health/live",
+    new HealthCheckOptions
+    {
+        Predicate = _ => false,
+        ResponseWriter = static (_, _) => Task.CompletedTask
+    });
+app.MapHealthChecks(
+    "/health/ready",
+    new HealthCheckOptions
+    {
+        Predicate = registration =>
+            registration.Tags.Contains("ready"),
+        ResponseWriter = static (_, _) => Task.CompletedTask
+    });
 
 // Redirect root URL to Swagger UI
 app.MapGet("/", async context =>
