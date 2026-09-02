@@ -1,9 +1,12 @@
 using System.Text.Json;
+using TixeNex.Api.Infrastructure.Persistence;
 using TixeNex.Worker.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
+using Minio;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
@@ -13,15 +16,18 @@ public class RabbitMqConsumer : BackgroundService
 {
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConfiguration _configuration;
+    private readonly IMinioClient _minioClient;
     private readonly ILogger<RabbitMqConsumer> _logger;
 
     public RabbitMqConsumer(
         IServiceScopeFactory scopeFactory, 
         IConfiguration configuration,
+        IMinioClient minioClient,
         ILogger<RabbitMqConsumer> logger)
     {
         _scopeFactory = scopeFactory;
         _configuration = configuration;
+        _minioClient = minioClient;
         _logger = logger;
     }
 
@@ -49,8 +55,48 @@ public class RabbitMqConsumer : BackgroundService
             NetworkRecoveryInterval = TimeSpan.FromSeconds(5)
         };
 
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await WaitForDependenciesAsync(stoppingToken);
+                await ConsumeAsync(factory, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(
+                    exception,
+                    "Worker dependency connection failed; retrying in 5 seconds.");
+                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
+            }
+        }
+    }
+
+    private async Task WaitForDependenciesAsync(
+        CancellationToken stoppingToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+
+        if (!await db.Database.CanConnectAsync(stoppingToken))
+        {
+            throw new InvalidOperationException("SQL Server is not ready.");
+        }
+
+        await _minioClient.ListBucketsAsync(stoppingToken);
+    }
+
+    private async Task ConsumeAsync(
+        ConnectionFactory factory,
+        CancellationToken stoppingToken)
+    {
         using var connection = await factory.CreateConnectionAsync(stoppingToken);
-        using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
+        using var channel = await connection.CreateChannelAsync(
+            cancellationToken: stoppingToken);
 
         await channel.QueueDeclareAsync(
             queue: "export_jobs", 
@@ -93,7 +139,7 @@ public class RabbitMqConsumer : BackgroundService
             consumer: consumer, 
             cancellationToken: stoppingToken);
 
-        while (!stoppingToken.IsCancellationRequested)
+        while (!stoppingToken.IsCancellationRequested && connection.IsOpen)
         {
             await Task.Delay(1000, stoppingToken);
         }
