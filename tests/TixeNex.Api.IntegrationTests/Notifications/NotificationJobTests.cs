@@ -162,6 +162,92 @@ public sealed class NotificationJobTests
     }
 
     [Fact]
+    public async Task TicketDeletion_NotifiesRequesterAndAssignedAgent()
+    {
+        await using var db = CreateContext();
+        await SeedTicketAsync(
+            db,
+            requesterUserId: "requester",
+            assignedToUserId: "assigned-agent",
+            isDeleted: true);
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketDeletedNotificationsAsync(1, "admin");
+
+        dispatcher.RecipientIds.Should().BeEquivalentTo(["requester", "assigned-agent"]);
+        dispatcher.Messages.Should().OnlyContain(x =>
+            x.Subject == $"Ticket deleted: {DisplayTicketId}" &&
+            x.Body == $"Ticket {DisplayTicketId} - Test ticket has been deleted by an administrator.");
+    }
+
+    [Fact]
+    public async Task TicketDeletion_WhenUnassigned_NotifiesOnlyRequester()
+    {
+        await using var db = CreateContext();
+        await SeedTicketAsync(db, requesterUserId: "requester", isDeleted: true);
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketDeletedNotificationsAsync(1, "admin");
+
+        dispatcher.Messages.Should().ContainSingle();
+        dispatcher.Messages[0].UserId.Should().Be("requester");
+    }
+
+    [Fact]
+    public async Task TicketDeletion_WhenRequesterIsAssignee_NotifiesUserOnce()
+    {
+        await using var db = CreateContext();
+        await SeedTicketAsync(
+            db,
+            requesterUserId: "requester",
+            assignedToUserId: "requester",
+            isDeleted: true);
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketDeletedNotificationsAsync(1, "admin");
+
+        dispatcher.Messages.Should().ContainSingle();
+        dispatcher.Messages[0].UserId.Should().Be("requester");
+    }
+
+    [Fact]
+    public async Task TicketDeletion_WhenDeletingAdminIsRequester_DoesNotAddAnotherAdminNotification()
+    {
+        await using var db = CreateContext();
+        await SeedTicketAsync(
+            db,
+            requesterUserId: "admin",
+            assignedToUserId: "assigned-agent",
+            isDeleted: true);
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketDeletedNotificationsAsync(1, "admin");
+
+        dispatcher.Messages.Should().ContainSingle();
+        dispatcher.Messages[0].UserId.Should().Be("assigned-agent");
+    }
+
+    [Fact]
+    public async Task TicketDeletion_ActiveTicket_DoesNotNotify()
+    {
+        await using var db = CreateContext();
+        await SeedTicketAsync(
+            db,
+            requesterUserId: "requester",
+            assignedToUserId: "assigned-agent");
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketDeletedNotificationsAsync(1, "admin");
+
+        dispatcher.Messages.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task DailySummary_UsesEachAdminRecipientsWorkspaceCount()
     {
         await using var db = CreateContext();

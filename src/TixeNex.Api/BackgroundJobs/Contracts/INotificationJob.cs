@@ -8,6 +8,10 @@ public interface INotificationJob
         string assignedToUserId,
         bool isReassignment,
         CancellationToken ct = default);
+    Task SendTicketDeletedNotificationsAsync(
+        int ticketId,
+        string deletedByUserId,
+        CancellationToken ct = default);
     Task SendTicketCommentNotificationsAsync(int ticketId, string authorUserId, CancellationToken ct = default);
     Task SendDailySummaryAsync(CancellationToken ct = default);
 }
