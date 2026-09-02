@@ -739,6 +739,17 @@ public sealed class TicketsController : ControllerBase
             new { entity.Number, entity.Title },
             ct);
 
+        if ((action == "Closed" || action == "Reopened") &&
+            !_environment.IsEnvironment("Testing"))
+        {
+            BackgroundJob.Enqueue<INotificationJob>(job =>
+                job.SendTicketLifecycleNotificationsAsync(
+                    entity.Id,
+                    action,
+                    visibilityContext.UserId,
+                    default));
+        }
+
         return NoContent();
     }
 

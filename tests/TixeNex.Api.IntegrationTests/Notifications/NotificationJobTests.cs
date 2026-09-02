@@ -247,6 +247,100 @@ public sealed class NotificationJobTests
         dispatcher.Messages.Should().BeEmpty();
     }
 
+    [Theory]
+    [InlineData("Closed", "closed")]
+    [InlineData("Reopened", "reopened")]
+    public async Task TicketLifecycle_NotifiesRequesterAndAssignedAgent(
+        string action,
+        string actionText)
+    {
+        await using var db = CreateContext();
+        await SeedTicketAsync(
+            db,
+            requesterUserId: "requester",
+            assignedToUserId: "assigned-agent");
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketLifecycleNotificationsAsync(1, action, "admin");
+
+        dispatcher.RecipientIds.Should().BeEquivalentTo(["requester", "assigned-agent"]);
+        dispatcher.Messages.Should().OnlyContain(x =>
+            x.Subject == $"Ticket {actionText}: {DisplayTicketId}" &&
+            x.Body == $"Ticket {DisplayTicketId} - Test ticket has been {actionText}.");
+    }
+
+    [Fact]
+    public async Task TicketLifecycle_WhenUnassigned_NotifiesOnlyRequester()
+    {
+        await using var db = CreateContext();
+        await SeedTicketAsync(db, requesterUserId: "requester");
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketLifecycleNotificationsAsync(1, "Closed", "admin");
+
+        dispatcher.Messages.Should().ContainSingle();
+        dispatcher.Messages[0].UserId.Should().Be("requester");
+    }
+
+    [Fact]
+    public async Task TicketLifecycle_WhenRequesterIsAssignee_NotifiesUserOnce()
+    {
+        await using var db = CreateContext();
+        await SeedTicketAsync(
+            db,
+            requesterUserId: "requester",
+            assignedToUserId: "requester");
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketLifecycleNotificationsAsync(1, "Reopened", "admin");
+
+        dispatcher.Messages.Should().ContainSingle();
+        dispatcher.Messages[0].UserId.Should().Be("requester");
+    }
+
+    [Theory]
+    [InlineData("requester", "assigned-agent")]
+    [InlineData("assigned-agent", "requester")]
+    public async Task TicketLifecycle_WhenActingUserIsRecipient_DoesNotNotifyActorAgain(
+        string actingUserId,
+        string expectedRecipientId)
+    {
+        await using var db = CreateContext();
+        await SeedTicketAsync(
+            db,
+            requesterUserId: "requester",
+            assignedToUserId: "assigned-agent");
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketLifecycleNotificationsAsync(1, "Closed", actingUserId);
+
+        dispatcher.Messages.Should().ContainSingle();
+        dispatcher.Messages[0].UserId.Should().Be(expectedRecipientId);
+    }
+
+    [Theory]
+    [InlineData("Started")]
+    [InlineData("Resolved")]
+    [InlineData("Unknown")]
+    public async Task TicketLifecycle_UnrelatedAction_DoesNotNotify(string action)
+    {
+        await using var db = CreateContext();
+        await SeedTicketAsync(
+            db,
+            requesterUserId: "requester",
+            assignedToUserId: "assigned-agent");
+        var dispatcher = new CollectingDispatcher();
+
+        await new NotificationJob(db, dispatcher)
+            .SendTicketLifecycleNotificationsAsync(1, action, "admin");
+
+        dispatcher.Messages.Should().BeEmpty();
+    }
+
     [Fact]
     public async Task DailySummary_UsesEachAdminRecipientsWorkspaceCount()
     {

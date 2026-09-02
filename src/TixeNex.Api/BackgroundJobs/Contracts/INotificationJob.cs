@@ -12,6 +12,11 @@ public interface INotificationJob
         int ticketId,
         string deletedByUserId,
         CancellationToken ct = default);
+    Task SendTicketLifecycleNotificationsAsync(
+        int ticketId,
+        string action,
+        string actingUserId,
+        CancellationToken ct = default);
     Task SendTicketCommentNotificationsAsync(int ticketId, string authorUserId, CancellationToken ct = default);
     Task SendDailySummaryAsync(CancellationToken ct = default);
 }
