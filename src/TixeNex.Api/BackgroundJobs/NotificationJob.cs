@@ -111,6 +111,110 @@ public sealed class NotificationJob : INotificationJob
         }, ct);
     }
 
+    public async Task SendTicketDeletedNotificationsAsync(
+        int ticketId,
+        string deletedByUserId,
+        CancellationToken ct = default)
+    {
+        var ticket = await _db.Tickets
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .Where(x => x.Id == ticketId && x.IsDeleted)
+            .Select(x => new
+            {
+                x.Number,
+                x.Title,
+                x.RequesterUserId,
+                x.AssignedToUserId
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (ticket is null)
+            return;
+
+        var recipientUserIds = new HashSet<string>(StringComparer.Ordinal);
+
+        AddRecipient(ticket.RequesterUserId);
+        AddRecipient(ticket.AssignedToUserId);
+        recipientUserIds.Remove(deletedByUserId);
+
+        var displayId = GetDisplayTicketId(ticket.Number);
+
+        foreach (var userId in recipientUserIds)
+        {
+            await _dispatcher.DispatchAsync(new NotificationMessage
+            {
+                Channel = NotificationChannel.InApp,
+                Subject = $"Ticket deleted: {displayId}",
+                Body = $"Ticket {displayId} - {ticket.Title} has been deleted by an administrator.",
+                UserId = userId
+            }, ct);
+        }
+
+        void AddRecipient(string? userId)
+        {
+            if (!string.IsNullOrWhiteSpace(userId))
+                recipientUserIds.Add(userId);
+        }
+    }
+
+    public async Task SendTicketLifecycleNotificationsAsync(
+        int ticketId,
+        string action,
+        string actingUserId,
+        CancellationToken ct = default)
+    {
+        var actionText = action switch
+        {
+            "Closed" => "closed",
+            "Reopened" => "reopened",
+            _ => null
+        };
+
+        if (actionText is null)
+            return;
+
+        var ticket = await _db.Tickets
+            .AsNoTracking()
+            .Where(x => x.Id == ticketId)
+            .Select(x => new
+            {
+                x.Number,
+                x.Title,
+                x.RequesterUserId,
+                x.AssignedToUserId
+            })
+            .FirstOrDefaultAsync(ct);
+
+        if (ticket is null)
+            return;
+
+        var recipientUserIds = new HashSet<string>(StringComparer.Ordinal);
+
+        AddRecipient(ticket.RequesterUserId);
+        AddRecipient(ticket.AssignedToUserId);
+        recipientUserIds.Remove(actingUserId);
+
+        var displayId = GetDisplayTicketId(ticket.Number);
+
+        foreach (var userId in recipientUserIds)
+        {
+            await _dispatcher.DispatchAsync(new NotificationMessage
+            {
+                Channel = NotificationChannel.InApp,
+                Subject = $"Ticket {actionText}: {displayId}",
+                Body = $"Ticket {displayId} - {ticket.Title} has been {actionText}.",
+                UserId = userId
+            }, ct);
+        }
+
+        void AddRecipient(string? userId)
+        {
+            if (!string.IsNullOrWhiteSpace(userId))
+                recipientUserIds.Add(userId);
+        }
+    }
+
     public async Task SendTicketCommentNotificationsAsync(
         int ticketId,
         string authorUserId,

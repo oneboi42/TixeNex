@@ -616,6 +616,15 @@ public sealed class TicketsController : ControllerBase
 
         await _audit.WriteAsync("SoftDelete", "Ticket", entity.Id.ToString(), new { entity.Number, entity.Title }, ct);
 
+        if (!_environment.IsEnvironment("Testing"))
+        {
+            BackgroundJob.Enqueue<INotificationJob>(job =>
+                job.SendTicketDeletedNotificationsAsync(
+                    entity.Id,
+                    visibilityContext.UserId,
+                    default));
+        }
+
         return NoContent();
     }
 
@@ -729,6 +738,17 @@ public sealed class TicketsController : ControllerBase
             entity.Id.ToString(),
             new { entity.Number, entity.Title },
             ct);
+
+        if ((action == "Closed" || action == "Reopened") &&
+            !_environment.IsEnvironment("Testing"))
+        {
+            BackgroundJob.Enqueue<INotificationJob>(job =>
+                job.SendTicketLifecycleNotificationsAsync(
+                    entity.Id,
+                    action,
+                    visibilityContext.UserId,
+                    default));
+        }
 
         return NoContent();
     }
