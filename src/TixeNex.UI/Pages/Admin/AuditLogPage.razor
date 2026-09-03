@@ -171,7 +171,18 @@ else
                             }
                             else
                             {
-                                <div>@FormatDetails(item.Details)</div>
+                                var details = FormatDetails(item.Details);
+
+                                <div class="fw-medium lh-sm">
+                                    @details.Identity
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(details.Action))
+                                {
+                                    <div class="small text-body-secondary mt-1 lh-sm">
+                                        @details.Action
+                                    </div>
+                                }
 
                                 <details class="mt-1">
                                     <summary class="small text-muted">
@@ -290,7 +301,7 @@ else
             : $"api/audit?{string.Join("&", query)}";
     }
 
-    private static string FormatDetails(string details)
+    private static FormattedAuditDetails FormatDetails(string details)
     {
         try
         {
@@ -299,21 +310,30 @@ else
             if (document.RootElement.ValueKind !=
                 JsonValueKind.Object)
             {
-                return details;
+                return new(details, null);
             }
 
             var root = document.RootElement;
-            var parts = new List<string>();
+            var identityParts = new List<string>();
+            var actionParts = new List<string>();
 
-            AddProperty(parts, root, "Number");
-            AddQuotedProperty(parts, root, "Title");
+            AddProperty(identityParts, root, "Number");
+            AddQuotedProperty(identityParts, root, "Title");
+
+            var previousAssignedTo =
+                GetString(root, "PreviousAssignedToDisplayName");
 
             var assignedTo =
                 GetString(root, "AssignedToDisplayName");
 
-            if (!string.IsNullOrWhiteSpace(assignedTo))
+            if (!string.IsNullOrWhiteSpace(previousAssignedTo) &&
+                !string.IsNullOrWhiteSpace(assignedTo))
             {
-                parts.Add($"Assigned to {assignedTo}");
+                actionParts.Add($"{previousAssignedTo} → {assignedTo}");
+            }
+            else if (!string.IsNullOrWhiteSpace(assignedTo))
+            {
+                actionParts.Add($"Assigned to {assignedTo}");
             }
 
             var previousStatus =
@@ -329,18 +349,28 @@ else
                     newStatus,
                     StringComparison.Ordinal))
             {
-                parts.Add($"{previousStatus} → {newStatus}");
+                actionParts.Add($"{previousStatus} → {newStatus}");
             }
 
-            return parts.Count == 0
+            var identity = identityParts.Count == 0
                 ? details
-                : string.Join(" · ", parts);
+                : string.Join(" · ", identityParts);
+
+            return new(
+                identity,
+                actionParts.Count == 0
+                    ? null
+                    : string.Join(" · ", actionParts));
         }
         catch (JsonException)
         {
-            return details;
+            return new(details, null);
         }
     }
+
+    private sealed record FormattedAuditDetails(
+        string Identity,
+        string? Action);
 
     private static void AddProperty(
         List<string> parts,
