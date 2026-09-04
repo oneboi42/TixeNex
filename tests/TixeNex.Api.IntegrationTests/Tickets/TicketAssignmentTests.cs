@@ -53,6 +53,42 @@ public sealed class TicketAssignmentTests
         updated.LastNotifiedAtUtc.Should().Be(ticket.LastNotifiedAtUtc);
     }
 
+    [Theory]
+    [InlineData("InProgress", "New")]
+    [InlineData("New", "New")]
+    public async Task Assign_AuditRecordsActualStatusBeforeAndAfterAssignment(
+        string previousStatus,
+        string expectedNewStatus)
+    {
+        var ticket = await SeedTicketAsync(previousStatus);
+        var agentId = await GetUserIdAsync("agent");
+        await LoginAsync("admin");
+
+        var response = await AssignAsync(ticket, agentId);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        var updated = await GetTicketAsync(ticket.Id);
+        updated.Status.Should().Be(expectedNewStatus);
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var audit = await db.AuditLogs.SingleAsync(x =>
+            x.EntityId == ticket.Id.ToString() && x.Action == "Assign");
+        using var auditJson = JsonDocument.Parse(audit.DetailsJson!);
+        auditJson.RootElement.GetProperty("PreviousAssignedToUserId").ValueKind
+            .Should().Be(JsonValueKind.Null);
+        auditJson.RootElement.GetProperty("PreviousAssignedToDisplayName").ValueKind
+            .Should().Be(JsonValueKind.Null);
+        auditJson.RootElement.GetProperty("AssignedToUserId").GetString()
+            .Should().Be(agentId);
+        auditJson.RootElement.GetProperty("AssignedToDisplayName").GetString()
+            .Should().NotBeNullOrWhiteSpace();
+        auditJson.RootElement.GetProperty("PreviousStatus").GetString()
+            .Should().Be(previousStatus);
+        auditJson.RootElement.GetProperty("NewStatus").GetString()
+            .Should().Be(updated.Status);
+    }
+
     [Fact]
     public async Task Reassign_InProgress_ResetsStatusAndWritesAuditAndOutbox()
     {
@@ -66,11 +102,20 @@ public sealed class TicketAssignmentTests
         response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         using var scope = _factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var previousAgentDisplayName = await db.Users
+            .Where(x => x.Id == previousAgentId)
+            .Select(x => x.DisplayName)
+            .SingleAsync();
+        var newAgentDisplayName = await db.Users
+            .Where(x => x.Id == newAgentId)
+            .Select(x => x.DisplayName)
+            .SingleAsync();
         var audit = await db.AuditLogs.SingleAsync(x => x.EntityId == ticket.Id.ToString() && x.Action == "Reassign");
         using var auditJson = JsonDocument.Parse(audit.DetailsJson!);
         auditJson.RootElement.GetProperty("PreviousAssignedToUserId").GetString().Should().Be(previousAgentId);
+        auditJson.RootElement.GetProperty("PreviousAssignedToDisplayName").GetString().Should().Be(previousAgentDisplayName);
         auditJson.RootElement.GetProperty("AssignedToUserId").GetString().Should().Be(newAgentId);
-        auditJson.RootElement.GetProperty("AssignedToDisplayName").GetString().Should().NotBeNullOrWhiteSpace();
+        auditJson.RootElement.GetProperty("AssignedToDisplayName").GetString().Should().Be(newAgentDisplayName);
         auditJson.RootElement.GetProperty("PreviousStatus").GetString().Should().Be("InProgress");
         auditJson.RootElement.GetProperty("NewStatus").GetString().Should().Be("New");
 

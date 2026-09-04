@@ -520,6 +520,14 @@ public sealed class TicketsController : ControllerBase
         if (previousAssignedToUserId == assignee.Id)
             return NoContent();
 
+        var previousAssignedToDisplayName = previousAssignedToUserId is null
+            ? null
+            : await _db.Users
+                .AsNoTracking()
+                .Where(user => user.Id == previousAssignedToUserId)
+                .Select(user => user.DisplayName)
+                .SingleOrDefaultAsync(ct);
+
         var action = previousAssignedToUserId is null ? "Assign" : "Reassign";
         var eventType = previousAssignedToUserId is null ? "Assigned" : "Reassigned";
         var previousStatus = entity.Status;
@@ -552,6 +560,7 @@ public sealed class TicketsController : ControllerBase
                 entity.Number,
                 entity.Title,
                 PreviousAssignedToUserId = previousAssignedToUserId,
+                PreviousAssignedToDisplayName = previousAssignedToDisplayName,
                 AssignedToUserId = assignee.Id,
                 AssignedToDisplayName = assignee.DisplayName,
                 PreviousStatus = previousStatus,
