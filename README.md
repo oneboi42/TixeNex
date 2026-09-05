@@ -19,6 +19,8 @@ The application models three main roles — **User**, **Agent**, and **Admin** �
 
 A central architectural feature is the asynchronous export pipeline: export jobs are processed independently from the original API request by a separate background worker, while real-time updates keep connected clients synchronized.
 
+AI-assisted tools support code review, test expansion, configuration analysis, debugging, and security-focused verification, including targeted security review batches covering authorization boundaries, authentication/session handling, SignalR access control, injection probes, and concurrency edge cases.
+
 The project emphasizes:
 
 - Role- and relationship-based authorization
@@ -43,51 +45,45 @@ The public demo requires no registration or credentials. Choose a role to start 
 
 [![Watch the TixeNex demo](screenshots/demo-preview.png)](https://youtu.be/6YWmawzM67c)
 
-**50-second walkthrough:** ticket workflow, role-based access, assignment, notifications, and exports.
+**1-minute walkthrough:** ticket workflow, role-based access, assignment, notifications, and asynchronous exports.
+
 #### Screenshots
 
 ##### Ticket Management
+
 ![Ticket workflow](screenshots/ticket-workflow.png)
 
 ##### Dashboard Overview
+
 ![Dashboard](screenshots/dashboard.png)
 
 ##### Asynchronous Export Processing
+
 ![Export processing](screenshots/export-processing.png)
 
 ---
 
 ### 🚀 Recommended Demo Flow
 
+For the easiest walkthrough, open **User, Agent, and Admin sessions in separate tabs**.
+
 1. **User** — create a ticket and see it automatically assigned to an available agent.
-2. **Admin** — inspect the ticket and optionally reassign it to your Demo Agent.
+2. **Admin** — inspect the ticket and optionally reassign it to another agent.
 3. **Agent** — move the ticket through **New → In Progress → Resolved**.
 4. **User** — close the resolved ticket or reopen it for further work.
 5. **Export** — request a CSV export and follow its asynchronous processing through to download.
-6. Explore comments, attachments, notifications, real-time ticket updates, and other role-specific functionality.
-
----
-### 👥 Demo Roles
-
-| Role | What you can explore |
-| --- | --- |
-| **User** | Create and track tickets, then close or reopen resolved requests |
-| **Agent** | Work with assigned tickets and manage their status |
-| **Admin** | Manage ticket assignments and broader administrative operations |
+6. Explore comments, attachments, notifications, real-time updates, and other role-specific functionality.
 
 Each role selection creates a separate temporary demo account.
 
 ---
 
-### 🧪 Demo Workspace Behavior
+### 🧪 Demo Environment
 
 - Demo sessions last **30 minutes** and can be extended up to **1 hour 30 minutes**.
-- Temporary demo data is automatically cleaned up after the session lifetime.
-- The workspace includes predefined sample tickets, so the application can be explored immediately.
-- Sample tickets can be modified and are automatically restored every **24 hours**.
-- Two predefined agents are available for automatic workload-based ticket assignment.
-- Admins can reassign tickets to other agents, including temporary Demo Agent accounts.
-
+- Temporary demo data is automatically cleaned up after the session expires.
+- Predefined sample tickets are available immediately and are restored automatically every **24 hours**.
+- Automatic workload-based assignment and manual admin reassignment are both available.
 ---
 
 ## Architecture & Tech Stack
@@ -195,7 +191,7 @@ TixeNex builds on a guided learning project that provided the initial solution a
 * **Notifications & real-time updates** — redesigned notification rules and implemented SignalR-based live ticket updates.
 * **Public demo environment** — built temporary role-based sessions, demo isolation, automated cleanup, shared demo workflows, and automatic restoration of sample data.
 * **Deployment & CI** — created the Docker Compose deployment setup and added GitHub Actions workflows.
-* **Testing & security** — substantially expanded API, UI, and Worker test coverage and performed additional security hardening and verification in an isolated disposable VM.
+* **Testing & security** — substantially expanded API, UI, and Worker test coverage and performed AI-assisted security review batches covering authorization, authentication/session handling, SignalR access control, injection vectors, and concurrency edge cases. Findings included SignalR authorization bypasses, concurrent refresh-token reuse, and stale JWT privileges after account changes, followed by targeted fixes and re-verification in an isolated disposable VM.
 * **UI & dashboard** — redesigned parts of the application interface and extended dashboard functionality.
 
 
