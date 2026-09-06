@@ -42,6 +42,7 @@ The public demo requires no registration or credentials. Choose a role to start 
 
 ---
 ### 🎬 Demo Preview
+**▶️ Click the preview below to watch the demo.**
 
 [![Watch the TixeNex demo](screenshots/demo-preview.png)](https://youtu.be/6YWmawzM67c)
 
