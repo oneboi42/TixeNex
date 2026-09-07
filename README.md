@@ -19,6 +19,8 @@ The application models three main roles â€” **User**, **Agent**, and **Admin** â
 
 A central architectural feature is the asynchronous export pipeline: export jobs are processed independently from the original API request by a separate background worker, while real-time updates keep connected clients synchronized.
 
+The application is currently deployed on a Linux VPS using Docker Compose, with HTTPS, reverse proxying, firewall rules, health checks, and CI/CD automation.
+
 AI-assisted tools support code review, test expansion, configuration analysis, debugging, and security-focused verification, including targeted security review batches covering authorization boundaries, authentication/session handling, SignalR access control, injection probes, and concurrency edge cases.
 
 The project emphasizes:
